@@ -1,6 +1,22 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 15, 2026 — 7:57 AM Pacific
+
+### Summary of changes since last update
+Enabled Git-based auto-deploy and set up the `www` subdomain. The GitHub repo was already connected to the Vercel project (push-to-`main` auto-deploys; PRs get preview URLs). Added a `www` DNS record and made `www.pixelparents.org` redirect to the apex via an in-code Next.js host redirect.
+
+### Detail of changes made:
+- **Git auto-deploy:** `vercel git connect` reported `drodio/pixelparents` is already connected to project `storytell/pixelparents`. Pushing to `main` now triggers production deploys automatically; non-`main` branches/PRs get preview deployments. (Manual `vercel deploy --prod` still works as a fallback.)
+- **www DNS:** added `CNAME www -> cname.vercel-dns.com` (DNS-only / un-proxied) in Cloudflare via `flarectl`. Zone now has apex `A` + `www` `CNAME`.
+- **www attached to project:** `vercel domains add www.pixelparents.org` — domain added under team `storytell`.
+- **www -> apex redirect:** added a host-based 308 redirect in `next.config.ts` (`has: host == www.pixelparents.org` -> `https://pixelparents.org/:path*`). Chosen over a dashboard-only redirect so it's version-controlled and reproducible. Build verified locally.
+- Project facts: Vercel project id `prj_aKSLUrQ9LYwTcXwCFV0a9xyMyH50`, Node 24.x, framework preset Next.js.
+
+### Potential concerns to address:
+- **www redirect depends on a deploy:** the 308 lives in the app, so it only takes effect once the commit deploys. Verify `https://www.pixelparents.org` 308s to the apex after the auto-deploy lands (and after DNS/cert propagation for www).
+- **CI secret scan** still recommended as a backstop (see earlier entries) — the local pre-commit hook is bypassable.
+
 ## Progress Update as of June 15, 2026 — 7:53 AM Pacific
 
 ### Summary of changes since last update
