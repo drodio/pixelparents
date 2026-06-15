@@ -1,6 +1,25 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 15, 2026 — 9:02 AM Pacific
+
+### Summary of changes since last update
+Generated a favicon set from the pixel mascot and replaced the default Next.js favicon. Shipped to prod via the Git auto-deploy pipeline.
+
+### Detail of changes made:
+- **Source:** `public/images/pixel-mascot.png` (934×918, has alpha). Center-cropped to square (918×918) with Pillow 9.0.0 (no ImageMagick on this machine), LANCZOS resampling.
+- **Generated app-router icons** (Next.js auto-detects these by filename):
+  - `app/favicon.ico` — replaced the default Create-Next-App icon; lean multi-size ICO (16/32/48, ~10KB).
+  - `app/icon.png` — 512×512, drives `<link rel="icon">` (served at `/icon.png`).
+  - `app/apple-icon.png` — 180×180 apple-touch-icon (served at `/apple-icon.png`).
+- **Build:** `next build` confirms `/icon.png` and `/apple-icon.png` routes are emitted; `favicon.ico` served statically from `app/`.
+- **Deploy:** pushed to `main` → auto production deploy (Git integration).
+- Note: regenerating favicons is a manual Pillow step (one-liner is recorded in this entry's git commit / can be re-derived from the mascot); not scripted into the build.
+
+### Potential concerns to address:
+- Favicon generation is a manual step — if the mascot art changes, the icons must be regenerated. Consider a small `scripts/gen-favicons.py` if this recurs.
+- Icons are derived by center-crop; if the mascot art ever has meaningful detail near the horizontal edges it could be clipped (current art is centered with transparent margins, so this is safe today).
+
 ## Progress Update as of June 15, 2026 — 7:57 AM Pacific
 
 ### Summary of changes since last update
