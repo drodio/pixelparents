@@ -1,0 +1,8 @@
+#!/usr/bin/env sh
+# See .githooks/post-commit — re-delegates to a machine-wide roborev post-rewrite
+# hook when present (local core.hooksPath would otherwise shadow it). No-op otherwise.
+for h in "$HOME/.config/roborev/git-hooks/post-rewrite" \
+         "${XDG_CONFIG_HOME:-$HOME/.config}/roborev/git-hooks/post-rewrite"; do
+  if [ -x "$h" ]; then exec "$h" "$@"; fi
+done
+exit 0

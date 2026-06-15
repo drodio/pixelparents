@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+#
+# pixelparents pre-commit hook
+# ----------------------------
+# This repo is PUBLIC / open source. This hook does two things:
+#
+#   1. SECRET GUARD (blocking) — refuses the commit if a staged change looks
+#      like it contains a credential, private key, or a sensitive file
+#      (e.g. .env). This is a safety net, not a guarantee — never rely on it
+#      alone for secrets that must never leak.
+#
+#   2. PROGRESS REMINDER (non-blocking) — reminds you to add an entry to the
+#      branch's PRD progress log (PRD/<branch>.md) so work stays documented.
+#
+# Enable for your clone (one time):  git config core.hooksPath .githooks
+# Emergency bypass (use sparingly):  git commit --no-verify
+#
+set -uo pipefail
+
+RED=$'\033[0;31m'; YEL=$'\033[0;33m'; GRN=$'\033[0;32m'; NC=$'\033[0m'
+fail=0
+
+staged_files=$(git diff --cached --name-only --diff-filter=ACM)
+
+# ---------------------------------------------------------------------------
+# 1a. Block sensitive FILES by name
+# ---------------------------------------------------------------------------
+while IFS= read -r f; do
+  [ -z "$f" ] && continue
+  base=$(basename "$f")
+  case "$base" in
+    .env.example|.env.sample|.env.template) : ;;            # allowed templates
+    .env|.env.*)
+      echo "${RED}✖ Refusing to commit env file:${NC} $f"; fail=1 ;;
+    *.pem|*.key|*.p12|*.pfx|*.keystore|*.jks|id_rsa|id_rsa.*|id_ed25519|.npmrc|.netrc)
+      echo "${RED}✖ Refusing to commit sensitive file:${NC} $f"; fail=1 ;;
+  esac
+done <<< "$staged_files"
+
+# ---------------------------------------------------------------------------
+# 1b. Scan ADDED lines for secret-shaped content
+#     (.githooks/ is excluded so this file's own patterns don't self-trigger)
+# ---------------------------------------------------------------------------
+added=$(git diff --cached --no-color -U0 -- . ':(exclude).githooks/**' \
+          | grep -E '^\+' | grep -Ev '^\+\+\+' || true)
+
+if [ -n "$added" ]; then
+  # High-signal provider fingerprints + private keys
+  hi='-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----|AKIA[0-9A-Z]{16}|AIza[0-9A-Za-z_-]{35}|xox[baprs]-[0-9A-Za-z-]{10,}|gh[pousr]_[0-9A-Za-z]{30,}|cfat_[0-9A-Za-z]{20,}|sk-(ant-)?[0-9A-Za-z_-]{20,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}'
+  hits=$(echo "$added" | grep -nE -e "$hi" || true)
+  if [ -n "$hits" ]; then
+    echo "${RED}✖ Possible secret detected in staged changes:${NC}"
+    echo "$hits" | sed 's/^/    /'
+    fail=1
+  fi
+
+  # Generic "key = long-value" assignments, minus obvious placeholders
+  gen=$(echo "$added" \
+    | grep -EI "(api[_-]?key|secret|token|password|passwd|credential|access[_-]?key)[[:space:]]*[:=][[:space:]]*['\"]?[A-Za-z0-9/+_-]{16,}" \
+    | grep -Eiv "your_|example|changeme|placeholder|dummy|sample|redacted|xxxx|<[a-z_]+>|\\\$\{|process\.env|os\.environ" || true)
+  if [ -n "$gen" ]; then
+    echo "${YEL}⚠ Possible hardcoded credential (review before committing):${NC}"
+    echo "$gen" | sed 's/^/    /'
+    fail=1
+  fi
+fi
+
+# ---------------------------------------------------------------------------
+# 2. Progress-log reminder (non-blocking)
+# ---------------------------------------------------------------------------
+branch=$(git rev-parse --abbrev-ref HEAD 2>/dev/null || echo "")
+prd="PRD/${branch}.md"
+if ! printf '%s\n' "$staged_files" | grep -qx "$prd"; then
+  echo "${YEL}⚠ Reminder:${NC} $prd was not updated in this commit."
+  echo "  Add a new 'Progress Update' entry (newest at top) to document this work."
+fi
+
+if [ "$fail" -ne 0 ]; then
+  echo ""
+  echo "${RED}Commit blocked by pre-commit secret guard.${NC}"
+  echo "If this is a false positive, fix the file or re-run with: git commit --no-verify"
+  exit 1
+fi
+
+echo "${GRN}✓ pre-commit checks passed${NC}"
+exit 0

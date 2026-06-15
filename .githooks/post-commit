@@ -1,0 +1,11 @@
+#!/usr/bin/env sh
+# This repo sets a local core.hooksPath (.githooks) for its committed pre-commit
+# secret guard. That overrides any machine-wide core.hooksPath, so we re-delegate
+# to a machine-wide roborev post-commit hook if one is installed. Harmless no-op
+# for clones without roborev.
+for h in "$HOME/.config/roborev/git-hooks/post-commit" \
+         "${XDG_CONFIG_HOME:-$HOME/.config}/roborev/git-hooks/post-commit"; do
+  if [ -x "$h" ]; then exec "$h" "$@"; fi
+done
+command -v roborev >/dev/null 2>&1 && roborev post-commit >/dev/null 2>&1 || true
+exit 0
