@@ -76,7 +76,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
         <div className="mt-2 flex flex-col gap-2">
           {OHS_AFFILIATIONS.map((opt) => (
             <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
-              <input type="radio" name="ohsAffiliation" value={opt} defaultChecked={row.ohsAffiliation === opt} className="mt-1 accent-white" />
+              <input type="radio" name="ohsAffiliation" value={opt} defaultChecked={row.ohsAffiliation === opt} className="mt-1 h-4 w-4 accent-amber-500" />
               <span>{opt}</span>
             </label>
           ))}
@@ -88,7 +88,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {TECHNICAL_DEPTH.map((opt) => (
             <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
-              <input type="radio" name="technicalDepth" value={opt} defaultChecked={row.technicalDepth === opt} className="mt-1 accent-white" />
+              <input type="radio" name="technicalDepth" value={opt} defaultChecked={row.technicalDepth === opt} className="mt-1 h-4 w-4 accent-amber-500" />
               <span>{opt}</span>
             </label>
           ))}
@@ -109,7 +109,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {SKILLSETS.map((opt) => (
             <label key={opt} className="flex items-center gap-2 text-sm text-white/80">
-              <input type="checkbox" name="skillsets" value={opt} defaultChecked={skills.has(opt)} className="accent-white" />
+              <input type="checkbox" name="skillsets" value={opt} defaultChecked={skills.has(opt)} className="h-4 w-4 accent-amber-500" />
               <span>{opt}</span>
             </label>
           ))}
@@ -121,7 +121,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
         <div className="mt-2 grid gap-2 sm:grid-cols-2">
           {TIME_COMMITMENT.map((opt) => (
             <label key={opt} className="flex items-center gap-2 text-sm text-white/80">
-              <input type="radio" name="timeCommitment" value={opt} defaultChecked={row.timeCommitment === opt} className="accent-white" />
+              <input type="radio" name="timeCommitment" value={opt} defaultChecked={row.timeCommitment === opt} className="h-4 w-4 accent-amber-500" />
               <span>{opt}</span>
             </label>
           ))}

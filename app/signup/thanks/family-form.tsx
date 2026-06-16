@@ -212,7 +212,7 @@ export default function FamilyForm({
               type="checkbox"
               checked={notInUS}
               onChange={(e) => setNotInUS(e.target.checked)}
-              className="accent-white"
+              className="h-4 w-4 accent-amber-500"
             />
             Not in the US
           </label>
