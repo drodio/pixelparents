@@ -3,6 +3,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { desc } from "drizzle-orm";
 import { getDb, hasDatabase } from "@/lib/db";
 import { signups, children, type ChildRow } from "@/lib/db/schema/signups";
+import { abbrState } from "@/lib/options";
 import { isAdminEmail, isEnvAdmin, dbAdminEmails } from "@/lib/admin";
 import { setAdmin } from "./actions";
 import { Pills } from "./pills";
@@ -64,7 +65,6 @@ export default async function ParentsPage() {
               <th className={thCls}>Status</th>
               <th className={thCls}>Name</th>
               <th className={thCls}>Children</th>
-              <th className={thCls}>Submitted</th>
               <th className={thCls}>Contact</th>
               <th className={thCls}>GitHub</th>
               <th className={thCls}>Affiliation</th>
@@ -75,6 +75,7 @@ export default async function ParentsPage() {
               <th className={thCls}>Parent interests</th>
               <th className={thCls}>Photos</th>
               <th className={thCls}>Actions</th>
+              <th className={thCls}>Submitted</th>
             </tr>
           </thead>
           <tbody>
@@ -121,36 +122,31 @@ export default async function ParentsPage() {
                     {myKids.length === 0 ? (
                       <span className="text-white/30">—</span>
                     ) : (
-                      <div className="flex flex-wrap gap-1">
+                      <div className="flex flex-col gap-0.5">
                         {myKids.map((k) => (
                           <Link
                             key={k.id}
                             href={`/admin/children?parent=${r.id}#c-${k.id}`}
-                            className="rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-xs text-white/80 hover:bg-white/15"
+                            className="font-bold text-teal-300 hover:underline"
                           >
                             {k.firstName}
-                            {k.grade ? ` (${k.grade})` : ""}
+                            {k.grade ? (
+                              <span className="font-normal text-white/50"> ({k.grade})</span>
+                            ) : null}
                           </Link>
                         ))}
                       </div>
                     )}
                   </td>
-                  <td className={`${tdCls} whitespace-nowrap text-white/50`}>
-                    {new Date(r.createdAt).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                      year: "numeric",
-                    })}
-                  </td>
                   <td className={tdCls}>
-                    <a className="underline decoration-white/30 hover:decoration-white" href={`mailto:${r.email}`}>
+                    <a className="text-teal-300 hover:underline" href={`mailto:${r.email}`}>
                       {r.email}
                     </a>
                     <div className="text-white/50">{r.phone}</div>
                   </td>
                   <td className={`${tdCls} whitespace-nowrap`}>
                     <a
-                      className="underline decoration-white/30 hover:decoration-white"
+                      className="text-teal-300 hover:underline"
                       href={`https://github.com/${r.githubUsername}`}
                       target="_blank"
                       rel="noreferrer"
@@ -169,13 +165,15 @@ export default async function ParentsPage() {
                     <Pills values={r.skillsets} />
                   </td>
                   <td className={`${tdCls} whitespace-nowrap text-white/80`}>
-                    {[r.city, r.state].filter(Boolean).join(", ") || "—"}
+                    {[r.city, abbrState(r.state)].filter(Boolean).join(", ") || "—"}
                   </td>
                   <td className={tdCls}>
                     <Pills values={r.parentInterests} />
                   </td>
                   <td className={`${tdCls} whitespace-nowrap text-white/50`}>
-                    {r.photos?.length ? `📷 ${r.photos.length}` : "—"}
+                    {r.photos?.length
+                      ? `${r.photos.length} photo${r.photos.length === 1 ? "" : "s"}`
+                      : "—"}
                   </td>
                   <td className={`${tdCls} whitespace-nowrap`}>
                     <div className="flex items-center gap-1">
@@ -188,6 +186,13 @@ export default async function ParentsPage() {
                       </Link>
                       <DeleteButton id={r.id} name={`${r.firstName} ${r.lastName}`} />
                     </div>
+                  </td>
+                  <td className={`${tdCls} whitespace-nowrap text-white/50`}>
+                    {new Date(r.createdAt).toLocaleDateString("en-US", {
+                      month: "short",
+                      day: "numeric",
+                      year: "numeric",
+                    })}
                   </td>
                 </tr>
               );

@@ -6,6 +6,8 @@ import { signups, children } from "@/lib/db/schema/signups";
 import { isAdminEmail } from "@/lib/admin";
 import { Pills } from "../pills";
 import { TableWrap, thCls, tdCls } from "../ui";
+import { PencilIcon } from "../icons";
+import { DeleteChildButton } from "../delete-child-button";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,7 @@ export default async function ChildrenPage({
             {filterParent.firstName} {filterParent.lastName}
           </span>{" "}
           ·{" "}
-          <Link href="/admin/children" className="underline decoration-white/40 hover:decoration-white">
+          <Link href="/admin/children" className="text-teal-300 hover:underline">
             Show all
           </Link>
         </p>
@@ -67,10 +69,11 @@ export default async function ChildrenPage({
           <thead>
             <tr>
               <th className={thCls}>Child</th>
+              <th className={thCls}>Parent</th>
               <th className={thCls}>Grade</th>
               <th className={thCls}>Interests</th>
               <th className={thCls}>Notes</th>
-              <th className={thCls}>Parent</th>
+              <th className={thCls}>Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -85,22 +88,31 @@ export default async function ChildrenPage({
                   <th scope="row" className={`${tdCls} whitespace-nowrap text-left font-bold text-white`}>
                     {k.firstName}
                   </th>
+                  <td className={`${tdCls} whitespace-nowrap`}>
+                    {p ? (
+                      <Link href={`/admin#p-${p.id}`} className="text-teal-300 hover:underline">
+                        {p.firstName} {p.lastName}
+                      </Link>
+                    ) : (
+                      "—"
+                    )}
+                  </td>
                   <td className={`${tdCls} whitespace-nowrap text-white/80`}>{k.grade ?? "—"}</td>
                   <td className={tdCls}>
                     <Pills values={k.interests} />
                   </td>
                   <td className={`${tdCls} max-w-md text-white/80`}>{k.notes || "—"}</td>
                   <td className={`${tdCls} whitespace-nowrap`}>
-                    {p ? (
+                    <div className="flex items-center gap-1">
                       <Link
-                        href={`/admin#p-${p.id}`}
-                        className="underline decoration-white/40 hover:decoration-white"
+                        href={`/signup/thanks?id=${k.signupId}&admin=1`}
+                        title="Edit child(ren) details"
+                        className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
                       >
-                        {p.firstName} {p.lastName}
+                        <PencilIcon />
                       </Link>
-                    ) : (
-                      "—"
-                    )}
+                      <DeleteChildButton id={k.id} name={k.firstName} />
+                    </div>
                   </td>
                 </tr>
               );

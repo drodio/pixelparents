@@ -2,16 +2,16 @@ import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { eq } from "drizzle-orm";
 import { getDb, hasDatabase } from "@/lib/db";
-import { signups } from "@/lib/db/schema/signups";
+import { children } from "@/lib/db/schema/signups";
 import { isAdminEmail } from "@/lib/admin";
-import EditForm from "./edit-form";
+import ChildEditForm from "./edit-form";
 
 export const dynamic = "force-dynamic";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-export default async function EditParentPage({
+export default async function EditChildPage({
   params,
 }: {
   params: Promise<{ id: string }>;
@@ -25,12 +25,14 @@ export default async function EditParentPage({
     return <p className="text-sm text-white/60">Record not found.</p>;
   }
 
-  const [row] = await getDb().select().from(signups).where(eq(signups.id, id)).limit(1);
+  const [row] = await getDb().select().from(children).where(eq(children.id, id)).limit(1);
   if (!row) {
     return (
       <div className="flex flex-col gap-4">
-        <p className="text-sm text-white/60">That submission no longer exists.</p>
-        <Link href="/admin" className="text-sm text-teal-300 hover:underline">← Back to Parents</Link>
+        <p className="text-sm text-white/60">That child no longer exists.</p>
+        <Link href="/admin/children" className="text-sm text-teal-300 hover:underline">
+          ← Back to Children
+        </Link>
       </div>
     );
   }
@@ -38,14 +40,12 @@ export default async function EditParentPage({
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-xl font-semibold">
-          Edit — {row.firstName} {row.lastName}
-        </h2>
-        <Link href="/admin" className="text-sm text-teal-300 hover:underline">
+        <h2 className="text-xl font-semibold">Edit child — {row.firstName}</h2>
+        <Link href="/admin/children" className="text-sm text-teal-300 hover:underline">
           ← Back
         </Link>
       </div>
-      <EditForm row={row} />
+      <ChildEditForm row={row} />
     </div>
   );
 }

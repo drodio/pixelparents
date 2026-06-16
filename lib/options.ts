@@ -33,12 +33,12 @@ export const SKILLSETS = [
 ] as const;
 
 export const TIME_COMMITMENT = [
-  "<1 hour /week",
-  "1-2 hours/week",
-  "2-5 hours/week",
-  "5-10 hours/week",
-  "10-20 hours/week",
-  "Full time or more!",
+  "<1hr/wk",
+  "1-2hr/wk",
+  "2-5hr/wk",
+  "5-10hr/wk",
+  "10-20hr/wk",
+  "Full time+",
 ] as const;
 
 export const GRADES = [
@@ -61,6 +61,27 @@ export const US_STATES = [
   "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia",
   "Washington", "West Virginia", "Wisconsin", "Wyoming",
 ] as const;
+
+// Full state name -> USPS two-letter abbreviation (for compact display).
+export const STATE_ABBR: Record<string, string> = {
+  Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA",
+  Colorado: "CO", Connecticut: "CT", Delaware: "DE", Florida: "FL", Georgia: "GA",
+  Hawaii: "HI", Idaho: "ID", Illinois: "IL", Indiana: "IN", Iowa: "IA",
+  Kansas: "KS", Kentucky: "KY", Louisiana: "LA", Maine: "ME", Maryland: "MD",
+  Massachusetts: "MA", Michigan: "MI", Minnesota: "MN", Mississippi: "MS",
+  Missouri: "MO", Montana: "MT", Nebraska: "NE", Nevada: "NV",
+  "New Hampshire": "NH", "New Jersey": "NJ", "New Mexico": "NM", "New York": "NY",
+  "North Carolina": "NC", "North Dakota": "ND", Ohio: "OH", Oklahoma: "OK",
+  Oregon: "OR", Pennsylvania: "PA", "Rhode Island": "RI", "South Carolina": "SC",
+  "South Dakota": "SD", Tennessee: "TN", Texas: "TX", Utah: "UT", Vermont: "VT",
+  Virginia: "VA", Washington: "WA", "West Virginia": "WV", Wisconsin: "WI",
+  Wyoming: "WY",
+};
+
+export function abbrState(name?: string | null): string | null {
+  if (!name) return null;
+  return STATE_ABBR[name] ?? name;
+}
 
 // Full non-PII option surface returned by GET /api/v1/options.
 export const OPTIONS = {

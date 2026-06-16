@@ -42,7 +42,7 @@ function parsePhotos(value: FormDataEntryValue | null): Photo[] {
         (p): p is Photo =>
           p && typeof p.url === "string" && typeof p.pathname === "string",
       )
-      .slice(0, 12);
+      .slice(0, 200);
   } catch {
     return [];
   }

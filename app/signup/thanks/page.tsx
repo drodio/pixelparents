@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Image from "next/image";
+import Link from "next/link";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { signups } from "@/lib/db/schema/signups";
@@ -33,9 +34,9 @@ async function getFirstName(id?: string): Promise<string | null> {
 export default async function ThanksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string }>;
+  searchParams: Promise<{ id?: string; admin?: string }>;
 }) {
-  const { id } = await searchParams;
+  const { id, admin } = await searchParams;
   const [firstName, interestPool] = await Promise.all([
     getFirstName(id),
     getInterestPool(),
@@ -53,6 +54,14 @@ export default async function ThanksPage({
         className="aspect-[5/2] w-full object-cover object-top"
       />
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
+        {admin && id ? (
+          <Link
+            href={`/admin/parents/${id}/edit`}
+            className="mb-4 inline-block text-sm font-medium text-teal-300 hover:underline"
+          >
+            ← Edit parent details
+          </Link>
+        ) : null}
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
 
         <div className="mt-6 space-y-4 text-white/70">
@@ -62,7 +71,7 @@ export default async function ThanksPage({
               href="https://festival.so/profile/founder/drodio"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline decoration-white/40 hover:decoration-white"
+              className="text-teal-300 hover:underline"
             >
               DROdio
             </a>
@@ -72,7 +81,7 @@ export default async function ThanksPage({
               href="https://chief.bot"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline decoration-white/40 hover:decoration-white"
+              className="text-teal-300 hover:underline"
             >
               Chief
             </a>
@@ -92,7 +101,7 @@ export default async function ThanksPage({
               href="https://github.com/drodio/pixelparents"
               target="_blank"
               rel="noopener noreferrer"
-              className="underline decoration-white/40 hover:decoration-white"
+              className="text-teal-300 hover:underline"
             >
               open source
             </a>{" "}
@@ -117,7 +126,7 @@ export default async function ThanksPage({
                 For reference, here are{" "}
                 <a
                   href={DRODIO_SUBMISSION_URL}
-                  className="underline decoration-white/40 hover:decoration-white"
+                  className="text-teal-300 hover:underline"
                 >
                   my answers
                 </a>

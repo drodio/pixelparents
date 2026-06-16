@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import {
   OHS_AFFILIATIONS,
@@ -143,7 +144,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
         </div>
       </div>
 
-      <div className="flex gap-3">
+      <div className="flex items-center gap-4">
         <button
           type="submit"
           disabled={pending}
@@ -151,6 +152,12 @@ export default function EditForm({ row }: { row: SignupRow }) {
         >
           {pending ? "Saving…" : "Save changes"}
         </button>
+        <Link
+          href={`/signup/thanks?id=${row.id}&admin=1`}
+          className="text-sm font-medium text-teal-300 hover:underline"
+        >
+          Edit child(ren) details →
+        </Link>
       </div>
     </form>
   );

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { eq } from "drizzle-orm";
 import { currentUser } from "@clerk/nextjs/server";
 import { getDb } from "@/lib/db";
-import { signups } from "@/lib/db/schema/signups";
+import { signups, children } from "@/lib/db/schema/signups";
 import { addAdmin, removeAdmin, isAdminEmail, isEnvAdmin } from "@/lib/admin";
 
 async function callerEmail(): Promise<string | null> {
@@ -46,4 +46,17 @@ export async function deleteSignup(formData: FormData): Promise<void> {
   await getDb().delete(signups).where(eq(signups.id, id));
   revalidatePath("/admin");
   revalidatePath("/admin/children");
+}
+
+// Delete a single child. Admin-only.
+export async function deleteChild(formData: FormData): Promise<void> {
+  const caller = await callerEmail();
+  if (!(await isAdminEmail(caller))) {
+    throw new Error("Forbidden: not an admin");
+  }
+  const id = String(formData.get("id") ?? "").trim();
+  if (!id) return;
+  await getDb().delete(children).where(eq(children.id, id));
+  revalidatePath("/admin/children");
+  revalidatePath("/admin");
 }

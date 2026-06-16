@@ -7,7 +7,8 @@ import { optimizeImage } from "@/lib/image";
 import type { Photo } from "@/lib/db/schema/signups";
 import { saveFamily, type FamilyState } from "./actions";
 
-const MAX_PHOTOS = 8;
+// Effectively unlimited; a high safety ceiling to avoid pathological abuse.
+const MAX_PHOTOS = 200;
 const initialState: FamilyState = { ok: false };
 
 const labelCls = "block text-sm font-medium text-white/80";
@@ -234,7 +235,8 @@ export default function FamilyForm({
             Photos of things you enjoy doing as a family
           </label>
           <p className="mt-1 text-xs text-white/40">
-            Resized &amp; optimized in your browser before upload. Up to {MAX_PHOTOS}.
+            Resized &amp; optimized in your browser before upload. Add as many as
+            you&rsquo;d like.
           </p>
           <input
             type="file"

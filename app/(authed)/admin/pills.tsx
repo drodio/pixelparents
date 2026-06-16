@@ -3,7 +3,7 @@
 import { useState } from "react";
 
 const pillCls =
-  "rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-xs text-white/80";
+  "whitespace-nowrap rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-xs text-white/80";
 
 // Shows up to 2 pills inline; when there are more, shows the first + a
 // "+N more" chip that expands the row to reveal the rest.
