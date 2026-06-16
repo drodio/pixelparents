@@ -50,16 +50,34 @@ export default async function ThanksPage({
         width={2000}
         height={1125}
         priority
-        className="h-48 w-full object-cover sm:h-64"
+        className="h-auto w-full"
       />
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
 
         <div className="mt-6 space-y-4 text-white/70">
           <p>
-            I&apos;m DROdio, dad to Devina, who&apos;s just entering OHS as a 7th
-            grader. I&apos;m the CEO of Chief, an AI Chief of Staff startup in the
-            SF Bay area. I love to build impactful software.
+            I&apos;m{" "}
+            <a
+              href="https://festival.so/profile/founder/drodio"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-white/40 hover:decoration-white"
+            >
+              DROdio
+            </a>
+            , dad to Devina, who&apos;s just entering OHS as a 7th grader.
+            I&apos;m the CEO of{" "}
+            <a
+              href="https://chief.bot"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-white/40 hover:decoration-white"
+            >
+              Chief
+            </a>
+            , an AI Chief of Staff startup in the SF Bay area. I love to build
+            impactful software.
           </p>
           <p>
             My objective with this website is to build software that will
@@ -69,8 +87,17 @@ export default async function ThanksPage({
             with no politics.
           </p>
           <p>
-            I hope to make everything we do open source so others can benefit
-            from it. Ensuring our kids&apos; safety and privacy is top-of-mind,
+            I hope to make everything we do{" "}
+            <a
+              href="https://github.com/drodio/pixelparents"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="underline decoration-white/40 hover:decoration-white"
+            >
+              open source
+            </a>{" "}
+            so others can benefit from it. Ensuring our kids&apos; safety and
+            privacy is top-of-mind,
             and within that safe space I want to be as fully inclusive as
             possible.
           </p>
