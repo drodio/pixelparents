@@ -51,7 +51,7 @@ export default async function ThanksPage({
         width={2000}
         height={1125}
         priority
-        className="aspect-[5/2] w-full object-cover object-top"
+        className="aspect-[13/5] w-full object-cover object-top"
       />
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         {admin && id ? (
@@ -64,7 +64,7 @@ export default async function ThanksPage({
         ) : null}
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
         <h2 className="mt-2 text-xl font-semibold text-white/90 sm:text-2xl">
-          Please tell us about your child(ren), below.
+          Please tell us about your interests + child(ren), below.
         </h2>
 
         <div className="mt-6 space-y-4 text-white/70">
@@ -137,6 +137,9 @@ export default async function ThanksPage({
               </>
             ) : null}
           </p>
+          <h2 className="pt-2 text-xl font-semibold text-white sm:text-2xl">
+            Your location, interests &amp; child(ren)
+          </h2>
           <p className="text-white/50">
             This information is optional — feel free to hold off until later if
             you prefer. It&apos;s stored in a Neon serverless Postgres database,
