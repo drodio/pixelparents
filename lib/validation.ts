@@ -1,0 +1,60 @@
+import { z } from "zod";
+import {
+  OHS_AFFILIATIONS,
+  TECHNICAL_DEPTH,
+  SKILLSETS,
+  TIME_COMMITMENT,
+  GRADES,
+} from "./options";
+
+// Allow an enum value or empty string (optional select left blank).
+const optionalEnum = <T extends readonly [string, ...string[]]>(values: T) =>
+  z.union([z.enum(values), z.literal("")]).optional();
+
+export const signupSchema = z.object({
+  firstName: z.string().trim().min(1, "First name is required").max(100),
+  lastName: z.string().trim().min(1, "Last name is required").max(100),
+  email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
+  phone: z.string().trim().min(1, "Phone is required").max(40),
+  githubUsername: z
+    .string()
+    .trim()
+    .min(1, "GitHub username is required")
+    .max(39)
+    .regex(/^[A-Za-z0-9-]+$/, "Use only letters, numbers, and dashes"),
+  ohsAffiliation: optionalEnum(OHS_AFFILIATIONS),
+  technicalDepth: optionalEnum(TECHNICAL_DEPTH),
+  // LinkedIn is captured as a handle (the part after linkedin.com/in/).
+  linkedinHandle: z
+    .string()
+    .trim()
+    .max(100)
+    .regex(/^[A-Za-z0-9._-]*$/, "Use only letters, numbers, dots, dashes")
+    .optional(),
+  skillsets: z.array(z.enum(SKILLSETS)).optional(),
+  timeCommitment: optionalEnum(TIME_COMMITMENT),
+});
+
+export type SignupInput = z.infer<typeof signupSchema>;
+
+export const familySchema = z.object({
+  city: z.string().trim().max(120).optional(),
+  state: z.string().trim().max(120).optional(),
+  parentInterests: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+});
+
+export const childSchema = z.object({
+  firstName: z.string().trim().min(1, "Child's first name is required").max(100),
+  grade: z.union([z.enum(GRADES), z.literal("")]).optional(),
+  interests: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
+  notes: z.string().trim().max(2000).optional(),
+});
+
+export type FamilyInput = z.infer<typeof familySchema>;
+export type ChildInput = z.infer<typeof childSchema>;
+
+// Build a full LinkedIn URL from a handle (or null if blank).
+export function linkedinUrlFromHandle(handle?: string | null): string | null {
+  const h = (handle ?? "").trim();
+  return h ? `https://linkedin.com/in/${h}` : null;
+}
