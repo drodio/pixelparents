@@ -50,7 +50,7 @@ export default async function ThanksPage({
         width={2000}
         height={1125}
         priority
-        className="h-auto w-full"
+        className="aspect-[5/2] w-full object-cover object-top"
       />
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
