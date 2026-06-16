@@ -1,6 +1,29 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 16, 2026 — 12:50 PM Pacific
+
+### Summary of changes since last update
+All Pixel Parents email now sends from the verified `DROdio@pixelparents.org`
+sender and carries DROdio's signature block. (`pixelparents.org` was already a
+verified sending domain on Resend — no DNS work needed.) Sent a test email from
+the new address to confirm.
+
+### Detail of changes made:
+- **Resend:** confirmed `pixelparents.org` domain is `verified` (sending enabled).
+  Sent a test email from `DROdio@pixelparents.org` to drodio@storytell.ai +
+  DROdio@pixelparents.org (Resend id 011804c4…).
+- **`lib/email.ts`:** refactored to a single `sendEmail()` helper that all
+  notifications route through. New default `FROM = "DROdio <DROdio@pixelparents.org>"`.
+  Every email now appends a signature block:
+  `— / DROdio / Devina's dad (7th grade) / +1.202.250.3846 cell or WhatsApp`.
+- **Vercel env:** updated `RESEND_FROM` (Production) to
+  `DROdio <DROdio@pixelparents.org>` (code default matches as a safety net).
+- Verified `next build` + TypeScript clean.
+
+### Potential concerns to address:
+- `RESEND_FROM` updated for **Production** only (Preview/Dev unset → fall back to
+  the code default, which is the same address). Fine for live email.
 ## Progress Update as of June 16, 2026 — 12:01 PM Pacific
 
 ### Summary of changes since last update
