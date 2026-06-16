@@ -30,10 +30,10 @@ export async function createRequest(input: {
   name: string;
   email: string;
   intendedUse: string;
-}): Promise<ApiKeyRow> {
+}): Promise<{ row: ApiKeyRow; created: boolean }> {
   await ensureApiKeysTable();
   const existing = await getRequestByClerkUser(input.clerkUserId);
-  if (existing && existing.status !== "rejected") return existing;
+  if (existing && existing.status !== "rejected") return { row: existing, created: false };
 
   const [row] = await getDb()
     .insert(apiKeys)
@@ -45,7 +45,7 @@ export async function createRequest(input: {
       status: "pending",
     })
     .returning();
-  return row!;
+  return { row: row!, created: true };
 }
 
 export async function getRequestById(id: string): Promise<ApiKeyRow | null> {

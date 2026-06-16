@@ -3,7 +3,7 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { createRequest, revealOrRotateKey } from "@/lib/db/api-keys";
-import { notifyAdminNewApiRequest } from "@/lib/email";
+import { notifyAdminNewApiRequest, notifyApiRequestReceived } from "@/lib/email";
 import { apiRequestSchema } from "@/lib/validation";
 
 function identity(user: NonNullable<Awaited<ReturnType<typeof currentUser>>>) {
@@ -33,13 +33,17 @@ export async function submitRequest(
   }
 
   const { email, name } = identity(user);
-  await createRequest({
+  const { created } = await createRequest({
     clerkUserId: user.id,
     name,
     email,
     intendedUse: parsed.data.intended_use,
   });
-  await notifyAdminNewApiRequest({ name, email, intendedUse: parsed.data.intended_use });
+  // Only notify on a genuinely new request — don't re-email on a duplicate submit.
+  if (created) {
+    await notifyAdminNewApiRequest({ name, email, intendedUse: parsed.data.intended_use });
+    if (email) await notifyApiRequestReceived({ to: email, name });
+  }
   revalidatePath("/account");
   return { ok: true };
 }

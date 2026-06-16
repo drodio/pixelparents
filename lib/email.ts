@@ -88,6 +88,37 @@ export async function notifyAdminNewApiRequest(notice: {
   }
 }
 
+// --- Developer API: confirm to the applicant that we received their request ---
+// Best-effort: never throws, never blocks the request.
+export async function notifyApiRequestReceived(notice: {
+  to: string;
+  name: string;
+}): Promise<void> {
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — skipping API request-received email.");
+    return;
+  }
+  const text = [
+    `Hi ${notice.name},`,
+    ``,
+    `Thanks for requesting Pixel Parents developer API access — your request is`,
+    `under review. We review every request by hand, and you'll get another email`,
+    `when it's approved. Your API key will then show up at:`,
+    ``,
+    `https://pixelparents.org/account`,
+  ].join("\n");
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: notice.to,
+      subject: "Your Pixel Parents API request is under review ⏳",
+      text,
+    });
+  } catch (err) {
+    console.error("Resend request-received notification failed:", err);
+  }
+}
+
 // --- Developer API: tell an applicant their request was approved/rejected ---
 // Best-effort: never throws, never blocks the admin's decision.
 export async function notifyApiDecision(notice: {

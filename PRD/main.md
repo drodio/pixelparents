@@ -1,6 +1,20 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 16, 2026 — 12:01 PM Pacific
+
+### Summary of changes since last update
+On a new API access request, the applicant now also gets a confirmation email
+("under review"), alongside the existing admin notification. Guarded so a
+duplicate submit doesn't re-email.
+
+### Detail of changes made:
+- **`lib/email.ts`:** added `notifyApiRequestReceived({to,name})` — "Your Pixel
+  Parents API request is under review ⏳", links to /account.
+- **`lib/db/api-keys.ts`:** `createRequest` now returns `{ row, created }`.
+- **`app/(authed)/account/actions.ts`:** `submitRequest` emails the applicant +
+  admin only when `created` is true (no re-emailing on duplicate submits).
+- Verified `next build` + TypeScript clean.
 ## Progress Update as of June 16, 2026 — 8:39 AM Pacific
 
 ### Summary of changes since last update
