@@ -1,6 +1,24 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 15, 2026 — 9:27 PM Pacific
+
+### Summary of changes since last update
+Built the `/admin` dashboard: a table of all signup submissions plus the ability to promote/revoke any submitter as an admin. Admin status is now DB-backed (new `admins` table keyed by email) and composes with the `ADMIN_EMAILS` env superadmin list — a person is granted admin the moment they sign in to Clerk with an email that's in either set, so public sign-ups stay open and no Clerk config change is needed.
+
+### Detail of changes made:
+- **New `admins` table** (`lib/db/schema/admins.ts`, barrel-exported in `lib/db/schema/index.ts`): `email` PK, `created_at`, `created_by`. Created idempotently in Neon (already live, 0 rows) and self-heals via `ensureAdminsTable()` per the existing `api_keys`/`ensure.ts` pattern.
+- **`lib/admin.ts`:** `isAdminEmail(email)` = env allowlist ∪ `admins` table row; plus `isEnvAdmin`, `dbAdminEmails()` (a Set for rendering per-row state without N+1), `addAdmin`/`removeAdmin`.
+- **`/admin` page** (`app/(authed)/admin/page.tsx`): gated by `isAdminEmail`; renders a horizontally-scrollable table of ALL submissions (submitted date, name, contact, GitHub link, affiliation, tech depth, time commitment, skillsets, location, parent interests, children w/ grade+interests, photo count) with a per-row **Make admin / Revoke** control. Env superadmins show a non-revocable "Superadmin" badge. Header shows counts (submissions / children / db-admins).
+- **Server action** (`app/(authed)/admin/actions.ts`): `setAdmin(formData)` re-verifies the *caller* is an admin server-side (never trusts the client), refuses to touch env superadmins, upserts/deletes the email, `revalidatePath('/admin')`.
+- **Data now:** 4 signups / 2 children in Neon. Build green with the full route set (admin + signup + dev-api).
+
+### Potential concerns to address:
+- **Bootstrap admin = `drodio@storytell.ai`** (the env superadmin). Sign in to Clerk with THAT email to reach `/admin` and promote others; any other sign-in email is locked out until added (env or DB).
+- **Clerk live domain still provisioning** (`clerk.pixelparents.org`) — until Clerk's edge serves it, production sign-in renders a blank widget; local dev (`pk_test`) works now. A background watcher is polling and will report when it goes live.
+- **Admin is keyed by email, not Clerk user id** — fine for this trust model; revisit if stricter identity binding is ever needed.
+- **Photos shown as counts only** (private Blob); viewing kids' photos would need signed `getDownloadUrl()` URLs (deferred).
+
 ## Progress Update as of June 15, 2026 — 7:07 PM Pacific
 
 ### Summary of changes since last update

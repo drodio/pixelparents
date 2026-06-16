@@ -4,3 +4,4 @@
 // re-export them here too.
 export * from "./api-keys";
 export * from "./signups";
+export * from "./admins";
