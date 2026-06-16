@@ -76,8 +76,8 @@ export default function DevelopersPage() {
               <p className="text-sm font-semibold uppercase tracking-wide text-emerald-300">Test</p>
               <p className="font-display text-2xl font-bold">Free &amp; instant</p>
               <p className="text-sm text-white/60">
-                Self-serve below — no approval. Returns ultra-high-level aggregates only: total
-                signups and a last-updated timestamp.
+                Self-serve below — no approval required (on your honor that you are an OHS family).
+                Returns ultra-high-level aggregates only: total signups and a last-updated timestamp.
               </p>
             </div>
             <div className="flex flex-col gap-2 rounded-lg border border-white/10 bg-white/[0.03] p-5">

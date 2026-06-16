@@ -1,6 +1,16 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 16, 2026 — 4:42 AM Pacific
+
+### Summary of changes since last update
+`/developers` Test-tier copy tweak only: "no approval." → "no approval required
+(on your honor that you are an OHS family).". Shipped to prod. No behavior change.
+
+### Detail of changes made:
+- **`app/developers/page.tsx`:** Test (formerly Public) tier card description
+  reworded. The OHS-only restriction remains honor-system in the copy — there is
+  still no server-side OHS verification on key issuance.
 ## Progress Update as of June 16, 2026 — 4:41 AM Pacific
 
 ### Summary of changes since last update
