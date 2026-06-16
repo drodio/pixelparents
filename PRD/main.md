@@ -1,6 +1,36 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 15, 2026 — 6:46 PM Pacific
+
+### Summary of changes since last update
+Added Clerk authentication with an admin-only gate, mirroring the founder-festival setup. Built on an isolated `worktree-clerk-auth` branch (under `.claude/worktrees/clerk-auth`) and merged into `main`. Implementation is complete and verified locally; Clerk keys are wired for local dev, and production wiring (Vercel env + DNS) is still pending.
+
+### Detail of changes made:
+- **Dependency:** `@clerk/nextjs` v7 added (merged alongside the parallel signup/dev-api deps — Neon/Drizzle/Zod/Vitest).
+- **Middleware:** `proxy.ts` (this Next.js version's renamed `middleware.ts`) runs `clerkMiddleware` and protects `/admin(.*)` via `createRouteMatcher` + `auth.protect()`. Public splash is untouched.
+- **Provider scoping:** `<ClerkProvider>` lives in `app/(authed)/layout.tsx`, NOT the root layout — so the public coming-soon splash loads zero Clerk JS and triggers no dev handshake. Verified: `/` returns 200 with no `ClerkProvider`/`clerk.browser.js`/publishable key in the HTML.
+- **Routes:** `app/(authed)/sign-in/[[...sign-in]]/page.tsx` (`<SignIn/>`) and `app/(authed)/admin/page.tsx` (gated). Verified locally: `/admin` signed-out → `307` to `/sign-in?redirect_url=…/admin`; `/sign-in` renders the real Clerk widget (dev instance `clerk.accounts.dev`).
+- **Admin gating is two layers:** `proxy.ts` requires *signed-in*; the admin page additionally checks `ADMIN_EMAILS` (comma-separated allowlist) so signing up via Clerk is not enough to reach admin tools. Seeded `ADMIN_EMAILS=drodio@storytell.ai` locally.
+- **Env:** `.env.example` documents `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `ADMIN_EMAILS` (templates only). Local `.env.local` uses Development-instance keys (`pk_test`/`sk_test`) so localhost works with no DNS; live keys (`pk_live`/`sk_live`, bound to `clerk.pixelparents.org`) are stored in git-ignored `.env.prod.local`.
+- **Vercel project moved:** `pixelparents` was transferred from the `storytell` team to `drodio1s-projects`; the repo was re-linked (`.vercel/project.json` orgId now `team_qK4jnhrT8pwg9pnSiIzXLUIe`).
+
+### Potential concerns to address:
+- **Production not wired yet:** live Clerk keys are NOT in Vercel's Production env, and the Clerk production instance (`clerk.pixelparents.org`) needs CNAME records on the `pixelparents.org` zone before the live gate works. Until then, only local dev auth functions.
+- **Clerk allows public sign-ups by default:** anyone can create a Clerk account; the `ADMIN_EMAILS` allowlist is what actually restricts `/admin`. Consider setting the Clerk app to restricted/invite-only sign-ups if public account creation is undesirable.
+- **Provisioning path:** keys came from the Clerk dashboard (Pro account) directly, not the Vercel Marketplace integration (the Marketplace flow was abandoned at terms-acceptance — no resource provisioned, but worth a `vercel integration list` check to confirm nothing dangling).
+
+## Progress Update as of June 15, 2026 — 6:44 PM Pacific
+
+### Summary of changes since last update
+Replaced the default create-next-app boilerplate in `README.md` with a short, parent-facing welcome message inviting Stanford OHS parents to contribute to the open source project.
+
+### Detail of changes made:
+- **`README.md`:** now a "Hello Stanford OHS parent!" welcome — explains this is an OSS project for parents to build software supporting kids at OHS, directs interested parents to DM DROdio on the Tech Pixel Parents WhatsApp group, and gives a fallback email (DROdio+OHS@Gmail.com) for parents not yet in the group. Dropped the Next.js/Vercel getting-started scaffolding that was there before.
+
+### Potential concerns to address:
+- README no longer documents local dev setup. If/when external contributors arrive, consider adding a CONTRIBUTING.md or a "Local development" section so newcomers can run the app.
+
 ## Progress Update as of June 15, 2026 — 6:18 PM Pacific
 
 ### Summary of changes since last update
