@@ -232,7 +232,8 @@ export default function FamilyForm({
 
         <div>
           <label className={labelCls}>
-            Photos of things you enjoy doing as a family
+            Would you like to share any photos of your family, including
+            activities you enjoy?
           </label>
           <p className="mt-1 text-xs text-white/40">
             Resized &amp; optimized in your browser before upload. Add as many as
