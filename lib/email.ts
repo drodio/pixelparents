@@ -54,46 +54,78 @@ export async function notifyNewSignup(s: SignupNotification): Promise<void> {
   }
 }
 
-// --- Developer API: notify DROdio of a self-serve API-key request ---
-// Uses the Resend REST API directly so it stays dependency-light. Best-effort:
-// absence of RESEND_API_KEY or any failure is swallowed.
-export type KeyRequestNotice = {
+const ACCOUNT_URL = "https://pixelparents.org/account";
+
+// --- Developer API: notify DROdio of a new access request (no key yet) ---
+// Best-effort: never throws, never blocks the request.
+export async function notifyAdminNewApiRequest(notice: {
   name: string;
   email: string;
   intendedUse: string;
-  prefix: string;
-};
-
-export async function notifyKeyRequest(notice: KeyRequestNotice): Promise<void> {
-  const key = process.env.RESEND_API_KEY;
-  if (!key) return;
-  const to = process.env.NOTIFY_TO ?? "DROdio@chief.bot";
-  const from = process.env.RESEND_FROM ?? "onboarding@resend.dev";
+}): Promise<void> {
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — skipping API-request admin email.");
+    return;
+  }
   const text = [
-    `A new Pixel Parents API key was just issued (tier: public).`,
+    `A new Pixel Parents developer API access request is awaiting review.`,
     ``,
     `Name:         ${notice.name}`,
     `Email:        ${notice.email}`,
-    `Key prefix:   ${notice.prefix}`,
     `Intended use: ${notice.intendedUse}`,
     ``,
-    `Approve in /admin to unlock the 'approved' (non-PII detail) tier.`,
+    `Approve or reject at https://pixelparents.org/admin/api-requests`,
   ].join("\n");
   try {
-    await fetch("https://api.resend.com/emails", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        from,
-        to,
-        subject: `New Pixel Parents API key request: ${notice.name}`,
-        text,
-      }),
+    await resend.emails.send({
+      from: FROM,
+      to: TO,
+      subject: `New API access request: ${notice.name}`,
+      text,
     });
-  } catch {
-    // ignore — notification is non-critical and must not block issuance
+  } catch (err) {
+    console.error("Resend API-request notification failed:", err);
+  }
+}
+
+// --- Developer API: tell an applicant their request was approved/rejected ---
+// Best-effort: never throws, never blocks the admin's decision.
+export async function notifyApiDecision(notice: {
+  to: string;
+  name: string;
+  approved: boolean;
+  reason?: string | null;
+}): Promise<void> {
+  if (!resend) {
+    console.warn("RESEND_API_KEY not set — skipping API decision email.");
+    return;
+  }
+  const subject = notice.approved
+    ? "Your Pixel Parents API access is approved 🎉"
+    : "Your Pixel Parents API access request";
+  const text = notice.approved
+    ? [
+        `Hi ${notice.name},`,
+        ``,
+        `Good news — your Pixel Parents developer API access has been approved.`,
+        `Sign in and grab your API key here:`,
+        ``,
+        ACCOUNT_URL,
+        ``,
+        `Have fun building (or vibe coding!) something for the OHS community.`,
+      ].join("\n")
+    : [
+        `Hi ${notice.name},`,
+        ``,
+        `Thanks for your interest in the Pixel Parents developer API.`,
+        `Unfortunately we can't approve this request right now.`,
+        notice.reason ? `\nNote: ${notice.reason}` : ``,
+        ``,
+        `If you think this was a mistake, just reply to this email.`,
+      ].join("\n");
+  try {
+    await resend.emails.send({ from: FROM, to: notice.to, subject, text });
+  } catch (err) {
+    console.error("Resend API decision notification failed:", err);
   }
 }

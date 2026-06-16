@@ -1,6 +1,48 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 16, 2026 — 8:35 AM Pacific
+
+### Summary of changes since last update
+Replaced instant self-serve API keys with an **approval flow**: Clerk account
+up front → request → admin approve/reject (+ email) → reveal key on a Clerk-gated
+`/account` page. One gate now — every endpoint requires an approved key. Spec:
+`docs/superpowers/specs/2026-06-16-api-key-approval-flow-design.md`.
+
+### Detail of changes made:
+- **Schema (`lib/db/schema/api-keys.ts`):** added `clerk_user_id`, `status`
+  (pending|approved|rejected), `decided_at`, `decided_by`, `reject_reason`,
+  `revealed_at`; `key_hash`/`key_prefix` now nullable; `tier` retired. Live Neon
+  DB migrated via idempotent ALTERs (`lib/db/ensure.ts` self-migrates on cold
+  start; also ran `scripts/migrate-apikeys.mjs` — 2 legacy keys backfilled `approved`).
+- **DB ops (`lib/db/api-keys.ts`):** `getRequestByClerkUser`, `createRequest`
+  (one active row/user), `getRequestById`, `approveRequest`, `rejectRequest`,
+  `revealOrRotateKey` (generates key only after approval, raw shown once),
+  `listRequests`. `verifyApiKey` now requires `status='approved'` + not revoked.
+- **Auth (`lib/api/authorize.ts`):** collapsed to one check — approved key or 401.
+  All four `/api/v1/*` routes updated; `/me` returns `{status:"approved"}`.
+  Removed `tierSatisfies`/`Tier`. Deleted the old public `POST /api/developers/keys`.
+- **`/account` (new, `app/(authed)/account/`):** Clerk-gated page renders by state
+  (none→request form, pending, rejected→reason+reapply, approved→reveal/regenerate
+  key). Server actions `submitRequest`/`revealKey`/`regenerateKey`. `proxy.ts` now
+  protects `/account` too.
+- **Admin (`app/(authed)/admin/api-requests/`):** filled the stub — lists requests
+  (pending first) with Approve / Reject(reason) server actions; re-checks `isAdminEmail`.
+- **Email (`lib/email.ts`):** `notifyAdminNewApiRequest` (on new request) +
+  `notifyApiDecision` (approved/rejected to applicant, approval links to /account).
+- **Public `/developers`:** removed the open key console; now a "Request API access"
+  CTA → `/account`, a 3-step "how access works", and endpoints with no tier column.
+- **Validation:** `keyRequestSchema` → `apiRequestSchema` (just `intended_use`).
+- Verified: `next build` + TypeScript clean; `vitest` 11/11.
+
+### Potential concerns to address:
+- **No server-side OHS verification** — "OHS families only" is honor-system +
+  manual admin review (by design for now).
+- **Clerk sign-up must be enabled** in the Clerk instance for new applicants to
+  create accounts; admin approval still required before any key.
+- End-to-end (Clerk sign-in → request → approve → reveal → call API) is verified
+  via a SQL-seeded approved key against prod; full UI path should be smoke-tested
+  in the browser.
 ## Progress Update as of June 16, 2026 — 4:44 AM Pacific
 
 ### Summary of changes since last update

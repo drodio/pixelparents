@@ -6,10 +6,10 @@ import { OPTIONS } from "@/lib/options";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/v1/options — approved tier. Non-PII reference data: the static option
-// taxonomies plus the live distinct-interests pool.
+// GET /api/v1/options — requires an approved key. Non-PII reference data: the
+// static option taxonomies plus the live distinct-interests pool.
 export async function GET(req: Request) {
-  const auth = await authorize(req, "approved");
+  const auth = await authorize(req);
   if (!auth.ok) return auth.res;
   return NextResponse.json({
     ...OPTIONS,

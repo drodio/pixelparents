@@ -4,7 +4,6 @@ import {
   generateApiKey,
   hashApiKey,
   parseBearer,
-  tierSatisfies,
 } from "@/lib/api-keys";
 
 describe("generateApiKey", () => {
@@ -66,17 +65,5 @@ describe("parseBearer", () => {
     expect(parseBearer("Basic abc")).toBeNull();
     expect(parseBearer("Bearer")).toBeNull(); // no token
     expect(parseBearer("Bearer a b")).toBeNull(); // token has whitespace
-  });
-});
-
-describe("tierSatisfies", () => {
-  it("lets any tier reach a public-tier endpoint", () => {
-    expect(tierSatisfies("public", "public")).toBe(true);
-    expect(tierSatisfies("approved", "public")).toBe(true);
-  });
-
-  it("requires the approved tier for approved-tier endpoints", () => {
-    expect(tierSatisfies("approved", "approved")).toBe(true);
-    expect(tierSatisfies("public", "approved")).toBe(false);
   });
 });
