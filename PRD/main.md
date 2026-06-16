@@ -29,7 +29,26 @@ Replaced the default create-next-app boilerplate in `README.md` with a short, pa
 
 ### Potential concerns to address:
 - README no longer documents local dev setup. If/when external contributors arrive, consider adding a CONTRIBUTING.md or a "Local development" section.
-- The parallel Clerk-auth merge in the main checkout will need to reconcile with this `README.md` change when it lands — content is identical to what was staged there, so it should auto-resolve.
+
+## Progress Update as of June 15, 2026 — 6:46 PM Pacific
+
+### Summary of changes since last update
+Added Clerk authentication with an admin-only gate, mirroring the founder-festival setup, and wired it through to production. Built on an isolated `worktree-clerk-auth` branch (under `.claude/worktrees/clerk-auth`) and merged into `main`. Verified locally; production env vars and Clerk DNS are now in place (propagating).
+
+### Detail of changes made:
+- **Dependency:** `@clerk/nextjs` v7 added (merged alongside the parallel signup/dev-api deps — Neon/Drizzle/Zod/Vitest).
+- **Middleware:** `proxy.ts` (this Next.js version's renamed `middleware.ts`) runs `clerkMiddleware` and protects `/admin(.*)` via `createRouteMatcher` + `auth.protect()`. Public splash is untouched.
+- **Provider scoping:** `<ClerkProvider>` lives in `app/(authed)/layout.tsx`, NOT the root layout — so the public coming-soon splash loads zero Clerk JS and triggers no dev handshake. Verified: `/` returns 200 with no `ClerkProvider`/`clerk.browser.js`/publishable key in the HTML.
+- **Routes:** `app/(authed)/sign-in/[[...sign-in]]/page.tsx` (`<SignIn/>`) and `app/(authed)/admin/page.tsx` (gated). Verified locally: `/admin` signed-out → `307` to `/sign-in?redirect_url=…/admin`; `/sign-in` renders the real Clerk widget (dev instance `clerk.accounts.dev`).
+- **Admin gating is two layers:** `proxy.ts` requires *signed-in*; the admin page additionally checks `ADMIN_EMAILS` (comma-separated allowlist) so signing up via Clerk is not enough to reach admin tools. Seeded `ADMIN_EMAILS=drodio@storytell.ai`.
+- **Env (local):** `.env.example` documents `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `ADMIN_EMAILS`. Local `.env.local` uses Development-instance keys (`pk_test`/`sk_test`) so localhost works with no DNS; live keys (`pk_live`/`sk_live`, bound to `clerk.pixelparents.org`) are in git-ignored `.env.prod.local`.
+- **Production wiring (DONE):** live keys added to Vercel **Production**; test keys to **Preview** + **Development**; `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in` and `ADMIN_EMAILS` set across all three (preview env vars added via the Vercel REST API because the CLI wouldn't target "all preview branches" non-interactively). 5 Clerk CNAMEs created on the `pixelparents.org` Cloudflare zone via flarectl, all **unproxied**: `clerk`→frontend-api, `accounts`→accounts, `clkmail`→mail, `clk._domainkey`/`clk2._domainkey`→dkim1/dkim2 (`*.clerk.services`).
+- **Vercel project moved:** `pixelparents` was transferred from the `storytell` team to `drodio1s-projects`; the repo was re-linked (`.vercel/project.json` orgId now `team_qK4jnhrT8pwg9pnSiIzXLUIe`).
+
+### Potential concerns to address:
+- **DNS propagation / Clerk verification pending:** the 5 Clerk CNAMEs were just created; Clerk auto-verifies once they propagate (minutes–hours). The live `clerk.pixelparents.org` gate won't fully function until verification completes — watch the Clerk dashboard (Domains) for the green check.
+- **Clerk allows public sign-ups by default:** anyone can create a Clerk account; the `ADMIN_EMAILS` allowlist is what actually restricts `/admin`. Consider setting the Clerk app to restricted/invite-only sign-ups if public account creation is undesirable.
+- **Provisioning path:** keys came from the Clerk dashboard (Pro account) directly, not the Vercel Marketplace integration (the Marketplace flow was abandoned at terms-acceptance — no resource provisioned, but worth a `vercel integration list` check to confirm nothing dangling).
 
 ## Progress Update as of June 15, 2026 — 6:18 PM Pacific
 

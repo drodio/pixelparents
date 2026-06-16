@@ -13,6 +13,7 @@
     "db:push": "drizzle-kit push"
   },
   "dependencies": {
+    "@clerk/nextjs": "^7.5.3",
     "@neondatabase/serverless": "^1.1.0",
     "@vercel/blob": "^2.4.0",
     "botid": "^1.5.11",
