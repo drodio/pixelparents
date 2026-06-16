@@ -1,6 +1,24 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 16, 2026 — 8:39 AM Pacific
+
+### Summary of changes since last update
+Fixed the public entry into the approval flow. This app's Clerk `auth.protect()`
+**rewrites signed-out visitors to 404** (same as `/admin`), so the `/developers`
+"Request API access" CTA → `/account` would 404 for logged-out users. Routed the
+CTA through `/sign-in?redirect_url=/account` and made the sign-in page honor a
+relative `redirect_url` (also benefits the admin login).
+
+### Detail of changes made:
+- **`app/developers/page.tsx`:** both CTAs now link to `/sign-in?redirect_url=/account`.
+- **`app/(authed)/sign-in/[[...sign-in]]/page.tsx`:** reads `redirect_url` (relative
+  paths only — open-redirect guard) and passes `forceRedirectUrl` / `signUpForceRedirectUrl`
+  to `<SignIn>`. Signed-out → sign-in/up → lands on `/account`.
+
+### Verified earlier (prod, SQL-seeded keys): approved key → 200, pending → 401,
+no key → 401, /breakdowns (approved) → 200, /developers → 200. `/account` 404s for
+signed-out (expected — matches `/admin`); the CTA now sends them to sign-in first.
 ## Progress Update as of June 16, 2026 — 8:35 AM Pacific
 
 ### Summary of changes since last update

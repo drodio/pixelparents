@@ -74,7 +74,7 @@ export default function DevelopersPage() {
             PII like names, emails, phones, or photos.
           </p>
           <Link
-            href="/account"
+            href="/sign-in?redirect_url=/account"
             className="rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
           >
             Request API access →
@@ -142,7 +142,7 @@ export default function DevelopersPage() {
             Create an account, tell us what you&apos;re building, and we&apos;ll review your request.
           </p>
           <Link
-            href="/account"
+            href="/sign-in?redirect_url=/account"
             className="rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
           >
             Request API access →
