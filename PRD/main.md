@@ -1,6 +1,19 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 15, 2026 — 6:48 PM Pacific
+
+### Summary of changes since last update
+Replaced the default create-next-app boilerplate in `README.md` with a short, parent-facing welcome message inviting Stanford OHS parents to contribute. Done on an isolated worktree branch (`worktree-readme-ohs-welcome`) to avoid an in-flight Clerk-auth merge that was occupying the main checkout, then pushed straight to `main`.
+
+### Detail of changes made:
+- **`README.md`:** now a "Hello Stanford OHS parent!" welcome — explains this is an OSS project for parents to build software supporting kids at OHS, directs interested parents to DM DROdio on the Tech Pixel Parents WhatsApp group, and gives a fallback email (DROdio+OHS@Gmail.com) for parents not yet in the group. Dropped the Next.js/Vercel getting-started scaffolding.
+- **Workflow note:** committed from a git worktree because the main checkout had an uncommitted parallel-agent merge (Clerk auth + Developer API). This commit only touches `README.md` + this log, so it merges cleanly with that work.
+
+### Potential concerns to address:
+- README no longer documents local dev setup. If/when external contributors arrive, consider adding a CONTRIBUTING.md or a "Local development" section.
+- The parallel Clerk-auth merge in the main checkout will need to reconcile with this `README.md` change when it lands — content is identical to what was staged there, so it should auto-resolve.
+
 ## Progress Update as of June 15, 2026 — 6:18 PM Pacific
 
 ### Summary of changes since last update
