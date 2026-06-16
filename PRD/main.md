@@ -1,6 +1,23 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 15, 2026 — 6:05 PM Pacific
+
+### Summary of changes since last update
+Brainstormed and wrote an approved design spec for a two-step parent onboarding feature (no implementation code yet). Committed the spec so other agents can see the plan before building.
+
+### Detail of changes made:
+- **Spec:** `docs/superpowers/specs/2026-06-15-signup-family-profile-design.md` — full design, user-approved.
+- **Feature scope:** `/signup` (recruit OHS parents: required first/last/email/phone + optional skills/availability profile) → redirect to `/signup/thanks?id=<uuid>` (personalized DROdio intro + optional family/child seed-data profile with dynamic interest pills, multi-photo upload, repeatable children).
+- **Decisions locked:** Neon Postgres via Vercel Marketplace; Drizzle ORM + drizzle-kit; Zod (shared); Vercel BotID for bot protection; Vercel Blob for photos with **client-side** resize/compress (~1600px, ~0.8) before upload; Resend email notifications to **DROdio@chief.bot** (user has a Resend account); DROdio-only `/admin` via HTTP Basic Auth middleware.
+- **Data model:** family-level fields (city, state, parent_interests, photos) on `signups`; `children` as 1:N. Interests pill pool = distinct union of parent + child interests.
+- **Explicitly deferred:** OHS-family authenticated public viewing (copy is a forward promise), family self-edit, verified custom email domain, the concrete reference URL to DROdio's own submission.
+
+### Potential concerns to address:
+- **Children's PII/photos are sensitive.** v1 stores in Neon behind admin-only access and builds NO public viewing — keep it that way until real OHS-family identity verification exists.
+- **New env vars incoming:** `DATABASE_URL`, `BLOB_READ_WRITE_TOKEN`, `RESEND_API_KEY`, `RESEND_FROM`, `NOTIFY_TO`, `ADMIN_USER`/`ADMIN_PASSWORD`. All go in git-ignored `.env.local` + Vercel env; templates in `.env.example`. Pre-commit secret guard covers them.
+- **Next step:** writing-plans skill to produce the implementation plan; then build (likely TDD for zod/validation + pure logic). Implementation will land in subsequent commits.
+
 ## Progress Update as of June 15, 2026 — 9:02 AM Pacific
 
 ### Summary of changes since last update
