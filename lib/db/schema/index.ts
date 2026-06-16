@@ -3,3 +3,4 @@
 // feature should add its `signups` / `children` tables as sibling files and
 // re-export them here too.
 export * from "./api-keys";
+export * from "./signups";

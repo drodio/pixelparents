@@ -1,7 +1,7 @@
 import { defineConfig } from "drizzle-kit";
 
-// Schema is a directory (one file per domain) so this feature's `api_keys` table
-// and the in-flight signup tables compose without editing a shared file.
+// Schema is a directory (one file per domain) so the signup tables and the
+// developer API's api_keys table compose without editing a shared file.
 export default defineConfig({
   schema: "./lib/db/schema",
   out: "./lib/db/migrations",

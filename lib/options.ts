@@ -1,19 +1,17 @@
-// Canonical option taxonomies for the Pixel Parents signup. Single source of
-// truth, shared by the signup form (when it lands) and the developer API's
-// /api/v1/options endpoint. These are non-PII reference data — safe to publish.
-//
-// NOTE (coordination): the in-flight /signup feature also needs these constants.
-// When that work merges, this file is the intended shared home — reconcile any
-// divergence here rather than duplicating the lists.
+// Canonical option taxonomies for Pixel Parents — single source of truth shared
+// by the signup form (long, user-facing labels) and the developer API's
+// /api/v1/options endpoint. Non-PII reference data, safe to publish.
 
-export const AFFILIATIONS = [
+export const OHS_AFFILIATIONS = [
   "New parent (child(ren) just starting at OHS)",
-  "Existing parent (currently enrolled)",
-  "Previous parent (graduated)",
+  "Existing parent (child(ren) currently enrolled at OHS)",
+  "Previous parent (child(ren) have graduated from OHS)",
   "Alumni student (I graduated from OHS)",
 ] as const;
+// Alias used by the developer API (kept in sync — same underlying list).
+export const AFFILIATIONS = OHS_AFFILIATIONS;
 
-export const TECH_DEPTH = [
+export const TECHNICAL_DEPTH = [
   "Yegge or Linus Level",
   "10x Developer",
   "Rusty, but good!",
@@ -21,6 +19,7 @@ export const TECH_DEPTH = [
   "Vibe coder",
   "Future vibe coder (just curious)",
 ] as const;
+export const TECH_DEPTH = TECHNICAL_DEPTH;
 
 export const SKILLSETS = [
   "Backend",
@@ -34,21 +33,46 @@ export const SKILLSETS = [
 ] as const;
 
 export const TIME_COMMITMENT = [
-  "<1 hour/week",
-  "1–2 hours/week",
-  "2–5 hours/week",
-  "5–10 hours/week",
-  "10–20 hours/week",
+  "<1 hour /week",
+  "1-2 hours/week",
+  "2-5 hours/week",
+  "5-10 hours/week",
+  "10-20 hours/week",
   "Full time or more!",
 ] as const;
 
-export const GRADES = ["7th", "8th", "9th", "10th", "11th"] as const;
+export const GRADES = [
+  "7th",
+  "8th",
+  "9th",
+  "10th",
+  "11th",
+  "Not an OHS child",
+] as const;
 
-// The full non-PII option surface returned by GET /api/v1/options.
+export const US_STATES = [
+  "Alabama", "Alaska", "Arizona", "Arkansas", "California", "Colorado",
+  "Connecticut", "Delaware", "Florida", "Georgia", "Hawaii", "Idaho",
+  "Illinois", "Indiana", "Iowa", "Kansas", "Kentucky", "Louisiana", "Maine",
+  "Maryland", "Massachusetts", "Michigan", "Minnesota", "Mississippi",
+  "Missouri", "Montana", "Nebraska", "Nevada", "New Hampshire", "New Jersey",
+  "New Mexico", "New York", "North Carolina", "North Dakota", "Ohio",
+  "Oklahoma", "Oregon", "Pennsylvania", "Rhode Island", "South Carolina",
+  "South Dakota", "Tennessee", "Texas", "Utah", "Vermont", "Virginia",
+  "Washington", "West Virginia", "Wisconsin", "Wyoming",
+] as const;
+
+// Full non-PII option surface returned by GET /api/v1/options.
 export const OPTIONS = {
-  affiliations: AFFILIATIONS,
-  tech_depth: TECH_DEPTH,
+  affiliations: OHS_AFFILIATIONS,
+  tech_depth: TECHNICAL_DEPTH,
   skillsets: SKILLSETS,
   time_commitment: TIME_COMMITMENT,
   grades: GRADES,
 } as const;
+
+export type OhsAffiliation = (typeof OHS_AFFILIATIONS)[number];
+export type TechnicalDepth = (typeof TECHNICAL_DEPTH)[number];
+export type Skillset = (typeof SKILLSETS)[number];
+export type TimeCommitment = (typeof TIME_COMMITMENT)[number];
+export type Grade = (typeof GRADES)[number];
