@@ -57,7 +57,7 @@ export default async function ThanksPage({
         {admin && id ? (
           <Link
             href={`/admin/parents/${id}/edit`}
-            className="mb-4 inline-block text-sm font-medium text-teal-300 hover:underline"
+            className="mb-4 inline-block text-sm font-medium text-amber-400 hover:underline"
           >
             ← Edit parent details
           </Link>
@@ -71,7 +71,7 @@ export default async function ThanksPage({
               href="https://festival.so/profile/founder/drodio"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-teal-300 hover:underline"
+              className="text-amber-400 hover:underline"
             >
               DROdio
             </a>
@@ -81,7 +81,7 @@ export default async function ThanksPage({
               href="https://chief.bot"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-teal-300 hover:underline"
+              className="text-amber-400 hover:underline"
             >
               Chief
             </a>
@@ -101,7 +101,7 @@ export default async function ThanksPage({
               href="https://github.com/drodio/pixelparents"
               target="_blank"
               rel="noopener noreferrer"
-              className="text-teal-300 hover:underline"
+              className="text-amber-400 hover:underline"
             >
               open source
             </a>{" "}
@@ -126,7 +126,7 @@ export default async function ThanksPage({
                 For reference, here are{" "}
                 <a
                   href={DRODIO_SUBMISSION_URL}
-                  className="text-teal-300 hover:underline"
+                  className="text-amber-400 hover:underline"
                 >
                   my answers
                 </a>

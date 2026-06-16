@@ -30,7 +30,7 @@ export default async function EditChildPage({
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-white/60">That child no longer exists.</p>
-        <Link href="/admin/children" className="text-sm text-teal-300 hover:underline">
+        <Link href="/admin/children" className="text-sm text-amber-400 hover:underline">
           ← Back to Children
         </Link>
       </div>
@@ -41,7 +41,7 @@ export default async function EditChildPage({
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Edit child — {row.firstName}</h2>
-        <Link href="/admin/children" className="text-sm text-teal-300 hover:underline">
+        <Link href="/admin/children" className="text-sm text-amber-400 hover:underline">
           ← Back
         </Link>
       </div>

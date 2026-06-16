@@ -135,7 +135,7 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
                     <Link
                       key={k.id}
                       href={`/admin/children?parent=${r.id}#c-${k.id}`}
-                      className="font-bold text-teal-300 hover:underline"
+                      className="whitespace-nowrap font-bold text-amber-400 hover:underline"
                     >
                       {k.firstName}
                       {k.grade ? <span className="font-normal text-white/50"> ({k.grade})</span> : null}
@@ -145,14 +145,14 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
               )}
             </td>
             <td className={tdCls}>
-              <a className="text-teal-300 hover:underline" href={`mailto:${r.email}`}>
+              <a className="text-amber-400 hover:underline" href={`mailto:${r.email}`}>
                 {r.email}
               </a>
               <div className="text-white/50">{r.phone}</div>
             </td>
             <td className={`${tdCls} whitespace-nowrap`}>
               <a
-                className="text-teal-300 hover:underline"
+                className="text-amber-400 hover:underline"
                 href={`https://github.com/${r.githubUsername}`}
                 target="_blank"
                 rel="noreferrer"

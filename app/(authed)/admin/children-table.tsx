@@ -72,7 +72,7 @@ export function ChildrenTable({ rows }: { rows: ChildTableRow[] }) {
             </th>
             <td className={`${tdCls} whitespace-nowrap`}>
               {k.parentId ? (
-                <Link href={`/admin#p-${k.parentId}`} className="text-teal-300 hover:underline">
+                <Link href={`/admin#p-${k.parentId}`} className="text-amber-400 hover:underline">
                   {k.parentName}
                 </Link>
               ) : (

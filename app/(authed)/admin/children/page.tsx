@@ -61,7 +61,7 @@ export default async function ChildrenPage({
             {filterParent.firstName} {filterParent.lastName}
           </span>{" "}
           ·{" "}
-          <Link href="/admin/children" className="text-teal-300 hover:underline">
+          <Link href="/admin/children" className="text-amber-400 hover:underline">
             Show all
           </Link>
         </p>

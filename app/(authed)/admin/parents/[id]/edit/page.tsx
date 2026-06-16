@@ -30,7 +30,7 @@ export default async function EditParentPage({
     return (
       <div className="flex flex-col gap-4">
         <p className="text-sm text-white/60">That submission no longer exists.</p>
-        <Link href="/admin" className="text-sm text-teal-300 hover:underline">← Back to Parents</Link>
+        <Link href="/admin" className="text-sm text-amber-400 hover:underline">← Back to Parents</Link>
       </div>
     );
   }
@@ -41,7 +41,7 @@ export default async function EditParentPage({
         <h2 className="text-xl font-semibold">
           Edit — {row.firstName} {row.lastName}
         </h2>
-        <Link href="/admin" className="text-sm text-teal-300 hover:underline">
+        <Link href="/admin" className="text-sm text-amber-400 hover:underline">
           ← Back
         </Link>
       </div>
