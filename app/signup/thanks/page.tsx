@@ -63,6 +63,9 @@ export default async function ThanksPage({
           </Link>
         ) : null}
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
+        <h2 className="mt-2 text-xl font-semibold text-white/90 sm:text-2xl">
+          Please tell us about your child(ren), below.
+        </h2>
 
         <div className="mt-6 space-y-4 text-white/70">
           <p>
