@@ -274,7 +274,12 @@ export default function FamilyForm({
         <hr className="border-white/10" />
 
         {/* Child-level */}
-        <h2 className="text-lg font-semibold">About your child</h2>
+        <div>
+          <h2 className="text-lg font-semibold">About your child</h2>
+          <p className="text-sm text-white/50">
+            (Feel free to add non-OHS children as well)
+          </p>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={labelCls} htmlFor="childFirstName">Child&apos;s first name</label>
