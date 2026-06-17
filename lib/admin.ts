@@ -1,6 +1,8 @@
 import { eq } from "drizzle-orm";
 import { getSql, getDb, hasDatabase } from "./db";
 import { admins } from "./db/schema/admins";
+import { getSignupByEmail } from "./db/signups";
+import { addRepoCollaborator, removeRepoCollaborator } from "./github";
 
 // Self-healing guard for the `admins` table (same rationale as ensureApiKeysTable
 // in lib/db/ensure.ts: this app shares one Neon DB across in-flight features and
@@ -68,9 +70,23 @@ export async function addAdmin(email: string, by: string | null): Promise<void> 
     INSERT INTO admins (email, created_by) VALUES (${email.toLowerCase()}, ${by})
     ON CONFLICT (email) DO NOTHING
   `;
+  // Best-effort: invite their GitHub account as a repo collaborator (maintain).
+  try {
+    const signup = await getSignupByEmail(email);
+    await addRepoCollaborator(signup?.githubUsername);
+  } catch (err) {
+    console.error("addAdmin: GitHub collaborator invite failed:", err);
+  }
 }
 
 export async function removeAdmin(email: string): Promise<void> {
   await ensureAdminsTable();
   await getSql()`DELETE FROM admins WHERE email = ${email.toLowerCase()}`;
+  // Best-effort: revoke their repo access too.
+  try {
+    const signup = await getSignupByEmail(email);
+    await removeRepoCollaborator(signup?.githubUsername);
+  } catch (err) {
+    console.error("removeAdmin: GitHub collaborator removal failed:", err);
+  }
 }

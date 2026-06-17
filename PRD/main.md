@@ -1,6 +1,29 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 4:07 PM Pacific
+
+### Summary of changes since last update
+App admins are now auto-invited as GitHub repo collaborators (maintain) when
+promoted, and removed when revoked — best-effort, keyed off the signup's
+github_username.
+
+### Detail of changes made:
+- **`lib/github.ts`:** `addRepoCollaborator`/`removeRepoCollaborator` (GitHub API,
+  `GITHUB_ADMIN_TOKEN`, repo from `GITHUB_REPO` default drodio/pixelparents).
+  Validates the username, never throws (admin changes never fail on a GitHub
+  hiccup), skips when the token/username is missing.
+- **`lib/admin.ts`:** `addAdmin`/`removeAdmin` look up the signup by email and
+  invite/remove that github_username after the DB write.
+- **`.env.example`:** documents `GITHUB_ADMIN_TOKEN` + `GITHUB_REPO`.
+- Token verified (admin/push) read-only; tsc + build clean.
+
+### Potential concerns to address:
+- GitHub emails an **invite the person must accept** (personal-account repo) — not
+  silent. Admins added by an email that isn't a signup have no github_username,
+  so they're skipped (logged).
+- `GITHUB_ADMIN_TOKEN` set in Vercel **Production** only so far.
+
 ## Progress Update as of June 17, 2026 — 4:03 PM Pacific
 
 ### Summary of changes since last update
