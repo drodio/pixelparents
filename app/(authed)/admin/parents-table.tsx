@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { Fragment, useMemo, useState } from "react";
 import { abbrState } from "@/lib/options";
 import { setAdmin } from "./actions";
 import { Pills } from "./pills";
@@ -9,6 +9,7 @@ import { TableWrap, thCls, tdCls } from "./ui";
 import { PencilIcon } from "./icons";
 import { DeleteButton } from "./delete-button";
 import { compare, SortHeader, type Dir } from "./sortable";
+import { PhotoGallery, type GalleryPhoto } from "./photo-gallery";
 
 export type ParentRow = {
   id: string;
@@ -25,6 +26,7 @@ export type ParentRow = {
   state: string | null;
   parentInterests: string[] | null;
   photoCount: number;
+  photos: GalleryPhoto[];
   dbAdmin: boolean;
   envAdmin: boolean;
   kids: { id: string; firstName: string; grade: string | null }[];
@@ -71,6 +73,15 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
     [rows, sortKey, dir],
   );
 
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const togglePhotos = (id: string) =>
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+
   const hp = { sortKey, dir, onSort, className: thCls };
 
   return (
@@ -95,8 +106,8 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
       </thead>
       <tbody>
         {sorted.map((r) => (
+          <Fragment key={r.id}>
           <tr
-            key={r.id}
             id={`p-${r.id}`}
             className="border-t border-white/10 odd:bg-white/[0.02] hover:bg-white/[0.05] target:bg-emerald-500/10"
           >
@@ -174,8 +185,19 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
             <td className={tdCls}>
               <Pills values={r.parentInterests} />
             </td>
-            <td className={`${tdCls} whitespace-nowrap text-white/50`}>
-              {r.photoCount ? `${r.photoCount} photo${r.photoCount === 1 ? "" : "s"}` : "—"}
+            <td className={`${tdCls} whitespace-nowrap`}>
+              {r.photos.length ? (
+                <button
+                  type="button"
+                  onClick={() => togglePhotos(r.id)}
+                  className="text-amber-400 hover:underline"
+                >
+                  {r.photos.length} photo{r.photos.length === 1 ? "" : "s"}
+                  <span className="ml-1 text-white/40">{expanded.has(r.id) ? "▲" : "▼"}</span>
+                </button>
+              ) : (
+                <span className="text-white/50">—</span>
+              )}
             </td>
             <td className={`${tdCls} whitespace-nowrap`}>
               <div className="flex items-center gap-1">
@@ -191,6 +213,14 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
             </td>
             <td className={`${tdCls} whitespace-nowrap text-white/50`}>{r.submittedLabel}</td>
           </tr>
+          {expanded.has(r.id) && r.photos.length > 0 && (
+            <tr className="border-t border-white/10 bg-black/40">
+              <td colSpan={14} className="px-4 py-4">
+                <PhotoGallery photos={r.photos} />
+              </td>
+            </tr>
+          )}
+          </Fragment>
         ))}
       </tbody>
     </TableWrap>

@@ -3,6 +3,7 @@ import { desc } from "drizzle-orm";
 import { getDb, hasDatabase } from "@/lib/db";
 import { signups, children, type ChildRow } from "@/lib/db/schema/signups";
 import { isAdminEmail, isEnvAdmin, dbAdminEmails } from "@/lib/admin";
+import { signedPhotoUrls } from "@/lib/blob";
 import { ParentsTable, type ParentRow } from "./parents-table";
 
 export const dynamic = "force-dynamic";
@@ -34,35 +35,49 @@ export default async function ParentsPage() {
     else kidsBySignup.set(k.signupId, [k]);
   }
 
-  const data: ParentRow[] = rows.map((r) => ({
-    id: r.id,
-    firstName: r.firstName,
-    lastName: r.lastName,
-    email: r.email,
-    phone: r.phone,
-    githubUsername: r.githubUsername,
-    ohsAffiliation: r.ohsAffiliation,
-    technicalDepth: r.technicalDepth,
-    timeCommitment: r.timeCommitment,
-    skillsets: r.skillsets,
-    city: r.city,
-    state: r.state,
-    parentInterests: r.parentInterests,
-    photoCount: r.photos?.length ?? 0,
-    dbAdmin: adminSet.has(r.email.toLowerCase()),
-    envAdmin: isEnvAdmin(r.email),
-    kids: (kidsBySignup.get(r.id) ?? []).map((k) => ({
-      id: k.id,
-      firstName: k.firstName,
-      grade: k.grade,
-    })),
-    submittedLabel: new Date(r.createdAt).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    }),
-    createdAtMs: new Date(r.createdAt).getTime(),
-  }));
+  // Presign every family's private photos in one batch, then map back by pathname.
+  const allPathnames = rows.flatMap((r) => (r.photos ?? []).map((p) => p.pathname));
+  const signed = await signedPhotoUrls(allPathnames);
+  const urlByPath = new Map<string, string>();
+  allPathnames.forEach((p, i) => {
+    if (signed[i]) urlByPath.set(p, signed[i]);
+  });
+
+  const data: ParentRow[] = rows.map((r) => {
+    const photos = (r.photos ?? [])
+      .map((p) => ({ url: urlByPath.get(p.pathname) ?? "", width: p.width, height: p.height }))
+      .filter((p) => p.url);
+    return {
+      id: r.id,
+      firstName: r.firstName,
+      lastName: r.lastName,
+      email: r.email,
+      phone: r.phone,
+      githubUsername: r.githubUsername,
+      ohsAffiliation: r.ohsAffiliation,
+      technicalDepth: r.technicalDepth,
+      timeCommitment: r.timeCommitment,
+      skillsets: r.skillsets,
+      city: r.city,
+      state: r.state,
+      parentInterests: r.parentInterests,
+      photoCount: photos.length,
+      photos,
+      dbAdmin: adminSet.has(r.email.toLowerCase()),
+      envAdmin: isEnvAdmin(r.email),
+      kids: (kidsBySignup.get(r.id) ?? []).map((k) => ({
+        id: k.id,
+        firstName: k.firstName,
+        grade: k.grade,
+      })),
+      submittedLabel: new Date(r.createdAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        year: "numeric",
+      }),
+      createdAtMs: new Date(r.createdAt).getTime(),
+    };
+  });
 
   return (
     <div className="flex flex-col gap-4">
