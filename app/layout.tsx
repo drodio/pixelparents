@@ -13,8 +13,19 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://pixelparents.org"),
   title: "Pixel Parents",
-  description: "Pixel Parents — coming soon.",
+  description:
+    "Parents building software to improve the experience for Stanford OHS students.",
+  openGraph: {
+    title: "Pixel Parents",
+    description:
+      "Parents building software to improve the experience for Stanford OHS students.",
+    siteName: "Pixel Parents",
+    url: "https://pixelparents.org",
+    type: "website",
+  },
+  twitter: { card: "summary_large_image" },
 };
 
 export default function RootLayout({

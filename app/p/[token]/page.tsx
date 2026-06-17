@@ -10,8 +10,16 @@ export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "A Pixel Parents profile",
+  description:
+    "A family in the Pixel Parents community — OHS parents building software for our kids.",
   // A secret link should never be indexed.
   robots: { index: false, follow: false },
+  openGraph: {
+    title: "A Pixel Parents profile",
+    description:
+      "A family in the Pixel Parents community — OHS parents building software for our kids.",
+    type: "profile",
+  },
 };
 
 function Pills({ items }: { items: string[] }) {
