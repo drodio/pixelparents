@@ -1,6 +1,17 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 3:35 PM Pacific
+
+### Summary of changes since last update
+Added the design spec for the DB-aware PII leak gate (Layer 2) as a doc-only PR for review before building. This is the "spec the gate" deliverable agreed earlier (quick wins shipped first via PR #3 + #6, then spec the gate).
+
+### Detail of changes made:
+- **New doc:** `docs/superpowers/specs/2026-06-17-pii-leak-gate-design.md` — layered design: Layer 1 = static pre-commit guard (done, on main); Layer 2 = GitHub Action that cross-references the PR diff against live Neon values and fails a required check to block merge/deploy, with a label-based manual override and no PII in the (public) Actions logs. Includes a matching strategy (full values, never fragments like the `drodio` handle), public-repo log-safety notes, effort estimates, and open questions.
+
+### Potential concerns to address:
+- **Not yet built** — this PR is the spec only; Layer 2 implementation awaits DROdio's review/approval of the open questions (names = warn vs block, override UX, scan scope, dedicated read-only DB role).
+
 ## Progress Update as of June 17, 2026 — 3:31 PM Pacific
 
 ### Summary of changes since last update
