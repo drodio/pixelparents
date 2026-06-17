@@ -70,9 +70,13 @@ if [ -n "$added" ]; then
   # ---------------------------------------------------------------------------
   # Email literals that aren't on an allowed non-personal domain.
   consumer_re="@(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton(mail)?|pm|gmx|zoho|fastmail)\."
+  # Allowlisted full addresses: the public contact CTA on builders.md is
+  # intentionally public, so exempt it from the consumer-domain block below.
+  cta_allow="^drodio\+ohs@gmail\.com$"
   emails=$(echo "$added" \
     | grep -EioI "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}" \
     | grep -Eiv "@(pixelparents\.org|resend\.dev|example\.(com|org|net)|sentry\.io)$" \
+    | grep -Eiv "$cta_allow" \
     | sort -u || true)
   if [ -n "$emails" ]; then
     # Consumer mail domains are almost always personal PII → hard block,

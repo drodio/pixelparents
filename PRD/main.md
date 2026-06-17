@@ -1,6 +1,19 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 3:31 PM Pacific
+
+### Summary of changes since last update
+Allowlisted the public contact CTA address in the pre-commit PII email guard (added in PR #3), so the consumer-domain hard-block no longer flags the intentionally-public address used on `builders.md`. Per DROdio's decision to keep that CTA rather than drop it.
+
+### Detail of changes made:
+- **`.githooks/pre-commit`:** added a `cta_allow` exclusion (case-insensitive, exact-match for the public CTA address) to the email-guard pipeline so it's exempt. Verified: the CTA passes (any case), all other consumer-domain addresses (other gmail/yahoo/etc. local parts) still hard-block, and `*@pixelparents.org` still allowed.
+- This sits on top of PR #3 (merged as `24c8b6e`), which added the PII guard + scrubbed the phone/child-name from `lib/email.ts` + `app/signup/thanks/page.tsx` and moved email contact to env.
+
+### Potential concerns to address:
+- **Allowlist is exact-match** — only this one address is exempt. Adding another intentionally-public consumer-domain address means extending the allowlist.
+- **DB-aware leak gate (Layer 2) still unbuilt** — design spec exists locally; static patterns still can't catch names / arbitrary DB values.
+
 ## Progress Update as of June 17, 2026 — 2:52 PM Pacific
 
 ### Summary of changes since last update
