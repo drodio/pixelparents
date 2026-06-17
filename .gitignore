@@ -45,5 +45,8 @@ next-env.d.ts
 # Visual brainstorming companion (local only)
 .superpowers/
 
+# beads issue tracker — local Dolt DB (synced via git refs, not files)
+.beads/
+
 # Other agents'  git worktrees live here — never commit them
 .claude/worktrees/
