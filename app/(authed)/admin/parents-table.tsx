@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 import { abbrState } from "@/lib/options";
+import { formatPhone } from "@/lib/format";
 import { setAdmin } from "./actions";
 import { Pills } from "./pills";
 import { TableWrap, thCls, tdCls } from "./ui";
@@ -159,7 +160,7 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
               <a className="text-amber-400 hover:underline" href={`mailto:${r.email}`}>
                 {r.email}
               </a>
-              <div className="text-white/50">{r.phone}</div>
+              <div className="text-white/50">{formatPhone(r.phone)}</div>
             </td>
             <td className={`${tdCls} whitespace-nowrap`}>
               <a

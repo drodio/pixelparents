@@ -1,6 +1,22 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 4:03 PM Pacific
+
+### Summary of changes since last update
+Admin parents table now formats phone numbers for display (e.g. 202-250-3846).
+
+### Detail of changes made:
+- **`lib/format.ts`:** `formatPhone()` — 10-digit → `XXX-XXX-XXXX`, 11-digit
+  leading-1 → `1-XXX-XXX-XXXX`, else returned unchanged. Unit-tested
+  (`lib/format.test.ts`).
+- **`app/(authed)/admin/parents-table.tsx`:** renders `formatPhone(r.phone)`.
+
+### Potential concerns to address:
+- Formatting is display-only; stored values are unchanged. Other surfaces (the
+  `/p` share page) still render the raw stored phone — apply `formatPhone` there
+  too if desired.
+
 ## Progress Update as of June 17, 2026 — 4:02 PM Pacific
 
 ### Summary of changes since last update
@@ -16,7 +32,6 @@ Built Layer 2 of the PII protection: a DB-aware leak gate (GitHub Action) that c
 - **Activation pending a secret:** the gate is dormant until a repo secret `DATABASE_URL` is added — recommend a **read-only** Neon role (CI on a public repo should not hold the read-write prod URL). Once added, optionally make "PII gate" a required status check in branch protection.
 - **Matching is exact-substring** (O(lines × values)); fine at current scale, may need indexing if signups grow large.
 - **Names = warn only** (common first names collide with English words); emails/phones are the hard blocks.
-
 ## Progress Update as of June 17, 2026 — 3:42 PM Pacific
 
 ### Summary of changes since last update
