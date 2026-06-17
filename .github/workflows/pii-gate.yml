@@ -1,0 +1,43 @@
+name: PII gate
+
+# DB-aware PII leak gate (Layer 2). Cross-references each PR's changes against
+# live DB values and fails when real PII (emails/phones) would land in this
+# public repo. Names warn only. See scripts/pii-gate.mjs and the design spec.
+#
+# Setup to make this effective:
+#   1. Add a repo secret DATABASE_URL (ideally a READ-ONLY Neon role).
+#   2. (optional) Make "PII gate" a required status check in branch protection.
+#   3. Create a `pii-reviewed` label to override a reviewed false positive.
+# Until the secret is set, the job passes (skips) so it never blocks PRs.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+  schedule:
+    - cron: "0 8 * * *" # nightly full-tree scan
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  pii-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # need base + head for the diff
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Run DB-aware PII gate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+          MODE: ${{ github.event_name == 'schedule' && 'full' || 'diff' }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          PII_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'pii-reviewed') && '1' || '' }}
+        run: node scripts/pii-gate.mjs
