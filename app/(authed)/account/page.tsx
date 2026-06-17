@@ -2,7 +2,11 @@ import { UserButton } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { getRequestByClerkUser } from "@/lib/db/api-keys";
+import { getSignupByEmail } from "@/lib/db/signups";
 import { hasDatabase } from "@/lib/db";
+import { shareFieldsOrDefault } from "@/lib/share";
+import { shareUrlFor } from "@/lib/url";
+import { ShareSettings } from "@/app/signup/thanks/share-settings";
 import { KeyPanel } from "./key-panel";
 import { RequestForm } from "./request-form";
 
@@ -44,6 +48,14 @@ export default async function AccountPage() {
   const req = await getRequestByClerkUser(user.id);
   const status = req?.status ?? "none";
 
+  // If this signed-in user also filled out the parent signup form (matched by
+  // email), let them manage their secret share link right here too.
+  const email =
+    user.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ??
+    user.emailAddresses[0]?.emailAddress ??
+    null;
+  const signup = email ? await getSignupByEmail(email) : null;
+
   return (
     <Shell>
       {status === "approved" ? (
@@ -84,6 +96,23 @@ export default async function AccountPage() {
             and we&apos;ll review your request.
           </p>
           <RequestForm />
+        </section>
+      )}
+
+      {signup && (
+        <section className="flex flex-col gap-4 border-t border-white/10 pt-8">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Your family profile</h2>
+            <p className="mt-1 text-sm text-white/55">
+              Share what you submitted with specific people via a secret link.
+            </p>
+          </div>
+          <ShareSettings
+            signupId={signup.id}
+            initialEnabled={signup.shareEnabled}
+            initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
+            initialFields={shareFieldsOrDefault(signup.shareFields)}
+          />
         </section>
       )}
     </Shell>

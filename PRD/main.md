@@ -1,6 +1,158 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 2:52 PM Pacific
+
+### Summary of changes since last update
+Scrubbed ALL PII from the tracked repo and added prevention. Personal emails,
+the phone number, the child's name, and a share-token prefix were removed from
+`PRD/main.md`, `README.md`, `docs/`, `lib/email.ts`, and the thanks-page copy.
+Email sender/recipient/signature now come only from env. Content-only scrub
+(git history purge deferred by decision).
+
+### Detail of changes made:
+- **`lib/email.ts`:** `FROM`/`NOTIFY_TO`/`SIGNATURE` are now env-only (no
+  hardcoded personal contact). `EMAIL_SIGNATURE` (multi-line) is appended when
+  set; `sendEmail` skips when there's no recipient.
+- **Vercel prod env:** set `NOTIFY_TO` and `EMAIL_SIGNATURE` (they were NOT set —
+  prod had been relying on the now-removed code defaults). Without this, the
+  next deploy would have silently stopped admin notifications.
+- **Scrubbed:** personal emails → `<admin-email>`/`<notify-email>`/placeholders
+  or the project `pixelparents.org` address; phone removed; child name removed
+  from public site copy + logs; `README.md` fallback contact now points to the
+  signup form instead of a personal Gmail.
+- **Prevention:** `CLAUDE.md` now forbids committing PII (incl. children's
+  names) anywhere; `.githooks/pre-commit` gained a blocking PII guard (personal
+  emails + phone numbers); **enabled `core.hooksPath=.githooks`** (it was unset,
+  so NO guard had been running). Tested: the guard blocks a staged email+phone.
+- **`.env.example`:** documents `EMAIL_SIGNATURE` + the keep-PII-in-env rule.
+- **Per roborev:** extracted `hasRecipient`/`appendSignature` helpers in
+  `lib/email.ts` (a primary `to` is required; cc never auto-promotes) with unit
+  tests (`lib/email.test.ts`); the PII guard now hard-blocks consumer-mail
+  domains (gmail/yahoo/icloud/…) and only *warns* on other email domains to
+  avoid false-positive blocks on vendor addresses.
+- Verified `tsc`, vitest, + `next build` clean.
+
+### Potential concerns to address:
+- **History not purged:** PII still exists in `origin/main`'s past commits and in
+  this branch's pre-rewrite commits. A full purge (git filter-repo + force-push)
+  is deferred per decision; revisit if required (coordinate w/ other agents).
+- **`EMAIL_SIGNATURE` content:** set to name + "OHS parent" + phone (child name
+  intentionally dropped). Adjust in Vercel env if a different sign-off is wanted.
+- **Other env scopes:** `NOTIFY_TO`/`EMAIL_SIGNATURE` set for Production only;
+  Preview deploys won't have them (emails there skip recipient/signature).
+- Multiple agents are active; this is going up as a PR (no direct `main` commits,
+  no manual `vercel --prod`).
+
+## Progress Update as of June 17, 2026 — 2:33 PM Pacific
+
+### Summary of changes since last update
+Established a standing **git workflow: always branch → commit → push → open a
+PR; never commit to `main`; the user merges**. Moved the (already-deployed)
+secret-share work off local `main` onto branch `feat/secret-share-url` and reset
+local `main` to `origin/main`, then opened a PR for it.
+
+### Detail of changes made:
+- **`CLAUDE.md`:** new "Git workflow" section codifying branch+PR-always.
+- **`.claude/settings.json` + `.claude/hooks/warn-unpushed.sh`:** a `Stop` hook
+  that warns (non-blocking) when commits are unpushed — backstop for the policy.
+  (`.claude/settings.local.json` stays gitignored.)
+- **Memory:** saved `git-workflow-pr-always` feedback so the preference persists.
+- All pending work (secret-share commits `77c2bb5`+`a326c15` plus this workflow
+  commit) lives on `feat/secret-share-url` and is going up as one PR. NOTE: the
+  secret-share feature was already deployed to prod earlier today, so this PR is
+  retroactive for that code; future work gets its own branch/PR before deploy.
+
+### Potential concerns to address:
+- **Convention tension:** the older "Progress log" section says `PRD/<branch>.md`,
+  but to keep one coherent log this entry stays in `PRD/main.md` even though the
+  active branch is `feat/secret-share-url`. Revisit if per-branch logs are wanted.
+- Photos-carousel request (match festival.so style on `/p/<token>` + expand the
+  `/admin` "N photos" row) is NOT in this PR — it's the next branch.
+
+## Progress Update as of June 17, 2026 — 2:22 PM Pacific
+
+### Summary of changes since last update
+Addressed the roborev review of the secret-share-URL commit (`77c2bb5`). All
+five findings fixed in this follow-up.
+
+### Detail of changes made:
+- **`getSignupByEmail` (`lib/db/signups.ts`):** now matches case-insensitively
+  (`lower(email)`), so the `/account` share panel shows even when the Clerk
+  email's case differs from the stored signup email.
+- **`share-settings.tsx`:** optimistic toggle/checkbox state now **reverts** on a
+  server-action error instead of staying out of sync with the DB.
+- **`thanks/actions.ts`:** bot-block log now records only `classificationReason`,
+  not the whole verification object.
+- **Removed dead code:** `getShareState` + `ShareState` (unused after the editor
+  switched to `getSignupForEdit`).
+- **Tests:** added `lib/share.test.ts` (shareFieldsOrDefault null→defaults /
+  []→honored / drops unknowns; sanitizeShareFields; token shape). Full suite
+  17/17 green; `tsc`, eslint, `next build` clean.
+
+### Potential concerns to address:
+- Still **not deployed** at the time of this entry — deploy is the next action.
+- Deferred: an integration test that a disabled/unknown share token 404s (needs
+  DB mocking; the pure-logic paths are now covered by unit tests).
+
+## Progress Update as of June 17, 2026 — 2:16 PM Pacific
+
+### Summary of changes since last update
+Added a **secret share URL** feature: a parent can enable an off-by-default,
+unguessable link (`/p/<token>`) that shows their family profile (the fields
+they choose) to anyone they share it with. Also **fixed the `/signup/thanks`
+editor**, which was a blank entry form that silently wiped existing data — it
+now pre-fills the parent's saved city/state/interests/photos and lists their
+already-registered children. Private family photos now render via presigned
+URLs. Schema columns were applied to the prod Neon DB. Next step: deploy to prod
+(the `/p/` route 404s until deployed) and wire the applicant welcome email.
+
+### Detail of changes made:
+- **Schema (`lib/db/schema/signups.ts`):** new columns `share_enabled`
+  (bool, default false), `share_token` (text, unique), `share_fields` (text[]).
+  Applied to the live Neon DB directly (additive `ALTER`s) — NOT via a drizzle
+  migration, matching how this repo already applies schema (`db:push`; the
+  `admins`/`api_keys` columns were also push-applied, so `drizzle-kit generate`
+  shows pre-existing drift). `share_token` raw (capability URL, re-copyable),
+  unlike API keys which are hashed.
+- **Secret page (`app/p/[token]/page.tsx`):** server component, `noindex`.
+  Looks up by `share_token` + `share_enabled=true`, else `notFound()`. Renders
+  only enabled fields + children. Styled to match the approved mockup.
+- **Sharing libs:** `lib/share.ts` (field defs, defaults, token gen via the
+  api-key recipe, `shareFieldsOrDefault` — null→defaults, []→honored),
+  `lib/url.ts` (`getBaseUrl`/`shareUrlFor`), `lib/share-actions.ts`
+  (`setShareEnabled`/`setShareFields`; capability = `signupId`),
+  `lib/db/signups.ts` (read helpers incl. `getSignupForEdit`).
+- **Management UI (`app/signup/thanks/share-settings.tsx`):** toggle + per-field
+  checkboxes + copy link. Wired into `/signup/thanks` and `/account` (latter
+  gated on the signed-in user's email matching a signup).
+- **Private photos (`lib/blob.ts`):** `signedPhotoUrls()` mints presigned GET
+  URLs (one `issueSignedToken` + per-photo `presignUrl`, `access:"private"`).
+  Used by both the secret page and the thanks-page editor. (Photos upload as
+  `access:"private"` blobs, so raw URLs can't be displayed.)
+- **Editor fix (`family-form.tsx` + `thanks/page.tsx`):** form now pre-fills
+  city/state/parent-interests/photos and shows existing children read-only.
+  This also stops the blank-form-overwrites-data bug (resubmitting kept the
+  pre-filled values).
+- **BotID (`thanks/actions.ts`):** signed-in admins are now exempt from the
+  `checkBotId()` block (DROdio kept hitting "Submission blocked"); non-admin
+  blocks now log `classificationReason`.
+- **Env:** `.env.example` documents optional `NEXT_PUBLIC_SITE_URL`.
+- Verified: `tsc --noEmit`, eslint (changed files), and `next build` all clean.
+- Sent a TEST welcome email to a test recipient (Resend) with both links, and
+  enabled DROdio's own share link (`/p/<token>`).
+
+### Potential concerns to address:
+- **Not deployed yet** — the `/p/<token>` route 404s on prod until this ships.
+- **Migration drift:** share columns live only in `schema.ts` + the live DB, not
+  in `lib/db/migrations`. A future `drizzle-kit generate` will still show the
+  pre-existing `admins`/`api_keys` drift alongside them.
+- **Presigned photo URLs expire (~10 min);** pages that show photos are dynamic
+  and re-render per load, so this only matters if a tab sits open a long time.
+- **Applicant welcome email not wired into the app yet** — only sent via a
+  one-off test script (since removed). Needs a `notifyApplicantWelcome()` in
+  `lib/email.ts` + a call from the step-1 signup action.
+
 ## Progress Update as of June 17, 2026 — 2:59 PM Pacific
 
 ### Summary of changes since last update
@@ -8,7 +160,7 @@ Redacted personal contact info (a child's first name + grade and a personal phon
 
 ### Detail of changes made:
 - **`PRD/main.md`:** the email-signature entry no longer quotes the literal signature string; it now just describes it (name + family intro + contact phone) without the values.
-- **Intentionally left as-is (DROdio's decision):** the same details remain in `lib/email.ts` (the `SIGNATURE` constant) and on the public `app/signup/thanks/page.tsx` intro — these are DROdio's own self-introductions and were kept on purpose.
+- **Note — superseded by the secret-share PR (#3):** this said the contact details were kept in `lib/email.ts` and the thanks-page intro, but the later (more thorough) scrub moved the signature to env (`EMAIL_SIGNATURE`) and removed the child name from the page.
 - **Git history left as-is:** the phone number is still present in historical commits (introduced in `2146d28`); no history rewrite was done. Treat the number as already-public.
 
 ### Potential concerns to address:
@@ -54,13 +206,12 @@ the new address to confirm.
 
 ### Detail of changes made:
 - **Resend:** confirmed `pixelparents.org` domain is `verified` (sending enabled).
-  Sent a test email from `DROdio@pixelparents.org` to drodio@storytell.ai +
+  Sent a test email from `DROdio@pixelparents.org` to <admin-email> +
   DROdio@pixelparents.org (Resend id 011804c4…).
 - **`lib/email.ts`:** refactored to a single `sendEmail()` helper that all
   notifications route through. New default `FROM = "DROdio <DROdio@pixelparents.org>"`.
-  Every email now appends DROdio's signature block (name, a short family intro,
-  and a contact phone — literal value redacted from this public log; it lives in
-  `lib/email.ts`).
+  Every email appends DROdio's signature block (name, family intro, contact
+  phone) — the literal value lives in env `EMAIL_SIGNATURE`, not in the repo.
 - **Vercel env:** updated `RESEND_FROM` (Production) to
   `DROdio <DROdio@pixelparents.org>` (code default matches as a safety net).
 - Verified `next build` + TypeScript clean.
@@ -243,7 +394,7 @@ Built the `/admin` dashboard: a table of all signup submissions plus the ability
 - **Data now:** 4 signups / 2 children in Neon. Build green with the full route set (admin + signup + dev-api).
 
 ### Potential concerns to address:
-- **Bootstrap admin = `drodio@storytell.ai`** (the env superadmin). Sign in to Clerk with THAT email to reach `/admin` and promote others; any other sign-in email is locked out until added (env or DB).
+- **Bootstrap admin = `<admin-email>`** (the env superadmin). Sign in to Clerk with THAT email to reach `/admin` and promote others; any other sign-in email is locked out until added (env or DB).
 - **Clerk live domain still provisioning** (`clerk.pixelparents.org`) — until Clerk's edge serves it, production sign-in renders a blank widget; local dev (`pk_test`) works now. A background watcher is polling and will report when it goes live.
 - **Admin is keyed by email, not Clerk user id** — fine for this trust model; revisit if stricter identity binding is ever needed.
 - **Photos shown as counts only** (private Blob); viewing kids' photos would need signed `getDownloadUrl()` URLs (deferred).
@@ -271,7 +422,7 @@ Implemented the full `/signup` + family-profile feature on the `signup` branch (
 Replaced the default create-next-app boilerplate in `README.md` with a short, parent-facing welcome message inviting Stanford OHS parents to contribute. Done on an isolated worktree branch (`worktree-readme-ohs-welcome`) to avoid an in-flight Clerk-auth merge that was occupying the main checkout, then pushed straight to `main`.
 
 ### Detail of changes made:
-- **`README.md`:** now a "Hello Stanford OHS parent!" welcome — explains this is an OSS project for parents to build software supporting kids at OHS, directs interested parents to DM DROdio on the Tech Pixel Parents WhatsApp group, and gives a fallback email (DROdio+OHS@Gmail.com) for parents not yet in the group. Dropped the Next.js/Vercel getting-started scaffolding.
+- **`README.md`:** now a "Hello Stanford OHS parent!" welcome — explains this is an OSS project for parents to build software supporting kids at OHS, directs interested parents to DM DROdio on the Tech Pixel Parents WhatsApp group, and gives a fallback contact email for parents not yet in the group. Dropped the Next.js/Vercel getting-started scaffolding.
 - **Workflow note:** committed from a git worktree because the main checkout had an uncommitted parallel-agent merge (Clerk auth + Developer API). This commit only touches `README.md` + this log, so it merges cleanly with that work.
 
 ### Potential concerns to address:
@@ -287,7 +438,7 @@ Added Clerk authentication with an admin-only gate, mirroring the founder-festiv
 - **Middleware:** `proxy.ts` (this Next.js version's renamed `middleware.ts`) runs `clerkMiddleware` and protects `/admin(.*)` via `createRouteMatcher` + `auth.protect()`. Public splash is untouched.
 - **Provider scoping:** `<ClerkProvider>` lives in `app/(authed)/layout.tsx`, NOT the root layout — so the public coming-soon splash loads zero Clerk JS and triggers no dev handshake. Verified: `/` returns 200 with no `ClerkProvider`/`clerk.browser.js`/publishable key in the HTML.
 - **Routes:** `app/(authed)/sign-in/[[...sign-in]]/page.tsx` (`<SignIn/>`) and `app/(authed)/admin/page.tsx` (gated). Verified locally: `/admin` signed-out → `307` to `/sign-in?redirect_url=…/admin`; `/sign-in` renders the real Clerk widget (dev instance `clerk.accounts.dev`).
-- **Admin gating is two layers:** `proxy.ts` requires *signed-in*; the admin page additionally checks `ADMIN_EMAILS` (comma-separated allowlist) so signing up via Clerk is not enough to reach admin tools. Seeded `ADMIN_EMAILS=drodio@storytell.ai`.
+- **Admin gating is two layers:** `proxy.ts` requires *signed-in*; the admin page additionally checks `ADMIN_EMAILS` (comma-separated allowlist) so signing up via Clerk is not enough to reach admin tools. Seeded `ADMIN_EMAILS=<admin-email>`.
 - **Env (local):** `.env.example` documents `CLERK_SECRET_KEY`, `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY`, `NEXT_PUBLIC_CLERK_SIGN_IN_URL`, `ADMIN_EMAILS`. Local `.env.local` uses Development-instance keys (`pk_test`/`sk_test`) so localhost works with no DNS; live keys (`pk_live`/`sk_live`, bound to `clerk.pixelparents.org`) are in git-ignored `.env.prod.local`.
 - **Production wiring (DONE):** live keys added to Vercel **Production**; test keys to **Preview** + **Development**; `NEXT_PUBLIC_CLERK_SIGN_IN_URL=/sign-in` and `ADMIN_EMAILS` set across all three (preview env vars added via the Vercel REST API because the CLI wouldn't target "all preview branches" non-interactively). 5 Clerk CNAMEs created on the `pixelparents.org` Cloudflare zone via flarectl, all **unproxied**: `clerk`→frontend-api, `accounts`→accounts, `clkmail`→mail, `clk._domainkey`/`clk2._domainkey`→dkim1/dkim2 (`*.clerk.services`).
 - **Vercel project moved:** `pixelparents` was transferred from the `storytell` team to `drodio1s-projects`; the repo was re-linked (`.vercel/project.json` orgId now `team_qK4jnhrT8pwg9pnSiIzXLUIe`).
@@ -325,7 +476,7 @@ Brainstormed and wrote an approved design spec for a two-step parent onboarding 
 ### Detail of changes made:
 - **Spec:** `docs/superpowers/specs/2026-06-15-signup-family-profile-design.md` — full design, user-approved.
 - **Feature scope:** `/signup` (recruit OHS parents: required first/last/email/phone + optional skills/availability profile) → redirect to `/signup/thanks?id=<uuid>` (personalized DROdio intro + optional family/child seed-data profile with dynamic interest pills, multi-photo upload, repeatable children).
-- **Decisions locked:** Neon Postgres via Vercel Marketplace; Drizzle ORM + drizzle-kit; Zod (shared); Vercel BotID for bot protection; Vercel Blob for photos with **client-side** resize/compress (~1600px, ~0.8) before upload; Resend email notifications to **DROdio@chief.bot** (user has a Resend account); DROdio-only `/admin` via HTTP Basic Auth middleware.
+- **Decisions locked:** Neon Postgres via Vercel Marketplace; Drizzle ORM + drizzle-kit; Zod (shared); Vercel BotID for bot protection; Vercel Blob for photos with **client-side** resize/compress (~1600px, ~0.8) before upload; Resend email notifications to **<notify-email>** (user has a Resend account); DROdio-only `/admin` via HTTP Basic Auth middleware.
 - **Data model:** family-level fields (city, state, parent_interests, photos) on `signups`; `children` as 1:N. Interests pill pool = distinct union of parent + child interests.
 - **Explicitly deferred:** OHS-family authenticated public viewing (copy is a forward promise), family self-edit, verified custom email domain, the concrete reference URL to DROdio's own submission.
 

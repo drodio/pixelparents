@@ -14,7 +14,7 @@ A two-step onboarding flow for OHS (Stanford Online High School) parents:
    *optional* family/child profile that becomes the project's initial seed data
    set (children, interests, family photos).
 
-Plus: store everything in **Neon Postgres**, **email DROdio@chief.bot** on each
+Plus: store everything in **Neon Postgres**, **email the NOTIFY_TO address** on each
 signup, a **DROdio-only admin view**, and **bot protection** on the public form.
 
 ## 2. Tech additions
@@ -133,7 +133,7 @@ lib/db/migrations/*              # generated SQL migrations
 - Page lists signups newest-first with their children and key fields.
 
 ## 7. Email notification (`lib/email.ts`)
-- Resend SDK. **To:** `NOTIFY_TO` (default `DROdio@chief.bot`).
+- Resend SDK. **To:** `NOTIFY_TO` (default `the NOTIFY_TO address`).
   **From:** `RESEND_FROM` (default `onboarding@resend.dev`; can move to a
   verified `pixelparents.org` sender later via Cloudflare DNS + `flarectl`).
 - Subject: `New Pixel Parents signup: <First Last>`. Body: submitted fields.
@@ -146,7 +146,7 @@ lib/db/migrations/*              # generated SQL migrations
 | `BLOB_READ_WRITE_TOKEN` | Vercel Blob | no |
 | `RESEND_API_KEY` | user's Resend account | no |
 | `RESEND_FROM` | optional | no |
-| `NOTIFY_TO` | `DROdio@chief.bot` | no |
+| `NOTIFY_TO` | `the NOTIFY_TO address` | no |
 | `ADMIN_USER` / `ADMIN_PASSWORD` | chosen | no |
 | `NEXT_PUBLIC_DRODIO_SUBMISSION_URL` | placeholder | may default in code |
 

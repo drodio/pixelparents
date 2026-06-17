@@ -87,20 +87,36 @@ function TagPicker({
   );
 }
 
+export type ExistingChild = { id: string; firstName: string; grade: string | null };
+
 export default function FamilyForm({
   signupId,
   suggestedInterests,
+  initialCity = "",
+  initialUsState = "",
+  initialParentInterests = [],
+  initialPhotos = [],
+  initialPhotoPreviews = {},
+  existingChildren = [],
 }: {
   signupId: string;
   suggestedInterests: string[];
+  initialCity?: string;
+  initialUsState?: string;
+  initialParentInterests?: string[];
+  initialPhotos?: Photo[];
+  // pathname -> presigned URL, so already-saved private photos can be shown.
+  initialPhotoPreviews?: Record<string, string>;
+  existingChildren?: ExistingChild[];
 }) {
   const [state, formAction, pending] = useActionState(saveFamily, initialState);
 
-  // Family-level (persists across "add another child")
+  // Family-level (persists across "add another child"), pre-filled from any
+  // existing submission so a returning parent doesn't blank out their own data.
   const [notInUS, setNotInUS] = useState(false);
-  const [parentInterests, setParentInterests] = useState<string[]>([]);
-  const [photos, setPhotos] = useState<Photo[]>([]);
-  const [previews, setPreviews] = useState<Record<string, string>>({});
+  const [parentInterests, setParentInterests] = useState<string[]>(initialParentInterests);
+  const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
+  const [previews, setPreviews] = useState<Record<string, string>>(initialPhotoPreviews);
   const [uploading, setUploading] = useState(0);
   const [photoError, setPhotoError] = useState<string | null>(null);
 
@@ -186,6 +202,7 @@ export default function FamilyForm({
               <input
                 id="city"
                 name="city"
+                defaultValue={initialCity}
                 disabled={notInUS}
                 className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-40`}
                 autoComplete="address-level2"
@@ -197,7 +214,7 @@ export default function FamilyForm({
                 id="state"
                 name="state"
                 disabled={notInUS}
-                defaultValue=""
+                defaultValue={initialUsState}
                 className={`${inputCls} disabled:cursor-not-allowed disabled:opacity-40`}
               >
                 <option value="">Select…</option>
@@ -273,9 +290,35 @@ export default function FamilyForm({
 
         <hr className="border-white/10" />
 
+        {/* Already-registered children (read-only) so returning parents can see
+            what's saved. The form below adds another child; it never edits these. */}
+        {existingChildren.length > 0 && (
+          <div>
+            <h2 className="text-lg font-semibold">
+              {existingChildren.length === 1 ? "Child you've added" : "Children you've added"}
+            </h2>
+            <ul className="mt-2 flex flex-col gap-2">
+              {existingChildren.map((c) => (
+                <li
+                  key={c.id}
+                  className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
+                >
+                  <span className="font-medium text-white/90">{c.firstName}</span>
+                  {c.grade && <span className="text-white/50">{c.grade}</span>}
+                </li>
+              ))}
+            </ul>
+            <p className="mt-2 text-xs text-white/40">
+              Already saved. Use the form below to add another child.
+            </p>
+          </div>
+        )}
+
         {/* Child-level */}
         <div>
-          <h2 className="text-lg font-semibold">About your child</h2>
+          <h2 className="text-lg font-semibold">
+            {existingChildren.length > 0 ? "Add another child" : "About your child"}
+          </h2>
           <p className="text-sm text-white/50">
             (Feel free to add non-OHS children as well)
           </p>

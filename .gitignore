@@ -41,3 +41,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 .env*.local
+
+# Visual brainstorming companion (local only)
+.superpowers/
+
+# Other agents'  git worktrees live here — never commit them
+.claude/worktrees/
