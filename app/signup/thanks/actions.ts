@@ -3,9 +3,25 @@
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { checkBotId } from "botid/server";
+import { currentUser } from "@clerk/nextjs/server";
 import { getDb } from "@/lib/db";
 import { signups, children, type Photo } from "@/lib/db/schema/signups";
 import { familySchema, childSchema } from "@/lib/validation";
+import { isAdminEmail } from "@/lib/admin";
+
+// A signed-in admin editing a family profile must never be bot-blocked.
+async function isAdminRequest(): Promise<boolean> {
+  try {
+    const user = await currentUser();
+    const email =
+      user?.emailAddresses.find((e) => e.id === user.primaryEmailAddressId)?.emailAddress ??
+      user?.emailAddresses[0]?.emailAddress ??
+      null;
+    return await isAdminEmail(email);
+  } catch {
+    return false;
+  }
+}
 
 export type FamilyState = {
   ok: boolean;
@@ -53,7 +69,8 @@ export async function saveFamily(
   formData: FormData,
 ): Promise<FamilyState> {
   const verification = await checkBotId();
-  if (verification.isBot) {
+  if (verification.isBot && !(await isAdminRequest())) {
+    console.warn("saveFamily bot-blocked:", JSON.stringify(verification));
     return { ok: false, message: "Submission blocked — please try again." };
   }
 

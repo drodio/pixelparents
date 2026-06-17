@@ -1,6 +1,64 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 2:16 PM Pacific
+
+### Summary of changes since last update
+Added a **secret share URL** feature: a parent can enable an off-by-default,
+unguessable link (`/p/<token>`) that shows their family profile (the fields
+they choose) to anyone they share it with. Also **fixed the `/signup/thanks`
+editor**, which was a blank entry form that silently wiped existing data — it
+now pre-fills the parent's saved city/state/interests/photos and lists their
+already-registered children. Private family photos now render via presigned
+URLs. Schema columns were applied to the prod Neon DB. Next step: deploy to prod
+(the `/p/` route 404s until deployed) and wire the applicant welcome email.
+
+### Detail of changes made:
+- **Schema (`lib/db/schema/signups.ts`):** new columns `share_enabled`
+  (bool, default false), `share_token` (text, unique), `share_fields` (text[]).
+  Applied to the live Neon DB directly (additive `ALTER`s) — NOT via a drizzle
+  migration, matching how this repo already applies schema (`db:push`; the
+  `admins`/`api_keys` columns were also push-applied, so `drizzle-kit generate`
+  shows pre-existing drift). `share_token` raw (capability URL, re-copyable),
+  unlike API keys which are hashed.
+- **Secret page (`app/p/[token]/page.tsx`):** server component, `noindex`.
+  Looks up by `share_token` + `share_enabled=true`, else `notFound()`. Renders
+  only enabled fields + children. Styled to match the approved mockup.
+- **Sharing libs:** `lib/share.ts` (field defs, defaults, token gen via the
+  api-key recipe, `shareFieldsOrDefault` — null→defaults, []→honored),
+  `lib/url.ts` (`getBaseUrl`/`shareUrlFor`), `lib/share-actions.ts`
+  (`setShareEnabled`/`setShareFields`; capability = `signupId`),
+  `lib/db/signups.ts` (read helpers incl. `getSignupForEdit`).
+- **Management UI (`app/signup/thanks/share-settings.tsx`):** toggle + per-field
+  checkboxes + copy link. Wired into `/signup/thanks` and `/account` (latter
+  gated on the signed-in user's email matching a signup).
+- **Private photos (`lib/blob.ts`):** `signedPhotoUrls()` mints presigned GET
+  URLs (one `issueSignedToken` + per-photo `presignUrl`, `access:"private"`).
+  Used by both the secret page and the thanks-page editor. (Photos upload as
+  `access:"private"` blobs, so raw URLs can't be displayed.)
+- **Editor fix (`family-form.tsx` + `thanks/page.tsx`):** form now pre-fills
+  city/state/parent-interests/photos and shows existing children read-only.
+  This also stops the blank-form-overwrites-data bug (resubmitting kept the
+  pre-filled values).
+- **BotID (`thanks/actions.ts`):** signed-in admins are now exempt from the
+  `checkBotId()` block (DROdio kept hitting "Submission blocked"); non-admin
+  blocks now log `classificationReason`.
+- **Env:** `.env.example` documents optional `NEXT_PUBLIC_SITE_URL`.
+- Verified: `tsc --noEmit`, eslint (changed files), and `next build` all clean.
+- Sent a TEST welcome email to drodio@gmail.com (Resend) with both links, and
+  enabled DROdio's own share link (`/p/nI0tgc0J…`).
+
+### Potential concerns to address:
+- **Not deployed yet** — the `/p/<token>` route 404s on prod until this ships.
+- **Migration drift:** share columns live only in `schema.ts` + the live DB, not
+  in `lib/db/migrations`. A future `drizzle-kit generate` will still show the
+  pre-existing `admins`/`api_keys` drift alongside them.
+- **Presigned photo URLs expire (~10 min);** pages that show photos are dynamic
+  and re-render per load, so this only matters if a tab sits open a long time.
+- **Applicant welcome email not wired into the app yet** — only sent via a
+  one-off test script (since removed). Needs a `notifyApplicantWelcome()` in
+  `lib/email.ts` + a call from the step-1 signup action.
+
 ## Progress Update as of June 16, 2026 — 12:50 PM Pacific
 
 ### Summary of changes since last update

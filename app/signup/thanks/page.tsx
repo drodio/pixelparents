@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
-import { eq } from "drizzle-orm";
-import { getDb } from "@/lib/db";
-import { signups } from "@/lib/db/schema/signups";
 import { getInterestPool } from "@/lib/interests";
+import { getSignupForEdit } from "@/lib/db/signups";
+import { shareFieldsOrDefault } from "@/lib/share";
+import { shareUrlFor } from "@/lib/url";
+import { signedPhotoUrls } from "@/lib/blob";
 import FamilyForm from "./family-form";
+import { ShareSettings } from "./share-settings";
 
 export const metadata: Metadata = {
   title: "Welcome — Pixel Parents",
@@ -16,32 +18,32 @@ const UUID_RE =
 
 const DRODIO_SUBMISSION_URL = process.env.NEXT_PUBLIC_DRODIO_SUBMISSION_URL;
 
-async function getFirstName(id?: string): Promise<string | null> {
-  if (!id || !UUID_RE.test(id)) return null;
-  try {
-    const [row] = await getDb()
-      .select({ firstName: signups.firstName })
-      .from(signups)
-      .where(eq(signups.id, id))
-      .limit(1);
-    return row?.firstName ?? null;
-  } catch (err) {
-    console.error("getFirstName failed:", err);
-    return null;
-  }
-}
-
 export default async function ThanksPage({
   searchParams,
 }: {
   searchParams: Promise<{ id?: string; admin?: string }>;
 }) {
   const { id, admin } = await searchParams;
-  const [firstName, interestPool] = await Promise.all([
-    getFirstName(id),
+  const validId = id && UUID_RE.test(id) ? id : null;
+  const [editData, interestPool] = await Promise.all([
+    validId ? getSignupForEdit(validId) : Promise.resolve(null),
     getInterestPool(),
   ]);
+
+  const signup = editData?.signup ?? null;
+  const firstName = signup?.firstName ?? null;
   const greeting = firstName ? `${firstName}, nice to meet you.` : "Nice to meet you.";
+
+  // Presign already-saved (private) photos so the editor can show them, and so
+  // resubmitting keeps them instead of wiping them.
+  const initialPhotos = signup?.photos ?? [];
+  const photoUrls = initialPhotos.length
+    ? await signedPhotoUrls(initialPhotos.map((p) => p.pathname))
+    : [];
+  const initialPhotoPreviews: Record<string, string> = {};
+  initialPhotos.forEach((p, i) => {
+    if (photoUrls[i]) initialPhotoPreviews[p.pathname] = photoUrls[i]!;
+  });
 
   return (
     <main className="min-h-dvh bg-black text-white">
@@ -149,8 +151,34 @@ export default async function ThanksPage({
         </div>
 
         <div className="mt-10">
-          <FamilyForm signupId={id ?? ""} suggestedInterests={interestPool} />
+          <FamilyForm
+            signupId={id ?? ""}
+            suggestedInterests={interestPool}
+            initialCity={signup?.city ?? ""}
+            initialUsState={signup?.state ?? ""}
+            initialParentInterests={signup?.parentInterests ?? []}
+            initialPhotos={initialPhotos}
+            initialPhotoPreviews={initialPhotoPreviews}
+            existingChildren={
+              editData?.kids.map((k) => ({
+                id: k.id,
+                firstName: k.firstName,
+                grade: k.grade,
+              })) ?? []
+            }
+          />
         </div>
+
+        {validId && signup && (
+          <div className="mt-12">
+            <ShareSettings
+              signupId={validId}
+              initialEnabled={signup.shareEnabled}
+              initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
+              initialFields={shareFieldsOrDefault(signup.shareFields)}
+            />
+          </div>
+        )}
       </div>
     </main>
   );

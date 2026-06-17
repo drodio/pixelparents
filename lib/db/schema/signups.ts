@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
 
 export type Photo = {
   url: string;
@@ -32,6 +32,13 @@ export const signups = pgTable("signups", {
   state: text("state"),
   parentInterests: text("parent_interests").array(),
   photos: jsonb("photos").$type<Photo[]>().default([]),
+
+  // Secret share URL (off by default). The token lives in /p/<token>; we keep it
+  // when the parent disables sharing so re-enabling restores the same URL.
+  // shareFields holds the field keys the parent has chosen to make visible.
+  shareEnabled: boolean("share_enabled").default(false).notNull(),
+  shareToken: text("share_token").unique(),
+  shareFields: text("share_fields").array(),
 
   // Reserved for future follow-up question sets.
   extra: jsonb("extra").$type<Record<string, unknown>>().default({}),
