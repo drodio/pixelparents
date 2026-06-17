@@ -1,6 +1,35 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 3:42 PM Pacific
+
+### Summary of changes since last update
+Overhauled the `/signup/thanks` page (branch `feat/child-profiles`): birth-year
+for non-OHS children (auto-age), per-child photo uploads, click-to-edit existing
+children, several labels promoted to H3, and an "editing" mode (drops the
+banner/intro, greets returning parents, surfaces the share link up top).
+
+### Detail of changes made:
+- **Schema (`children`):** added `birth_year` (int) + `photos` (jsonb Photo[]);
+  applied to the live Neon DB (additive ALTERs, per the repo's db:push pattern).
+- **`family-form.tsx`:** grade "Not an OHS child" → a "Year born" select that
+  auto-shows the computed age; per-child photo upload (separate from family
+  photos); the "Children you've added" list is now clickable — clicking loads
+  that child into the form (Save changes / Cancel) and updates it; 4 field labels
+  are now `<h3>`.
+- **`actions.ts`:** parses `childBirthYear` + `childPhotos`; `intent=update-child`
+  updates the clicked child (scoped by signupId) instead of inserting.
+- **`page.tsx`:** `hasExistingData` drives edit-mode (no banner, greeting
+  "<name>, edit your info here:", share panel above the subheading, intro hidden);
+  presigns each child's private photos for the editor.
+- **`validation.ts`:** `childSchema.birthYear` (coerced int, optional).
+- Verified `tsc`, eslint, `next build` clean.
+
+### Potential concerns to address:
+- Per-child photo editing replaces the child's photo set on update (parents can
+  add/remove); existing photos are presigned + preloaded so they aren't wiped.
+- Migration drift unchanged (schema lives in `schema.ts` + live DB, not migrations).
+
 ## Progress Update as of June 17, 2026 — 2:52 PM Pacific
 
 ### Summary of changes since last update

@@ -1,7 +1,8 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+import { and, eq } from "drizzle-orm";
 import { checkBotId } from "botid/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { getDb } from "@/lib/db";
@@ -95,13 +96,15 @@ export async function saveFamily(
   }
 
   const childFirst = String(formData.get("childFirstName") ?? "").trim();
-  const wantsChild = intent === "add-another" || childFirst.length > 0;
+  const isChildUpdate = intent === "update-child";
+  const wantsChild = isChildUpdate || intent === "add-another" || childFirst.length > 0;
 
   let child: ReturnType<typeof childSchema.safeParse> | null = null;
   if (wantsChild) {
     child = childSchema.safeParse({
       firstName: childFirst,
       grade: formData.get("childGrade") ?? "",
+      birthYear: formData.get("childBirthYear") || undefined,
       interests: parseStringArray(formData.get("childInterests")),
       notes: formData.get("childNotes") ?? "",
     });
@@ -116,6 +119,7 @@ export async function saveFamily(
   }
 
   const photos = parsePhotos(formData.get("photos"));
+  const childPhotos = parsePhotos(formData.get("childPhotos"));
 
   const db = getDb();
   try {
@@ -132,20 +136,41 @@ export async function saveFamily(
       .where(eq(signups.id, id));
 
     if (child?.success) {
-      await db.insert(children).values({
-        signupId: id,
+      const values = {
         firstName: child.data.firstName,
         grade: child.data.grade || null,
+        birthYear: child.data.birthYear ?? null,
         interests: child.data.interests?.length ? child.data.interests : null,
         notes: child.data.notes || null,
-      });
+        photos: childPhotos,
+      };
+      if (isChildUpdate) {
+        const childId = String(formData.get("childId") ?? "");
+        if (!UUID_RE.test(childId)) {
+          return { ok: false, message: "Couldn't find that child to update." };
+        }
+        const updated = await db
+          .update(children)
+          .set(values)
+          .where(and(eq(children.id, childId), eq(children.signupId, id)))
+          .returning({ id: children.id });
+        if (updated.length === 0) {
+          return { ok: false, message: "Couldn't find that child to update." };
+        }
+      } else {
+        await db.insert(children).values({ signupId: id, ...values });
+      }
     }
+
+    // Refresh the server-rendered "Children you've added" list + pre-filled
+    // fields so an edit/add shows immediately (no manual reload).
+    revalidatePath("/signup/thanks");
   } catch (err) {
     console.error("saveFamily failed:", err);
     return { ok: false, message: "Something went wrong saving your info. Please try again." };
   }
 
-  if (intent === "add-another") {
+  if (intent === "add-another" || intent === "update-child") {
     return { ok: true, savedChildName: child?.success ? child.data.firstName : undefined };
   }
 

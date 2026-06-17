@@ -46,6 +46,8 @@ export const familySchema = z.object({
 export const childSchema = z.object({
   firstName: z.string().trim().min(1, "Child's first name is required").max(100),
   grade: z.union([z.enum(GRADES), z.literal("")]).optional(),
+  // Birth year (for a "Not an OHS child"); age is derived, not stored.
+  birthYear: z.coerce.number().int().min(1980).max(2100).optional(),
   interests: z.array(z.string().trim().min(1).max(60)).max(50).optional(),
   notes: z.string().trim().max(2000).optional(),
 });

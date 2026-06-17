@@ -14,6 +14,7 @@ const initialState: FamilyState = { ok: false };
 const labelCls = "block text-sm font-medium text-white/80";
 const inputCls =
   "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40";
+const h3Cls = "text-base font-semibold text-white";
 
 function TagPicker({
   value,
@@ -87,7 +88,17 @@ function TagPicker({
   );
 }
 
-export type ExistingChild = { id: string; firstName: string; grade: string | null };
+export type ExistingChild = {
+  id: string;
+  firstName: string;
+  grade: string | null;
+  birthYear: number | null;
+  interests: string[] | null;
+  notes: string | null;
+  photos: Photo[];
+  // pathname -> presigned URL for already-saved (private) child photos.
+  photoPreviews: Record<string, string>;
+};
 
 export default function FamilyForm({
   signupId,
@@ -123,8 +134,16 @@ export default function FamilyForm({
   // Child-level (cleared after "add another child")
   const [childFirstName, setChildFirstName] = useState("");
   const [childGrade, setChildGrade] = useState("");
+  const [childBirthYear, setChildBirthYear] = useState("");
   const [childInterests, setChildInterests] = useState<string[]>([]);
   const [childNotes, setChildNotes] = useState("");
+  const [childPhotos, setChildPhotos] = useState<Photo[]>([]);
+  const [childPreviews, setChildPreviews] = useState<Record<string, string>>({});
+  const [childUploading, setChildUploading] = useState(0);
+  // When set, the child form is editing an existing child (vs adding a new one).
+  const [editingChildId, setEditingChildId] = useState<string | null>(null);
+
+  const currentYear = new Date().getFullYear();
 
   const lastSavedRef = useRef<FamilyState>(initialState);
   useEffect(() => {
@@ -132,8 +151,12 @@ export default function FamilyForm({
       // an "add another child" succeeded — reset only the child fields
       setChildFirstName("");
       setChildGrade("");
+      setChildBirthYear("");
       setChildInterests([]);
       setChildNotes("");
+      setChildPhotos([]);
+      setChildPreviews({});
+      setEditingChildId(null);
       lastSavedRef.current = state;
     }
   }, [state]);
@@ -172,7 +195,69 @@ export default function FamilyForm({
     setPhotos((p) => p.filter((x) => x.pathname !== pathname));
   }
 
-  const busy = pending || uploading > 0;
+  // Per-child photo uploads (separate from the family photos above).
+  async function onChildFiles(files: FileList | null) {
+    if (!files?.length) return;
+    setPhotoError(null);
+    let count = childPhotos.length + childUploading;
+    for (const file of Array.from(files)) {
+      if (count >= MAX_PHOTOS) {
+        setPhotoError(`You can add up to ${MAX_PHOTOS} photos.`);
+        break;
+      }
+      count++;
+      setChildUploading((n) => n + 1);
+      try {
+        const opt = await optimizeImage(file);
+        const fd = new FormData();
+        const name = file.name.replace(/\.[^.]+$/, "") + ".webp";
+        fd.append("file", new File([opt.blob], name, { type: opt.contentType }));
+        fd.append("width", String(opt.width));
+        fd.append("height", String(opt.height));
+        const res = await fetch("/api/blob/upload", { method: "POST", body: fd });
+        if (!res.ok) throw new Error(`upload failed (${res.status})`);
+        const meta: Photo = await res.json();
+        setChildPreviews((p) => ({ ...p, [meta.pathname]: URL.createObjectURL(opt.blob) }));
+        setChildPhotos((p) => [...p, meta]);
+      } catch (err) {
+        console.error(err);
+        setPhotoError("A photo failed to upload. Please try again.");
+      } finally {
+        setChildUploading((n) => n - 1);
+      }
+    }
+  }
+  function removeChildPhoto(pathname: string) {
+    setChildPhotos((p) => p.filter((x) => x.pathname !== pathname));
+  }
+
+  // Click an existing child to load it into the form for editing.
+  function loadChild(c: ExistingChild) {
+    setEditingChildId(c.id);
+    setChildFirstName(c.firstName);
+    setChildGrade(c.grade ?? "");
+    setChildBirthYear(c.birthYear ? String(c.birthYear) : "");
+    setChildInterests(c.interests ?? []);
+    setChildNotes(c.notes ?? "");
+    setChildPhotos(c.photos ?? []);
+    setChildPreviews(c.photoPreviews ?? {});
+    setPhotoError(null);
+    if (typeof document !== "undefined") {
+      document.getElementById("child-form-anchor")?.scrollIntoView({ behavior: "smooth" });
+    }
+  }
+  function cancelEdit() {
+    setEditingChildId(null);
+    setChildFirstName("");
+    setChildGrade("");
+    setChildBirthYear("");
+    setChildInterests([]);
+    setChildNotes("");
+    setChildPhotos([]);
+    setChildPreviews({});
+  }
+
+  const busy = pending || uploading > 0 || childUploading > 0;
 
   return (
     <>
@@ -182,6 +267,8 @@ export default function FamilyForm({
         <input type="hidden" name="parentInterests" value={JSON.stringify(parentInterests)} />
         <input type="hidden" name="childInterests" value={JSON.stringify(childInterests)} />
         <input type="hidden" name="photos" value={JSON.stringify(photos)} />
+        <input type="hidden" name="childPhotos" value={JSON.stringify(childPhotos)} />
+        <input type="hidden" name="childId" value={editingChildId ?? ""} />
 
         {state.message && (
           <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
@@ -236,9 +323,9 @@ export default function FamilyForm({
         </div>
 
         <div>
-          <label className={labelCls}>
+          <h3 className={h3Cls}>
             Your + your spouse&apos;s interests (select existing or add new ones)
-          </label>
+          </h3>
           <TagPicker
             value={parentInterests}
             onChange={setParentInterests}
@@ -248,10 +335,10 @@ export default function FamilyForm({
         </div>
 
         <div>
-          <label className={labelCls}>
+          <h3 className={h3Cls}>
             Would you like to share any photos of your family, including
             activities you enjoy?
-          </label>
+          </h3>
           <p className="mt-1 text-xs text-white/40">
             Resized &amp; optimized in your browser before upload. Add as many as
             you&rsquo;d like.
@@ -299,25 +386,40 @@ export default function FamilyForm({
             </h2>
             <ul className="mt-2 flex flex-col gap-2">
               {existingChildren.map((c) => (
-                <li
-                  key={c.id}
-                  className="flex items-center justify-between rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-sm"
-                >
-                  <span className="font-medium text-white/90">{c.firstName}</span>
-                  {c.grade && <span className="text-white/50">{c.grade}</span>}
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    onClick={() => loadChild(c)}
+                    className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                      editingChildId === c.id
+                        ? "border-amber-400 bg-amber-400/10"
+                        : "border-white/10 bg-white/[0.03] hover:bg-white/10"
+                    }`}
+                  >
+                    <span className="font-medium text-white/90">{c.firstName}</span>
+                    <span className="text-white/50">
+                      {c.grade ||
+                        (c.birthYear ? `age ${currentYear - c.birthYear}` : "")}{" "}
+                      <span aria-hidden>✎</span>
+                    </span>
+                  </button>
                 </li>
               ))}
             </ul>
             <p className="mt-2 text-xs text-white/40">
-              Already saved. Use the form below to add another child.
+              Click a child to edit, or use the form below to add another.
             </p>
           </div>
         )}
 
         {/* Child-level */}
-        <div>
+        <div id="child-form-anchor">
           <h2 className="text-lg font-semibold">
-            {existingChildren.length > 0 ? "Add another child" : "About your child"}
+            {editingChildId
+              ? `Editing ${childFirstName || "this child"}`
+              : existingChildren.length > 0
+                ? "Add another child"
+                : "About your child"}
           </h2>
           <p className="text-sm text-white/50">
             (Feel free to add non-OHS children as well)
@@ -354,10 +456,33 @@ export default function FamilyForm({
           </div>
         </div>
 
+        {childGrade === "Not an OHS child" && (
+          <div>
+            <label className={labelCls} htmlFor="childBirthYear">Year born</label>
+            <select
+              id="childBirthYear"
+              name="childBirthYear"
+              value={childBirthYear}
+              onChange={(e) => setChildBirthYear(e.target.value)}
+              className={inputCls}
+            >
+              <option value="">Select…</option>
+              {Array.from({ length: 25 }, (_, i) => currentYear - 1 - i).map((y) => (
+                <option key={y} value={y}>
+                  {y} — age {currentYear - y}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs text-white/40">
+              Used to show the child&apos;s age (auto-calculated).
+            </p>
+          </div>
+        )}
+
         <div>
-          <label className={labelCls}>
+          <h3 className={h3Cls}>
             Your child&apos;s interests (select existing or add new ones)
-          </label>
+          </h3>
           <TagPicker
             value={childInterests}
             onChange={setChildInterests}
@@ -367,9 +492,7 @@ export default function FamilyForm({
         </div>
 
         <div>
-          <label className={labelCls} htmlFor="childNotes">
-            What else should we know about your child?
-          </label>
+          <h3 className={h3Cls}>What else should we know about your child?</h3>
           <textarea
             id="childNotes"
             name="childNotes"
@@ -381,35 +504,92 @@ export default function FamilyForm({
           />
         </div>
 
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="submit"
-            name="intent"
-            value="done"
-            disabled={busy}
-            className="rounded-full bg-white px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
-          >
-            Done
-          </button>
-          <button
-            type="submit"
-            name="intent"
-            value="add-another"
-            disabled={busy}
-            className="rounded-full border border-white/30 px-6 py-3 font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
-          >
-            Done + add another child
-          </button>
-          <button
-            type="submit"
-            name="intent"
-            value="skip"
-            disabled={busy}
-            className="rounded-full px-6 py-3 text-white/60 underline-offset-4 hover:underline disabled:opacity-50"
-          >
-            I&apos;d rather skip this for now
-          </button>
+        <div>
+          <h3 className={h3Cls}>Photos of this child (optional)</h3>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={(e) => onChildFiles(e.target.files)}
+            className="mt-2 block w-full text-sm text-white/70 file:mr-3 file:rounded-full file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-black"
+          />
+          {childUploading > 0 && (
+            <p className="mt-1 text-sm text-white/50">Uploading {childUploading}…</p>
+          )}
+          {childPhotos.length > 0 && (
+            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+              {childPhotos.map((p) => (
+                <div key={p.pathname} className="group relative">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={childPreviews[p.pathname]}
+                    alt="child photo"
+                    className="aspect-square w-full rounded-lg object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeChildPhoto(p.pathname)}
+                    className="absolute right-1 top-1 rounded-full bg-black/70 px-2 text-xs text-white"
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+
+        {editingChildId ? (
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              name="intent"
+              value="update-child"
+              disabled={busy}
+              className="rounded-full bg-white px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              Save changes
+            </button>
+            <button
+              type="button"
+              onClick={cancelEdit}
+              disabled={busy}
+              className="rounded-full border border-white/30 px-6 py-3 font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="submit"
+              name="intent"
+              value="done"
+              disabled={busy}
+              className="rounded-full bg-white px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+            >
+              Done
+            </button>
+            <button
+              type="submit"
+              name="intent"
+              value="add-another"
+              disabled={busy}
+              className="rounded-full border border-white/30 px-6 py-3 font-semibold text-white transition-colors hover:bg-white/10 disabled:opacity-50"
+            >
+              Done + add another child
+            </button>
+            <button
+              type="submit"
+              name="intent"
+              value="skip"
+              disabled={busy}
+              className="rounded-full px-6 py-3 text-white/60 underline-offset-4 hover:underline disabled:opacity-50"
+            >
+              I&apos;d rather skip this for now
+            </button>
+          </div>
+        )}
       </form>
     </>
   );

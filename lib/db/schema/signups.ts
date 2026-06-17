@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, boolean, integer } from "drizzle-orm/pg-core";
 
 export type Photo = {
   url: string;
@@ -53,8 +53,12 @@ export const children = pgTable("children", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   firstName: text("first_name").notNull(),
   grade: text("grade"),
+  // For a non-OHS child we collect birth year instead of a grade and derive age.
+  birthYear: integer("birth_year"),
   interests: text("interests").array(),
   notes: text("notes"),
+  // Photos of this specific child (separate from family-level signups.photos).
+  photos: jsonb("photos").$type<Photo[]>().default([]),
 });
 
 export type SignupRow = typeof signups.$inferSelect;
