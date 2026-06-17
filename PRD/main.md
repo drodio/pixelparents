@@ -1,6 +1,20 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 2:59 PM Pacific
+
+### Summary of changes since last update
+Redacted personal contact info (a child's first name + grade and a personal phone number) from an earlier progress-log entry, since this repo is public. Scope was deliberately limited to `PRD/main.md` per DROdio.
+
+### Detail of changes made:
+- **`PRD/main.md`:** the email-signature entry no longer quotes the literal signature string; it now just describes it (name + family intro + contact phone) without the values.
+- **Intentionally left as-is (DROdio's decision):** the same details remain in `lib/email.ts` (the `SIGNATURE` constant) and on the public `app/signup/thanks/page.tsx` intro — these are DROdio's own self-introductions and were kept on purpose.
+- **Git history left as-is:** the phone number is still present in historical commits (introduced in `2146d28`); no history rewrite was done. Treat the number as already-public.
+
+### Potential concerns to address:
+- **Public repo + PII discipline:** future progress-log entries (and code) must avoid quoting personal phone numbers / minors' names verbatim — describe, don't transcribe. The `.githooks/pre-commit` secret guard does not catch PII like this.
+- If the phone number ever needs to be truly removed from GitHub, it requires a history rewrite + force-push (currently blocked by `main` branch protection) and should be treated as already-exposed regardless.
+
 ## Progress Update as of June 17, 2026 — 2:34 PM Pacific
 
 ### Summary of changes since last update
@@ -44,8 +58,9 @@ the new address to confirm.
   DROdio@pixelparents.org (Resend id 011804c4…).
 - **`lib/email.ts`:** refactored to a single `sendEmail()` helper that all
   notifications route through. New default `FROM = "DROdio <DROdio@pixelparents.org>"`.
-  Every email now appends a signature block:
-  `— / DROdio / Devina's dad (7th grade) / +1.202.250.3846 cell or WhatsApp`.
+  Every email now appends DROdio's signature block (name, a short family intro,
+  and a contact phone — literal value redacted from this public log; it lives in
+  `lib/email.ts`).
 - **Vercel env:** updated `RESEND_FROM` (Production) to
   `DROdio <DROdio@pixelparents.org>` (code default matches as a safety net).
 - Verified `next build` + TypeScript clean.
