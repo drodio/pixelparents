@@ -3,20 +3,28 @@ import { Resend } from "resend";
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
 
-// All Pixel Parents email comes from the verified pixelparents.org sender.
-const FROM = process.env.RESEND_FROM ?? "DROdio <DROdio@pixelparents.org>";
-const TO = process.env.NOTIFY_TO ?? "DROdio@chief.bot";
+// All config is env-driven — this repo is PUBLIC, so no personal contact info
+// (sender name, notify address, phone, signature) is hardcoded here.
+// Set RESEND_FROM, NOTIFY_TO, and EMAIL_SIGNATURE (multi-line) in env.
+const FROM = process.env.RESEND_FROM ?? "Pixel Parents <noreply@pixelparents.org>";
+const TO = process.env.NOTIFY_TO ?? "";
+const SIGNATURE = process.env.EMAIL_SIGNATURE ?? "";
 
-// Appended to every email.
-const SIGNATURE = [
-  "—",
-  "DROdio",
-  "Devina's dad (7th grade)",
-  "+1.202.250.3846 cell or WhatsApp",
-].join("\n");
+// A primary `to` is required for a send. `cc` is supplementary (e.g. cc'ing an
+// applicant on an admin notification) and never promotes to the primary
+// recipient — so an admin email with no NOTIFY_TO is skipped, not mis-sent.
+export function hasRecipient(to?: string | string[]): boolean {
+  if (Array.isArray(to)) return to.some((t) => Boolean(t && t.trim()));
+  return Boolean(to && to.trim());
+}
 
-// Single send path: applies FROM + the signature, best-effort (never throws,
-// never blocks the caller). Returns false when email is unconfigured/failed.
+// Appends the signature only when one is configured (EMAIL_SIGNATURE in env).
+export function appendSignature(text: string, signature: string): string {
+  return signature ? `${text}\n\n${signature}` : text;
+}
+
+// Single send path: applies FROM + the (optional) signature, best-effort (never
+// throws, never blocks the caller). Returns false when email is unconfigured/failed.
 async function sendEmail(msg: {
   to: string | string[];
   subject: string;
@@ -27,13 +35,17 @@ async function sendEmail(msg: {
     console.warn("RESEND_API_KEY not set — skipping email:", msg.subject);
     return false;
   }
+  if (!hasRecipient(msg.to)) {
+    console.warn("No recipient (NOTIFY_TO unset?) — skipping email:", msg.subject);
+    return false;
+  }
   try {
     await resend.emails.send({
       from: FROM,
       to: msg.to,
       cc: msg.cc,
       subject: msg.subject,
-      text: `${msg.text}\n\n${SIGNATURE}`,
+      text: appendSignature(msg.text, SIGNATURE),
     });
     return true;
   } catch (err) {

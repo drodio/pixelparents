@@ -6,6 +6,17 @@ Never commit secrets, credentials, private keys, or `.env*` files (only
 `.env.example`-style templates). A `.githooks/pre-commit` secret guard backstops
 this, but treat the discipline as the real protection, not the hook.
 
+**Never commit PII or sensitive personal data.** That includes real personal
+emails (gmail, company addresses, etc.), phone numbers, **children's names**,
+home addresses, customer/applicant data pulled from the DB, and live secret
+tokens/share URLs/keys. This applies everywhere — source, `PRD/*.md` progress
+logs, `docs/`, READMEs, comments, commit messages. Keep real values in env vars
+(`.env.local`, Vercel env) and use placeholders (`<admin-email>`, `<token>`) or
+the project's own `pixelparents.org` address in committed text. When logging work
+in `PRD/`, write "the applicant" / "the child" — never the actual name or contact.
+The `.githooks/pre-commit` guard also blocks personal emails and phone numbers,
+but it can't catch names — that's on you.
+
 Enable the hooks once per clone: `git config core.hooksPath .githooks`
 
 # Git workflow: ALWAYS branch → commit → push → PR (do this without being asked)

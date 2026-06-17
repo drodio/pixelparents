@@ -44,3 +44,6 @@ next-env.d.ts
 
 # Visual brainstorming companion (local only)
 .superpowers/
+
+# Other agents'  git worktrees live here — never commit them
+.claude/worktrees/

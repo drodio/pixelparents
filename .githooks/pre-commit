@@ -63,6 +63,46 @@ if [ -n "$added" ]; then
     echo "$gen" | sed 's/^/    /'
     fail=1
   fi
+
+  # ---------------------------------------------------------------------------
+  # 1c. PII GUARD (blocking) — personal emails + phone numbers. Public repo:
+  #     keep contact details in env, not source/docs/logs. Can't catch names.
+  # ---------------------------------------------------------------------------
+  # Email literals that aren't on an allowed non-personal domain.
+  consumer_re="@(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton(mail)?|pm|gmx|zoho|fastmail)\."
+  emails=$(echo "$added" \
+    | grep -EioI "[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}" \
+    | grep -Eiv "@(pixelparents\.org|resend\.dev|example\.(com|org|net)|sentry\.io)$" \
+    | sort -u || true)
+  if [ -n "$emails" ]; then
+    # Consumer mail domains are almost always personal PII → hard block,
+    # REGARDLESS of local part (so admin@gmail.com / you@gmail.com still block).
+    personal=$(echo "$emails" | grep -EiI "$consumer_re" || true)
+    # Non-consumer domains: a role/placeholder local part is fine; warn on the rest.
+    other=$(echo "$emails" | grep -EivI "$consumer_re" \
+      | grep -Eiv "^(noreply|no-reply|hello|info|support|admin|user|name|email|you)@" || true)
+    if [ -n "$personal" ]; then
+      echo "${RED}✖ Personal email (PII) in staged changes:${NC}"
+      echo "$personal" | sed 's/^/    /'
+      echo "    Use an env var or a pixelparents.org address — never commit personal emails."
+      fail=1
+    fi
+    if [ -n "$other" ]; then
+      echo "${YEL}⚠ Email address in staged changes (review — is this PII?):${NC}"
+      echo "$other" | sed 's/^/    /'
+    fi
+  fi
+  # Phone numbers: require BOTH a phone-shape AND phone context (leading country
+  # code, or a nearby keyword) so numeric IDs like "123 456 7890" don't block.
+  phones=$(echo "$added" \
+    | grep -EI "\+?1?[ .]?\(?[0-9]{3}\)?[ .-][0-9]{3}[ .-][0-9]{4}" \
+    | grep -EiI "\+[0-9]{1,3}[ .()-]*[0-9]|tel:|\bphone\b|\bcell\b|\bmobile\b|whatsapp|call (me|us)|text (me|us)" || true)
+  if [ -n "$phones" ]; then
+    echo "${RED}✖ Possible phone number (PII) in staged changes:${NC}"
+    echo "$phones" | sed 's/^/    /'
+    echo "    Keep phone numbers in env (e.g. EMAIL_SIGNATURE), not in the repo."
+    fail=1
+  fi
 fi
 
 # ---------------------------------------------------------------------------
