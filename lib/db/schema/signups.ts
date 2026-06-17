@@ -6,6 +6,9 @@ export type Photo = {
   contentType?: string;
   width?: number;
   height?: number;
+  // Optional caption with inline @[Name](childId) mention markers — who's in the
+  // photo. Set by the uploading parent or an admin. See lib/mentions.ts.
+  caption?: string;
 };
 
 // Parent signup + family-level profile (1:1 with a parent).

@@ -5,4 +5,3 @@
 export * from "./api-keys";
 export * from "./signups";
 export * from "./admins";
-export * from "./photo-tags";

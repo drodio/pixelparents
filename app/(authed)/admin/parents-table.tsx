@@ -3,14 +3,13 @@
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 import { abbrState } from "@/lib/options";
-import { formatPhone } from "@/lib/format";
-import { setAdmin } from "./actions";
+import { setAdmin, setPhotoCaption } from "./actions";
 import { Pills } from "./pills";
 import { TableWrap, thCls, tdCls } from "./ui";
 import { PencilIcon } from "./icons";
 import { DeleteButton } from "./delete-button";
 import { compare, SortHeader, type Dir } from "./sortable";
-import { PhotoGallery, type GalleryPhoto, type Person } from "./photo-gallery";
+import { PhotoGallery, type GalleryPhoto } from "./photo-gallery";
 
 export type ParentRow = {
   id: string;
@@ -39,7 +38,7 @@ function shortAffiliation(s: string | null): string | null {
   return s ? s.split(" (")[0] : null;
 }
 
-export function ParentsTable({ rows, people }: { rows: ParentRow[]; people: Person[] }) {
+export function ParentsTable({ rows }: { rows: ParentRow[] }) {
   const [sortKey, setSortKey] = useState("submitted");
   const [dir, setDir] = useState<Dir>("desc");
   const onSort = (k: string) => {
@@ -160,7 +159,7 @@ export function ParentsTable({ rows, people }: { rows: ParentRow[]; people: Pers
               <a className="text-amber-400 hover:underline" href={`mailto:${r.email}`}>
                 {r.email}
               </a>
-              <div className="text-white/50">{formatPhone(r.phone)}</div>
+              <div className="text-white/50">{r.phone}</div>
             </td>
             <td className={`${tdCls} whitespace-nowrap`}>
               <a
@@ -217,7 +216,14 @@ export function ParentsTable({ rows, people }: { rows: ParentRow[]; people: Pers
           {expanded.has(r.id) && r.photos.length > 0 && (
             <tr className="border-t border-white/10 bg-black/40">
               <td colSpan={14} className="px-4 py-4">
-                <PhotoGallery photos={r.photos} people={people} signupId={r.id} />
+                <PhotoGallery
+                  photos={r.photos}
+                  candidates={[
+                    { id: r.id, name: `${r.firstName} ${r.lastName}` },
+                    ...r.kids.map((k) => ({ id: k.id, name: k.firstName })),
+                  ]}
+                  onSaveCaption={(pathname, caption) => setPhotoCaption(r.id, pathname, caption)}
+                />
               </td>
             </tr>
           )}

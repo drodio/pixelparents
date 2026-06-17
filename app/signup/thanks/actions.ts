@@ -59,6 +59,17 @@ function parsePhotos(value: FormDataEntryValue | null): Photo[] {
         (p): p is Photo =>
           p && typeof p.url === "string" && typeof p.pathname === "string",
       )
+      .map((p): Photo => ({
+        url: p.url,
+        pathname: p.pathname,
+        contentType: typeof p.contentType === "string" ? p.contentType : undefined,
+        width: typeof p.width === "number" ? p.width : undefined,
+        height: typeof p.height === "number" ? p.height : undefined,
+        caption:
+          typeof p.caption === "string" && p.caption.trim()
+            ? p.caption.slice(0, 2000)
+            : undefined,
+      }))
       .slice(0, 200);
   } catch {
     return [];

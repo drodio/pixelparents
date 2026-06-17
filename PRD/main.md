@@ -1,60 +1,37 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
-## Progress Update as of June 17, 2026 — 4:07 PM Pacific
+## Progress Update as of June 17, 2026 — 4:06 PM Pacific (branch: `worktree-photo-gallery`, PR #12)
 
 ### Summary of changes since last update
-App admins are now auto-invited as GitHub repo collaborators (maintain) when
-promoted, and removed when revoked — best-effort, keyed off the signup's
-github_username.
+**Reworked PR #12** after discovering the admin photo gallery (Stage 1) was
+*already merged to main* via another agent's `feat/admin-photo-gallery` (not
+abandoned — it shipped). My original branch had independently re-built Stage 1 +
+added Stage 2. Reset the branch onto current `main` and kept only the net-new
+**Stage 2: @-mention photo captions**, layered onto main's existing gallery — no
+duplicated gallery component.
 
 ### Detail of changes made:
-- **`lib/github.ts`:** `addRepoCollaborator`/`removeRepoCollaborator` (GitHub API,
-  `GITHUB_ADMIN_TOKEN`, repo from `GITHUB_REPO` default drodio/pixelparents).
-  Validates the username, never throws (admin changes never fail on a GitHub
-  hiccup), skips when the token/username is missing.
-- **`lib/admin.ts`:** `addAdmin`/`removeAdmin` look up the signup by email and
-  invite/remove that github_username after the DB write.
-- **`.env.example`:** documents `GITHUB_ADMIN_TOKEN` + `GITHUB_REPO`.
-- Token verified (admin/push) read-only; tsc + build clean.
+- **Reusable (new):** `lib/mentions.ts` (+ 7 tests) — `@[Name](childId)` markers,
+  `renderCaption`/`extractMentionIds`/`serializeMention`. `components/mention-text.tsx`
+  (amber @-chips), `components/mention-caption-input.tsx` (dependency-free textarea +
+  `@`-dropdown → markers).
+- **`Photo` type:** added optional `caption` (covers both `signups.photos` and the
+  now-merged `children.photos`). `parsePhotos` normalizes + caps caption (2000).
+- **Admin gallery (`app/(authed)/admin/photo-gallery.tsx`):** extended main's view-only
+  gallery in place — `GalleryPhoto` gains `pathname`+`caption`; optional `candidates` +
+  `onSaveCaption` add caption display (chips) + inline edit; lightbox shows the caption.
+  `page.tsx` passes pathname+caption; `parents-table.tsx` passes candidates (the family's
+  kids) + `setPhotoCaption`; `actions.ts` adds admin-only `setPhotoCaption`.
+- **Parent flow (`family-form.tsx`):** caption input on **both** the family-photo grid and
+  the per-child-photo grid (candidates = already-saved children); rides existing photos JSON.
+- Verified: vitest 27/27, `next build` + TS clean, eslint clean. Force-pushed to PR #12.
 
 ### Potential concerns to address:
-- GitHub emails an **invite the person must accept** (personal-account repo) — not
-  silent. Admins added by an email that isn't a signup have no github_username,
-  so they're skipped (logged).
-- `GITHUB_ADMIN_TOKEN` set in Vercel **Production** only so far.
-
-## Progress Update as of June 17, 2026 — 4:03 PM Pacific
-
-### Summary of changes since last update
-Admin parents table now formats phone numbers for display (e.g. 202-250-3846).
-
-### Detail of changes made:
-- **`lib/format.ts`:** `formatPhone()` — 10-digit → `XXX-XXX-XXXX`, 11-digit
-  leading-1 → `1-XXX-XXX-XXXX`, else returned unchanged. Unit-tested
-  (`lib/format.test.ts`).
-- **`app/(authed)/admin/parents-table.tsx`:** renders `formatPhone(r.phone)`.
-
-### Potential concerns to address:
-- Formatting is display-only; stored values are unchanged. Other surfaces (the
-  `/p` share page) still render the raw stored phone — apply `formatPhone` there
-  too if desired.
-
-## Progress Update as of June 17, 2026 — 4:02 PM Pacific
-
-### Summary of changes since last update
-Built Layer 2 of the PII protection: a DB-aware leak gate (GitHub Action) that cross-references each PR's changes against live DB values and fails the check when real PII would land in this public repo. Implemented with the agreed defaults (names = warn, label override, diff-scan on PR + nightly full scan, read-only DB role recommended). Also added the design spec doc.
-
-### Detail of changes made:
-- **`scripts/pii-gate.mjs`:** the scanner. Pulls emails + phones + full names from the DB (`signups` + `admins`) into an in-memory match set; scans either the PR's added lines (diff mode, via BASE_SHA..HEAD_SHA) or every tracked file (full mode, nightly). **Blocks** on DB emails/phones; **warns** on full names; **does not match GitHub usernames** (public, and "drodio" is the org/handle that's everywhere). Public-repo safe: prints only `file:line` + type + a short sha256 marker, never the value. Fails OPEN (exit 0 + warning) if the secret is missing or the DB is unreachable, so a hiccup never blocks every PR.
-- **`.github/workflows/pii-gate.yml`:** runs on PRs (+ labeled/unlabeled) and nightly (full scan). Reads `DATABASE_URL` from secrets; sets MODE/BASE_SHA/HEAD_SHA; honors a `pii-reviewed` label as a manual override (`PII_OVERRIDE`). Until the secret is added it passes (skips), so it never blocks PRs before setup.
-- **Spec doc:** `docs/superpowers/specs/2026-06-17-pii-leak-gate-design.md` (the design; PR #7 was folded in here to avoid a PRD conflict).
-- **Verified locally:** full scan of the current (scrubbed) tree = clean / exit 0; a catch test confirmed the matcher flags a real DB email (value never printed).
-
-### Potential concerns to address:
-- **Activation pending a secret:** the gate is dormant until a repo secret `DATABASE_URL` is added — recommend a **read-only** Neon role (CI on a public repo should not hold the read-write prod URL). Once added, optionally make "PII gate" a required status check in branch protection.
-- **Matching is exact-substring** (O(lines × values)); fine at current scale, may need indexing if signups grow large.
-- **Names = warn only** (common first names collide with English words); emails/phones are the hard blocks.
+- **Not browser-verified** (Clerk-gated + needs a signup with photos).
+- The stale local `origin/feat/admin-photo-gallery` ref is cosmetic (branch deleted on origin
+  after merge) — nothing to clean up there; the work is live in `main`.
+- Follow-up beads filed earlier: captions on the public `/p/<token>` page + festival carousel.
 ## Progress Update as of June 17, 2026 — 3:42 PM Pacific
 
 ### Summary of changes since last update

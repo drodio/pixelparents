@@ -5,6 +5,7 @@ import { BotIdClient } from "botid/client";
 import { GRADES, US_STATES } from "@/lib/options";
 import { optimizeImage } from "@/lib/image";
 import type { Photo } from "@/lib/db/schema/signups";
+import { MentionCaptionInput, type MentionCandidate } from "@/components/mention-caption-input";
 import { saveFamily, type FamilyState } from "./actions";
 
 // Effectively unlimited; a high safety ceiling to avoid pathological abuse.
@@ -195,6 +196,23 @@ export default function FamilyForm({
     setPhotos((p) => p.filter((x) => x.pathname !== pathname));
   }
 
+  function setCaption(pathname: string, caption: string) {
+    setPhotos((p) =>
+      p.map((x) => (x.pathname === pathname ? { ...x, caption: caption || undefined } : x)),
+    );
+  }
+  function setChildCaption(pathname: string, caption: string) {
+    setChildPhotos((p) =>
+      p.map((x) => (x.pathname === pathname ? { ...x, caption: caption || undefined } : x)),
+    );
+  }
+
+  // People taggable in photos = the children this parent has already added.
+  const mentionCandidates: MentionCandidate[] = existingChildren.map((c) => ({
+    id: c.id,
+    name: c.firstName,
+  }));
+
   // Per-child photo uploads (separate from the family photos above).
   async function onChildFiles(files: FileList | null) {
     if (!files?.length) return;
@@ -353,22 +371,35 @@ export default function FamilyForm({
           {photoError && <p className="mt-1 text-sm text-red-400">{photoError}</p>}
           {uploading > 0 && <p className="mt-1 text-sm text-white/50">Uploading {uploading}…</p>}
           {photos.length > 0 && (
-            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {photos.map((p) => (
-                <div key={p.pathname} className="group relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={previews[p.pathname]}
-                    alt="family photo"
-                    className="aspect-square w-full rounded-lg object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removePhoto(p.pathname)}
-                    className="absolute right-1 top-1 rounded-full bg-black/70 px-2 text-xs text-white"
-                  >
-                    ✕
-                  </button>
+                <div
+                  key={p.pathname}
+                  className="flex gap-3 rounded-lg border border-white/10 bg-white/[0.02] p-2"
+                >
+                  <div className="group relative shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={previews[p.pathname]}
+                      alt="family photo"
+                      className="h-20 w-20 rounded-lg object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removePhoto(p.pathname)}
+                      className="absolute right-1 top-1 rounded-full bg-black/70 px-2 text-xs text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <MentionCaptionInput
+                      value={p.caption ?? ""}
+                      onChange={(c) => setCaption(p.pathname, c)}
+                      candidates={mentionCandidates}
+                      placeholder="Caption — type @ to tag a child"
+                    />
+                  </div>
                 </div>
               ))}
             </div>
@@ -517,22 +548,35 @@ export default function FamilyForm({
             <p className="mt-1 text-sm text-white/50">Uploading {childUploading}…</p>
           )}
           {childPhotos.length > 0 && (
-            <div className="mt-3 grid grid-cols-3 gap-2 sm:grid-cols-4">
+            <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
               {childPhotos.map((p) => (
-                <div key={p.pathname} className="group relative">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                  <img
-                    src={childPreviews[p.pathname]}
-                    alt="child photo"
-                    className="aspect-square w-full rounded-lg object-cover"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => removeChildPhoto(p.pathname)}
-                    className="absolute right-1 top-1 rounded-full bg-black/70 px-2 text-xs text-white"
-                  >
-                    ✕
-                  </button>
+                <div
+                  key={p.pathname}
+                  className="flex gap-3 rounded-lg border border-white/10 bg-white/[0.02] p-2"
+                >
+                  <div className="group relative shrink-0">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={childPreviews[p.pathname]}
+                      alt="child photo"
+                      className="h-20 w-20 rounded-lg object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeChildPhoto(p.pathname)}
+                      className="absolute right-1 top-1 rounded-full bg-black/70 px-2 text-xs text-white"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <MentionCaptionInput
+                      value={p.caption ?? ""}
+                      onChange={(c) => setChildCaption(p.pathname, c)}
+                      candidates={mentionCandidates}
+                      placeholder="Caption — type @ to tag a child"
+                    />
+                  </div>
                 </div>
               ))}
             </div>

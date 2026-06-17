@@ -48,6 +48,33 @@ export async function deleteSignup(formData: FormData): Promise<void> {
   revalidatePath("/admin/children");
 }
 
+// Set (or clear) the caption + @-mention tags on one of a family's photos.
+// Admin-only; tags a family's photo on their behalf. Caption is stored with
+// @[Name](childId) markers (see lib/mentions.ts).
+export async function setPhotoCaption(
+  signupId: string,
+  pathname: string,
+  caption: string,
+): Promise<void> {
+  const caller = await callerEmail();
+  if (!(await isAdminEmail(caller))) {
+    throw new Error("Forbidden: not an admin");
+  }
+  const db = getDb();
+  const [row] = await db
+    .select({ photos: signups.photos })
+    .from(signups)
+    .where(eq(signups.id, signupId))
+    .limit(1);
+  if (!row) return;
+  const clean = caption.trim() ? caption.slice(0, 2000) : undefined;
+  const photos = (row.photos ?? []).map((p) =>
+    p.pathname === pathname ? { ...p, caption: clean } : p,
+  );
+  await db.update(signups).set({ photos }).where(eq(signups.id, signupId));
+  revalidatePath("/admin");
+}
+
 // Delete a single child. Admin-only.
 export async function deleteChild(formData: FormData): Promise<void> {
   const caller = await callerEmail();
