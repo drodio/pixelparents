@@ -1,6 +1,22 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 1:37 PM Pacific
+
+### Summary of changes since last update
+Added a public `/builders` page that renders the Pixel Parent Builder Guidelines from an open-source Markdown file (`builders.md` at the repo root). Built on an isolated worktree branch (`worktree-builders-page`) off latest `origin/main`, verified via `npm run build` + `npm run lint`, and pushed to `main`.
+
+### Detail of changes made:
+- **`builders.md` (repo root):** the canonical, editable source for the guidelines — "Pixel Parent Builder Guidelines v0.1" (proposed, to be ratified). Sections: Who we are, How we work (×2), What we protect. Editing this file + redeploying is all it takes to update the page.
+- **`app/builders/page.tsx`:** server component, statically prerendered (`○ /builders` in build output). Reads `builders.md` at **build time** via `fs.readFileSync(join(process.cwd(), "builders.md"))` — no runtime fs dependency, so the root file doesn't need bundle tracing. Matches the `/developers` look: black bg, centered mascot header, `max-w-3xl`. Footer points readers to `builders.md` in the OSS repo and links to `/developers`.
+- **`app/builders/markdown.tsx`:** `"use client"` renderer using `react-markdown` + `remark-gfm`, with a `components` map styling h1/h2/p/ul/li/strong/em/a to the dark theme (bullets render as bordered cards). All element styling is here so editing `builders.md` never requires CSS changes.
+- **Deps added:** `react-markdown@^9` and `remark-gfm@^4` (first markdown libs in the repo).
+
+### Potential concerns to address:
+- **Build-time read means content updates require a redeploy.** If we later want live editing without a deploy, move the source to a DB/CMS or switch the page to `force-dynamic` (and ensure the file is bundle-traced). Build-time is the right call for v0.1.
+- **Guidelines are v0.1 / "proposed."** Once the builders ratify them, bump the version in `builders.md` (page updates automatically on next deploy).
+- **No nav link yet.** `/builders` is reachable by URL and from the `/developers` footer, but the homepage doesn't link to it — add to site nav when there is one.
+
 ## Progress Update as of June 16, 2026 — 12:50 PM Pacific
 
 ### Summary of changes since last update
