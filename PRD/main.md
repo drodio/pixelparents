@@ -1,6 +1,22 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 4:02 PM Pacific
+
+### Summary of changes since last update
+Built Layer 2 of the PII protection: a DB-aware leak gate (GitHub Action) that cross-references each PR's changes against live DB values and fails the check when real PII would land in this public repo. Implemented with the agreed defaults (names = warn, label override, diff-scan on PR + nightly full scan, read-only DB role recommended). Also added the design spec doc.
+
+### Detail of changes made:
+- **`scripts/pii-gate.mjs`:** the scanner. Pulls emails + phones + full names from the DB (`signups` + `admins`) into an in-memory match set; scans either the PR's added lines (diff mode, via BASE_SHA..HEAD_SHA) or every tracked file (full mode, nightly). **Blocks** on DB emails/phones; **warns** on full names; **does not match GitHub usernames** (public, and "drodio" is the org/handle that's everywhere). Public-repo safe: prints only `file:line` + type + a short sha256 marker, never the value. Fails OPEN (exit 0 + warning) if the secret is missing or the DB is unreachable, so a hiccup never blocks every PR.
+- **`.github/workflows/pii-gate.yml`:** runs on PRs (+ labeled/unlabeled) and nightly (full scan). Reads `DATABASE_URL` from secrets; sets MODE/BASE_SHA/HEAD_SHA; honors a `pii-reviewed` label as a manual override (`PII_OVERRIDE`). Until the secret is added it passes (skips), so it never blocks PRs before setup.
+- **Spec doc:** `docs/superpowers/specs/2026-06-17-pii-leak-gate-design.md` (the design; PR #7 was folded in here to avoid a PRD conflict).
+- **Verified locally:** full scan of the current (scrubbed) tree = clean / exit 0; a catch test confirmed the matcher flags a real DB email (value never printed).
+
+### Potential concerns to address:
+- **Activation pending a secret:** the gate is dormant until a repo secret `DATABASE_URL` is added — recommend a **read-only** Neon role (CI on a public repo should not hold the read-write prod URL). Once added, optionally make "PII gate" a required status check in branch protection.
+- **Matching is exact-substring** (O(lines × values)); fine at current scale, may need indexing if signups grow large.
+- **Names = warn only** (common first names collide with English words); emails/phones are the hard blocks.
+
 ## Progress Update as of June 17, 2026 — 3:42 PM Pacific
 
 ### Summary of changes since last update
