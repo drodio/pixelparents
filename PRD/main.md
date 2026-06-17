@@ -1,6 +1,19 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 2:34 PM Pacific
+
+### Summary of changes since last update
+Linked the words "open source" in `builders.md` to the GitHub repo (https://github.com/drodio/pixelparents). First change made under the new branch → PR workflow (see CLAUDE.md): committed on branch `worktree-builders-page` and opened as a PR rather than pushed straight to `main`. Also diagnosed why pixelparents.org/builders was 404ing in production (see concerns).
+
+### Detail of changes made:
+- **`builders.md`:** "it's open source" in the "How we work" bullet now links to `https://github.com/drodio/pixelparents`. Verified the rendered link in the build output.
+- Build + lint clean; `/builders` still statically prerendered.
+
+### Potential concerns to address:
+- **Production 404 on /builders is a DEPLOY problem, not a code problem.** The page is correct on `origin/main` (commit `e0ed561`) and in the GitHub repo. But pixelparents.org is served by **manual `vercel --prod` CLI deploys** (the live production deployment has `gitSource: null` / no git metadata / CLI user `drodio-storytell`). The GitHub repo *is* connected to the Vercel project, but pushes appear to only produce Preview deployments — production is updated by hand. A manual prod deploy ~7m ago (by a parallel agent, from a local checkout that predates `/builders`) became the live alias, so the page 404s even though it's on main. "It was working before" was likely a Preview URL or an earlier prod deploy that a later manual deploy clobbered.
+- **Recommended durable fix:** stop manual `vercel --prod` deploys (parallel agents keep clobbering each other from divergent local states) and let Vercel's Git integration auto-deploy `main` to Production on merge. Until then, production must be redeployed from latest `main` by hand to pick up `/builders`.
+
 ## Progress Update as of June 17, 2026 — 1:37 PM Pacific
 
 ### Summary of changes since last update
