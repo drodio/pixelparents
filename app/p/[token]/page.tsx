@@ -19,7 +19,10 @@ export const metadata: Metadata = {
     description:
       "A family in the Pixel Parents community — OHS parents building software for our kids.",
     type: "profile",
+    // A page-level openGraph doesn't inherit the root file-based image, so set it.
+    images: ["/opengraph-image.png"],
   },
+  twitter: { card: "summary_large_image", images: ["/opengraph-image.png"] },
 };
 
 function Pills({ items }: { items: string[] }) {
