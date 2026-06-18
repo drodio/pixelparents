@@ -106,6 +106,7 @@ export default async function SharedProfilePage({
   // The /p banner is the family's main (first) photo, if any — not the generic
   // signup banner (which only belongs on the signup flow).
   const bannerUrl = familyCarousel[0]?.url ?? null;
+  const currentYear = new Date().getFullYear();
 
   return (
     <main className="min-h-dvh bg-black text-white">
@@ -159,7 +160,14 @@ export default async function SharedProfilePage({
                     id={`kid-${kid.id}`}
                     className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-5 target:ring-2 target:ring-amber-400/60"
                   >
-                    <h3 className="text-lg font-semibold">{kid.firstName}</h3>
+                    <div className="flex items-baseline justify-between gap-3">
+                      <h3 className="text-lg font-semibold">{kid.firstName}</h3>
+                      {kid.grade === "Not an OHS child" && kid.birthYear && (
+                        <span className="shrink-0 text-sm font-semibold text-amber-400">
+                          age {currentYear - kid.birthYear}
+                        </span>
+                      )}
+                    </div>
                     {kid.grade && (
                       <div className="mt-0.5 text-sm font-semibold text-amber-400">
                         {kid.grade}
@@ -209,10 +217,8 @@ export default async function SharedProfilePage({
           </section>
         )}
 
-        <footer className="mt-14 border-t border-white/10 pt-6 text-sm text-white/45">
-          This is a private profile shared via a secret link. The owner controls
-          it and can disable it at any time, which immediately makes this page
-          stop working.
+        <footer className="mt-14 border-t border-white/10 pt-6 text-center text-sm text-white/45">
+          This is a private profile shared via a secret link.
           <br />
           <Link href="/" className="text-white/65 hover:underline">
             Pixel Parents →
