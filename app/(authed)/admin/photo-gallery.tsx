@@ -10,6 +10,8 @@ export type GalleryPhoto = {
   caption: string | null;
   width?: number;
   height?: number;
+  // Source: null = family-level photo; otherwise the child's name.
+  label?: string | null;
 };
 
 // Thumbnail strip that opens a fullscreen, click-through lightbox (prev/next via
@@ -82,6 +84,11 @@ export function PhotoGallery({
                 className="h-24 w-24 cursor-zoom-in object-cover"
               />
             </button>
+            {p.label && (
+              <span className="truncate rounded bg-white/10 px-1.5 py-0.5 text-[10px] text-white/70">
+                {p.label}
+              </span>
+            )}
             {onSaveCaption ? (
               editing === p.pathname ? (
                 <div className="flex w-48 flex-col gap-1">

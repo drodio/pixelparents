@@ -100,6 +100,13 @@ export function MentionCaptionInput({
         ref={ref}
         value={text}
         onChange={onInput}
+        onKeyDown={(e) => {
+          // While the @-suggestion list is open, Enter/Tab picks the top match.
+          if (token !== null && matches.length > 0 && (e.key === "Enter" || e.key === "Tab")) {
+            e.preventDefault();
+            pick(matches[0]);
+          }
+        }}
         onBlur={() => setTimeout(() => setToken(null), 120)}
         rows={2}
         placeholder={placeholder ?? "Add a caption — type @ to tag a child"}

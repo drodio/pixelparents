@@ -42,8 +42,14 @@ export default async function ParentsPage() {
     else kidsBySignup.set(k.signupId, [k]);
   }
 
-  // Presign every family's private photos in one batch, then map back by pathname.
-  const allPathnames = rows.flatMap((r) => (r.photos ?? []).map((p) => p.pathname));
+  // Presign every family's private photos — family-level AND per-child — in one
+  // batch, then map back by pathname.
+  const allPathnames = rows.flatMap((r) => [
+    ...(r.photos ?? []).map((p) => p.pathname),
+    ...(kidsBySignup.get(r.id) ?? []).flatMap((k) =>
+      (k.photos ?? []).map((p) => p.pathname),
+    ),
+  ]);
   const signed = await signedPhotoUrls(allPathnames);
   const urlByPath = new Map<string, string>();
   allPathnames.forEach((p, i) => {
@@ -51,15 +57,25 @@ export default async function ParentsPage() {
   });
 
   const data: ParentRow[] = rows.map((r) => {
-    const photos = (r.photos ?? [])
-      .map((p) => ({
+    const familyPhotos = (r.photos ?? []).map((p) => ({
+      url: urlByPath.get(p.pathname) ?? "",
+      pathname: p.pathname,
+      caption: p.caption ?? null,
+      width: p.width,
+      height: p.height,
+      label: null as string | null,
+    }));
+    const childPhotos = (kidsBySignup.get(r.id) ?? []).flatMap((k) =>
+      (k.photos ?? []).map((p) => ({
         url: urlByPath.get(p.pathname) ?? "",
         pathname: p.pathname,
         caption: p.caption ?? null,
         width: p.width,
         height: p.height,
-      }))
-      .filter((p) => p.url);
+        label: k.firstName as string | null,
+      })),
+    );
+    const photos = [...familyPhotos, ...childPhotos].filter((p) => p.url);
     return {
       id: r.id,
       firstName: r.firstName,

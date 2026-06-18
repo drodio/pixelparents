@@ -61,17 +61,37 @@ export async function setPhotoCaption(
     throw new Error("Forbidden: not an admin");
   }
   const db = getDb();
+  const clean = caption.trim() ? caption.slice(0, 2000) : undefined;
+
+  // The photo may be a family photo (signups.photos) or one of the family's
+  // children's photos (children.photos) — find and update whichever holds it.
   const [row] = await db
     .select({ photos: signups.photos })
     .from(signups)
     .where(eq(signups.id, signupId))
     .limit(1);
-  if (!row) return;
-  const clean = caption.trim() ? caption.slice(0, 2000) : undefined;
-  const photos = (row.photos ?? []).map((p) =>
-    p.pathname === pathname ? { ...p, caption: clean } : p,
-  );
-  await db.update(signups).set({ photos }).where(eq(signups.id, signupId));
+  if (row && (row.photos ?? []).some((p) => p.pathname === pathname)) {
+    const photos = (row.photos ?? []).map((p) =>
+      p.pathname === pathname ? { ...p, caption: clean } : p,
+    );
+    await db.update(signups).set({ photos }).where(eq(signups.id, signupId));
+    revalidatePath("/admin");
+    return;
+  }
+
+  const kids = await db
+    .select({ id: children.id, photos: children.photos })
+    .from(children)
+    .where(eq(children.signupId, signupId));
+  for (const k of kids) {
+    if ((k.photos ?? []).some((p) => p.pathname === pathname)) {
+      const photos = (k.photos ?? []).map((p) =>
+        p.pathname === pathname ? { ...p, caption: clean } : p,
+      );
+      await db.update(children).set({ photos }).where(eq(children.id, k.id));
+      break;
+    }
+  }
   revalidatePath("/admin");
 }
 
