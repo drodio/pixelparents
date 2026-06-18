@@ -1,6 +1,22 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 7:58 PM Pacific
+
+### Summary of changes since last update
+Polished the /p share page: non-OHS children now show their age on the right of
+the card (from birth year), photo captions are centered as 'N / total caption',
+and the footer is centered with the disable/expire sentence removed.
+
+### Detail of changes made:
+- **app/p/[token]/page.tsx:** non-OHS child cards show 'age N' (current year -
+  birth year) on the right; footer centered + trimmed to one sentence.
+- **photo-carousel.tsx:** caption row is one centered line (counter + caption).
+- (banner = first family photo was already in place from a prior change.)
+
+### Potential concerns to address:
+- The 3-tier visibility control (Anyone with link / OHS Families / Just me) + the
+  editable slider on /p and the thanks-page panel is the NEXT PR.
 ## Progress Update as of June 17, 2026 — 5:48 PM Pacific
 
 ### Summary of changes since last update

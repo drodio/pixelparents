@@ -141,14 +141,15 @@ export function PhotoCarousel({ photos }: { photos: CarouselPhoto[] }) {
         )}
       </div>
 
-      <div className="mt-3 flex items-start justify-between gap-4 text-sm">
-        <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-white/50">
+      <div className="mt-3 text-center text-sm">
+        <span className="text-white/45">
           {center + 1} / {n}
         </span>
-        {current?.caption && current.caption.length > 0 ? (
-          <Caption parts={current.caption} className="text-right text-white/70" />
-        ) : (
-          <span />
+        {current?.caption && current.caption.length > 0 && (
+          <>
+            <span className="text-white/45"> • </span>
+            <Caption parts={current.caption} className="text-white/70" />
+          </>
         )}
       </div>
 
