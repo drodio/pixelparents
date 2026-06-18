@@ -115,16 +115,19 @@ export async function notifyApplicantWelcome(n: {
     ``,
     `\u{1F449} ${base}/signup/thanks?id=${n.id}`,
     ``,
-    `That link is yours — you can come back to it anytime, and as a parent you keep full control over your data. Only authenticated OHS families will ever see your answers.`,
+    `That link is yours — you can come back to it anytime, and as a parent you keep full control over your data. Only you + Pixel Parent admins (like our builder group) will have access to your answers.`,
+    ``,
+    `You will also be able to create a "secret link" to share your answers more widely. You can restrict access to the link to only be for "others that have signed up as users in our system" (aka OHS parents) or you can make it visible to "anyone with the link".`,
     ...(exampleUrl
       ? [
           ``,
-          `There's also a "secret URL" you can enable after submitting your data if you want to share it with specific people. It's off by default for privacy. Here's what I've submitted, for reference:`,
+          `For example, here's my "secret link" family profile page so you can get to know me and my family:`,
+          ``,
           exampleUrl,
         ]
       : []),
     ``,
-    `A bit about me and what I'm hoping we build together: I'm dad to Devina, just entering OHS as a 7th grader, and CEO of Chief, an AI Chief of Staff startup in the SF Bay area. My goal with Pixel Parents is to build software that transforms the experience of parents and students at OHS — staying independent, moving fast, and keeping everything open source so others can benefit too.`,
+    `A bit about me and what I'm hoping we build together: I'm dad to Devina, just entering OHS as a 7th grader, and CEO of Chief https://Chief.bot, an AI Chief of Staff startup in the SF Bay area. My goal with Pixel Parents is to build software that transforms the experience of parents and students at OHS — staying independent, moving fast, and keeping everything open source so others can benefit too.`,
   ].join("\n");
   await sendEmail({
     to: n.to,

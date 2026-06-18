@@ -151,6 +151,8 @@ export async function completeSignup(id: string): Promise<SignupState> {
       skillsets: row.skillsets,
       timeCommitment: row.timeCommitment,
     });
+    // Welcome the applicant + point them at step 2 (best-effort, never blocks).
+    await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: row.id });
     await getDb()
       .update(signups)
       .set({ extra: { ...extra, notified: true } })
