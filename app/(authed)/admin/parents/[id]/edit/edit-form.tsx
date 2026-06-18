@@ -72,7 +72,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
       </div>
 
       <fieldset>
-        <legend className={labelCls}>OHS affiliation</legend>
+        <legend className={labelCls}>OHS affiliation *</legend>
         <div className="mt-2 flex flex-col gap-2">
           {OHS_AFFILIATIONS.map((opt) => (
             <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
@@ -81,6 +81,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
             </label>
           ))}
         </div>
+        <Err msg={errors.ohsAffiliation} />
       </fieldset>
 
       <fieldset>

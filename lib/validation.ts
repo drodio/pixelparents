@@ -22,7 +22,9 @@ export const signupSchema = z.object({
     .min(1, "GitHub username is required")
     .max(39)
     .regex(/^[A-Za-z0-9-]+$/, "Use only letters, numbers, and dashes"),
-  ohsAffiliation: optionalEnum(OHS_AFFILIATIONS),
+  ohsAffiliation: z.enum(OHS_AFFILIATIONS, {
+    error: "Please select your OHS affiliation",
+  }),
   technicalDepth: optionalEnum(TECHNICAL_DEPTH),
   // LinkedIn is captured as a handle (the part after linkedin.com/in/).
   linkedinHandle: z

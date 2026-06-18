@@ -82,7 +82,9 @@ export default function SignupForm() {
         </div>
 
         <fieldset>
-          <legend className={labelCls}>Stanford OHS affiliation</legend>
+          <legend className={labelCls}>
+            Stanford OHS affiliation <span className="text-red-400">*</span>
+          </legend>
           <div className="mt-2 flex flex-col gap-2">
             {OHS_AFFILIATIONS.map((opt) => (
               <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
@@ -91,6 +93,7 @@ export default function SignupForm() {
               </label>
             ))}
           </div>
+          <FieldError msg={errors.ohsAffiliation} />
         </fieldset>
 
         <fieldset>
