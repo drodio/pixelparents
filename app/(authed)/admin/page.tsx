@@ -22,11 +22,18 @@ export default async function ParentsPage() {
   }
 
   const db = getDb();
-  const [rows, kids, adminSet] = await Promise.all([
+  const [allRows, kids, adminSet] = await Promise.all([
     db.select().from(signups).orderBy(desc(signups.createdAt)),
     db.select().from(children),
     dbAdminEmails(),
   ]);
+
+  // Auto-save creates a draft signup row on first /signup keystroke. Hide rows
+  // that are still completely blank (no name/email yet) so abandoned drafts
+  // don't clutter the admin list. They can be pruned from the DB later.
+  const rows = allRows.filter(
+    (r) => (r.firstName?.trim() || r.lastName?.trim() || r.email?.trim()),
+  );
 
   const kidsBySignup = new Map<string, ChildRow[]>();
   for (const k of kids) {
