@@ -124,7 +124,7 @@ export async function notifyApplicantWelcome(n: {
         ]
       : []),
     ``,
-    `A bit about me and what I'm hoping we build together: I'm dad to a student just entering OHS as a 7th grader, and CEO of Chief, an AI Chief of Staff startup in the SF Bay area. My goal with Pixel Parents is to build software that transforms the experience of parents and students at OHS — staying independent, moving fast, and keeping everything open source so others can benefit too.`,
+    `A bit about me and what I'm hoping we build together: I'm dad to Devina, just entering OHS as a 7th grader, and CEO of Chief, an AI Chief of Staff startup in the SF Bay area. My goal with Pixel Parents is to build software that transforms the experience of parents and students at OHS — staying independent, moving fast, and keeping everything open source so others can benefit too.`,
   ].join("\n");
   await sendEmail({
     to: n.to,

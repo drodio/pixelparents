@@ -137,7 +137,7 @@ export default async function ThanksPage({
                 >
                   DROdio
                 </a>
-                , dad to a student just entering OHS as a 7th grader. I&apos;m the
+                , dad to Devina, just entering OHS as a 7th grader. I&apos;m the
                 CEO of{" "}
                 <a
                   href="https://chief.bot"

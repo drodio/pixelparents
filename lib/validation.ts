@@ -16,12 +16,12 @@ export const signupSchema = z.object({
   lastName: z.string().trim().min(1, "Last name is required").max(100),
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
   phone: z.string().trim().min(1, "Phone is required").max(40),
+  // Optional — empty allowed; if provided, must be a valid GitHub handle.
   githubUsername: z
     .string()
     .trim()
-    .min(1, "GitHub username is required")
     .max(39)
-    .regex(/^[A-Za-z0-9-]+$/, "Use only letters, numbers, and dashes"),
+    .regex(/^[A-Za-z0-9-]*$/, "Use only letters, numbers, and dashes"),
   ohsAffiliation: z.enum(OHS_AFFILIATIONS, {
     error: "Please select your OHS affiliation",
   }),

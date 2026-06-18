@@ -175,7 +175,7 @@ export default function SignupForm() {
           </div>
           <div className="sm:col-span-2">
             <label className={labelCls} htmlFor="githubUsername">
-              GitHub username <span className="text-red-400">*</span>
+              GitHub username
             </label>
             <div className="mt-1 flex items-center rounded-lg border border-white/15 bg-white/5 focus-within:border-white/40 focus-within:ring-1 focus-within:ring-white/40">
               <span className="select-none px-3 py-2 text-sm text-white/40">github.com/</span>
