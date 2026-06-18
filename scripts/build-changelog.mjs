@@ -10,8 +10,14 @@ import { neon } from "@neondatabase/serverless";
 import { execSync } from "node:child_process";
 
 const BACKFILL = process.argv.includes("--backfill");
-const MODEL = process.env.CHANGELOG_MODEL || "claude-haiku-4-5-20251001";
-const KEY = process.env.ANTHROPIC_API_KEY || process.env.AI_GATEWAY_API_KEY;
+// Prefer the Vercel AI Gateway (one key → many models, billed via Vercel);
+// fall back to a direct Anthropic key if that's all that's set.
+const GW_KEY = process.env.VERCEL_AI_GATEWAY || process.env.AI_GATEWAY_API_KEY;
+const ANT_KEY = process.env.ANTHROPIC_API_KEY;
+const USE_GATEWAY = Boolean(GW_KEY);
+const MODEL =
+  process.env.CHANGELOG_MODEL ||
+  (USE_GATEWAY ? "anthropic/claude-haiku-4-5" : "claude-haiku-4-5-20251001");
 
 const VALID_TYPES = ["feature", "enhancement", "bug_fix"];
 const VALID_CATS = [
@@ -23,8 +29,8 @@ if (!process.env.DATABASE_URL) {
   console.error("DATABASE_URL not set — aborting.");
   process.exit(1);
 }
-if (!KEY) {
-  console.warn("No ANTHROPIC_API_KEY / AI_GATEWAY_API_KEY — generator is dormant. Exiting cleanly.");
+if (!GW_KEY && !ANT_KEY) {
+  console.warn("No VERCEL_AI_GATEWAY / ANTHROPIC_API_KEY — generator is dormant. Exiting cleanly.");
   process.exit(0);
 }
 
@@ -61,22 +67,39 @@ Commit subject: ${commit.subject}
 
 Respond with ONLY JSON: {"title": "...", "summary": "1-2 sentences", "bullets": ["..."], "changeType": "...", "categories": ["..."]}`;
 
-  const res = await fetch("https://api.anthropic.com/v1/messages", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "x-api-key": KEY,
-      "anthropic-version": "2023-06-01",
-    },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: 500,
-      messages: [{ role: "user", content: prompt }],
-    }),
-  });
-  if (!res.ok) throw new Error(`Anthropic ${res.status}`);
-  const data = await res.json();
-  const text = data.content?.[0]?.text ?? "";
+  let text;
+  if (USE_GATEWAY) {
+    // Vercel AI Gateway — OpenAI-compatible chat completions.
+    const res = await fetch("https://ai-gateway.vercel.sh/v1/chat/completions", {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${GW_KEY}` },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!res.ok) throw new Error(`AI Gateway ${res.status}: ${await res.text().catch(() => "")}`);
+    const data = await res.json();
+    text = data.choices?.[0]?.message?.content ?? "";
+  } else {
+    const res = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-api-key": ANT_KEY,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: MODEL,
+        max_tokens: 500,
+        messages: [{ role: "user", content: prompt }],
+      }),
+    });
+    if (!res.ok) throw new Error(`Anthropic ${res.status}`);
+    const data = await res.json();
+    text = data.content?.[0]?.text ?? "";
+  }
   const json = JSON.parse(text.slice(text.indexOf("{"), text.lastIndexOf("}") + 1));
   if (!json.title || !json.summary) throw new Error("LLM omitted title/summary");
   return {

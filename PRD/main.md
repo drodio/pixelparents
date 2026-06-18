@@ -1,6 +1,25 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 5:48 PM Pacific
+
+### Summary of changes since last update
+Changelog auto-generator now uses the Vercel AI Gateway (VERCEL_AI_GATEWAY key)
+instead of requiring a direct Anthropic key. Verified working end-to-end —
+generated 2 entries from conventional-commit history.
+
+### Detail of changes made:
+- **scripts/build-changelog.mjs:** prefers VERCEL_AI_GATEWAY (OpenAI-compatible
+  gateway endpoint, model 'anthropic/claude-haiku-4-5'); falls back to a direct
+  Anthropic call if only ANTHROPIC_API_KEY is set.
+- **.env.example:** documents VERCEL_AI_GATEWAY as the preferred key.
+- Ran a --backfill via the gateway; changelog now has 7 curated + 2 auto entries.
+
+### Potential concerns to address:
+- Generator runs locally / in CI (needs git history); only matches
+  conventional-commit-prefixed subjects (feat/fix/perf/...). A GitHub Action on
+  push-to-main could automate it (would need VERCEL_AI_GATEWAY + DATABASE_URL as
+  repo secrets).
 ## Progress Update as of June 17, 2026 — 5:42 PM Pacific
 
 ### Summary of changes since last update
