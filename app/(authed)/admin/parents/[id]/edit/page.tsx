@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { getDb, hasDatabase } from "@/lib/db";
 import { signups } from "@/lib/db/schema/signups";
 import { isAdminEmail } from "@/lib/admin";
+import { Breadcrumb } from "../../../breadcrumb";
 import EditForm from "./edit-form";
 
 export const dynamic = "force-dynamic";
@@ -37,13 +38,17 @@ export default async function EditParentPage({
 
   return (
     <div className="mx-auto flex w-full max-w-2xl flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-2">
+        <Breadcrumb
+          items={[
+            { label: "Pixel Parents Admin", href: "/admin" },
+            { label: "Parents", href: "/admin" },
+            { label: `${row.firstName} ${row.lastName}` },
+          ]}
+        />
         <h2 className="text-xl font-semibold">
           Edit — {row.firstName} {row.lastName}
         </h2>
-        <Link href="/admin" className="text-sm text-amber-400 hover:underline">
-          ← Back
-        </Link>
       </div>
       <EditForm row={row} />
     </div>
