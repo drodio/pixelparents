@@ -91,11 +91,14 @@ function PhotoUploader({
   initialPreviews,
   onSave,
   candidates,
+  showMainPill = false,
 }: {
   initialPhotos: Photo[];
   initialPreviews: Record<string, string>;
   onSave: (photos: Photo[]) => void;
   candidates: MentionCandidate[];
+  // When true, the first photo is labeled "Main Photo" (it's used as the /p banner).
+  showMainPill?: boolean;
 }) {
   const [photos, setPhotos] = useState<Photo[]>(initialPhotos);
   const photosRef = useRef(photos);
@@ -105,11 +108,34 @@ function PhotoUploader({
   const [previews, setPreviews] = useState<Record<string, string>>(initialPreviews);
   const [uploading, setUploading] = useState(0);
   const [error, setError] = useState<string | null>(null);
+  // Enlarged-photo lightbox (holds the URL to show, or null when closed).
+  const [lightbox, setLightbox] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!lightbox) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setLightbox(null);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [lightbox]);
 
   function mutate(next: Photo[]) {
     photosRef.current = next;
     setPhotos(next);
     onSave(next);
+  }
+
+  // Reorder a photo by one position. The first photo is the "main" one (used as
+  // the /p banner for family photos), so this lets a parent choose it.
+  function move(from: number, dir: -1 | 1) {
+    const to = from + dir;
+    const cur = photosRef.current;
+    if (to < 0 || to >= cur.length) return;
+    const next = [...cur];
+    const [moved] = next.splice(from, 1);
+    next.splice(to, 0, moved!);
+    mutate(next);
   }
 
   async function onFiles(files: FileList | null) {
@@ -155,11 +181,21 @@ function PhotoUploader({
       {uploading > 0 && <p className="mt-1 text-sm text-white/50">Uploading {uploading}…</p>}
       {photos.length > 0 && (
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
-          {photos.map((p) => (
+          {photos.map((p, i) => (
             <div key={p.pathname} className="flex gap-3 rounded-lg border border-white/10 bg-white/[0.02] p-2">
               <div className="group relative shrink-0">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={previews[p.pathname]} alt="photo" className="h-20 w-20 rounded-lg object-cover" />
+                <img
+                  src={previews[p.pathname]}
+                  alt="photo"
+                  onClick={() => setLightbox(previews[p.pathname] ?? null)}
+                  className="h-20 w-20 cursor-zoom-in rounded-lg object-cover"
+                />
+                {showMainPill && i === 0 && (
+                  <span className="absolute left-1 top-1 rounded bg-amber-400 px-1.5 py-0.5 text-[10px] font-semibold text-black">
+                    Main Photo
+                  </span>
+                )}
                 <button
                   type="button"
                   onClick={() => mutate(photosRef.current.filter((x) => x.pathname !== p.pathname))}
@@ -167,6 +203,28 @@ function PhotoUploader({
                 >
                   ✕
                 </button>
+                {photos.length > 1 && (
+                  <div className="absolute inset-x-1 bottom-1 flex justify-between">
+                    <button
+                      type="button"
+                      disabled={i === 0}
+                      onClick={() => move(i, -1)}
+                      aria-label="Move earlier"
+                      className="rounded bg-black/70 px-1.5 text-xs text-white disabled:opacity-30"
+                    >
+                      ‹
+                    </button>
+                    <button
+                      type="button"
+                      disabled={i === photos.length - 1}
+                      onClick={() => move(i, 1)}
+                      aria-label="Move later"
+                      className="rounded bg-black/70 px-1.5 text-xs text-white disabled:opacity-30"
+                    >
+                      ›
+                    </button>
+                  </div>
+                )}
               </div>
               <div className="min-w-0 flex-1">
                 <MentionCaptionInput
@@ -184,6 +242,28 @@ function PhotoUploader({
               </div>
             </div>
           ))}
+        </div>
+      )}
+      {lightbox && (
+        <div
+          onClick={() => setLightbox(null)}
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 p-4"
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={lightbox}
+            alt="Enlarged photo"
+            onClick={(e) => e.stopPropagation()}
+            className="max-h-[85vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
+          />
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            aria-label="Close"
+            className="absolute right-4 top-4 text-3xl leading-none text-white/70 hover:text-white"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>
@@ -477,6 +557,7 @@ export default function FamilyForm({
             initialPreviews={initialPhotoPreviews}
             onSave={(photos) => queue({ photos }, true)}
             candidates={candidates}
+            showMainPill
           />
         </div>
       </section>
