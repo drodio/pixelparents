@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { getBaseUrl } from "@/lib/url";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -87,10 +88,47 @@ export async function notifyNewSignup(s: SignupNotification): Promise<void> {
     ``,
     `Signup id:   ${s.id}`,
   ].join("\n");
+  // No applicant CC here — they now get the curated notifyApplicantWelcome email
+  // instead of this internal-style admin dump.
   await sendEmail({
     to: TO,
-    cc: s.email ? [s.email] : undefined,
     subject: `New Pixel Parents signup: ${s.firstName} ${s.lastName}`,
+    text,
+  });
+}
+
+// Welcome the applicant after step 1 and point them at step 2 (their thanks page).
+// The signature (EMAIL_SIGNATURE) is auto-appended and provides the contact line.
+export async function notifyApplicantWelcome(n: {
+  to: string;
+  firstName: string;
+  id: string;
+}): Promise<void> {
+  const base = getBaseUrl();
+  const exampleUrl = process.env.NEXT_PUBLIC_DRODIO_SUBMISSION_URL;
+  const text = [
+    `Hi ${n.firstName},`,
+    ``,
+    `Thanks for signing up for Pixel Parents — I've got your submission, and I'm glad you're here. Looking forward to connecting with you more over WhatsApp.`,
+    ``,
+    `There's one more (optional) step whenever you have a few minutes: if you're willing to tell us a bit about your interests and your child(ren) at OHS, it helps us build a small seed data set before we bring other parents in:`,
+    ``,
+    `\u{1F449} ${base}/signup/thanks?id=${n.id}`,
+    ``,
+    `That link is yours — you can come back to it anytime, and as a parent you keep full control over your data. Only authenticated OHS families will ever see your answers.`,
+    ...(exampleUrl
+      ? [
+          ``,
+          `There's also a "secret URL" you can enable after submitting your data if you want to share it with specific people. It's off by default for privacy. Here's what I've submitted, for reference:`,
+          exampleUrl,
+        ]
+      : []),
+    ``,
+    `A bit about me and what I'm hoping we build together: I'm dad to a student just entering OHS as a 7th grader, and CEO of Chief, an AI Chief of Staff startup in the SF Bay area. My goal with Pixel Parents is to build software that transforms the experience of parents and students at OHS — staying independent, moving fast, and keeping everything open source so others can benefit too.`,
+  ].join("\n");
+  await sendEmail({
+    to: n.to,
+    subject: "Thanks for signing up for Pixel Parents — one more step",
     text,
   });
 }

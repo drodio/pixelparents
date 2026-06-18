@@ -5,7 +5,7 @@ import { checkBotId } from "botid/server";
 import { getDb } from "@/lib/db";
 import { signups } from "@/lib/db/schema/signups";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
-import { notifyNewSignup } from "@/lib/email";
+import { notifyNewSignup, notifyApplicantWelcome } from "@/lib/email";
 
 export type SignupState = {
   ok: boolean;
@@ -88,6 +88,9 @@ export async function submitSignup(
     skillsets,
     timeCommitment: data.timeCommitment || null,
   });
+
+  // Welcome the applicant + point them at step 2 (best-effort, never blocks).
+  await notifyApplicantWelcome({ to: data.email, firstName: data.firstName, id });
 
   redirect(`/signup/thanks?id=${id}`);
 }
