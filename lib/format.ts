@@ -1,5 +1,5 @@
-// Format a stored phone string for display. US 10-digit → 202-250-3846,
-// 11-digit leading 1 → 1-202-250-3846. Anything else (international, partial,
+// Format a stored phone string for display. US 10-digit → 201-555-0142,
+// 11-digit leading 1 → 1-201-555-0142. Anything else (international, partial,
 // already-formatted in an unexpected way) is returned unchanged.
 export function formatPhone(raw: string | null | undefined): string {
   const value = raw ?? "";

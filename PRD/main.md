@@ -1,6 +1,23 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 5:40 PM Pacific
+
+### Summary of changes since last update
+Hardened the PII gates to cover PR metadata (titles/bodies/commit messages), which the file-based gates missed — a PR title had leaked a phone number. While testing, the hardened gate caught a **real leak already on `main`**: PR #14 had baked the actual phone number into `lib/format.ts` + `lib/format.test.ts` as example/test data. Fixed that too. Also redacted PR #14's title on GitHub.
+
+### Detail of changes made:
+- **`scripts/pii-gate.mjs`:** now also scans the **PR title, PR body, and the PR's commit messages** (diff mode), not just changed files. Uses DB matches + static phone/email patterns (so a leaked value that isn't in the DB is still caught). Reserved `555` fictional numbers are exempt. Still logs only source + type + sha marker, never the value.
+- **`.github/workflows/pii-gate.yml`:** added the `edited` PR trigger (re-runs when a title/body changes) and passes `PR_TITLE`/`PR_BODY` via **env** (not inlined into the run script — avoids injection).
+- **`.githooks/pre-commit`:** the phone guard now allowlists reserved `555`/`555-01xx` fictional numbers, so tests/docs can use example numbers without tripping the block (matches the metadata gate).
+- **Real-leak fix:** `lib/format.ts` + `lib/format.test.ts` now use the reserved fictional number `201-555-0142` instead of the real one. Format test still passes (3/3).
+- **PR #14 title** edited on GitHub to "Admin: format phone numbers in the submissions table".
+- **Verified:** gate full scan of the tree = clean; metadata catch test blocks a phone in the PR title; clean title passes; `pii-reviewed` override works.
+
+### Potential concerns to address:
+- **History:** the real number still exists in PR #14's merged commits + the prior PR-title metadata (history purge remains deferred by decision).
+- **Commit-message vector locally:** the CI gate now scans commit messages at PR time; a local `commit-msg` hook could add earlier defense but wasn't added (kept scope tight).
+
 ## Progress Update as of June 17, 2026 — 5:31 PM Pacific
 
 ### Summary of changes since last update

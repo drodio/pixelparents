@@ -3,13 +3,13 @@ import { formatPhone } from "@/lib/format";
 
 describe("formatPhone", () => {
   it("formats 10-digit US numbers as XXX-XXX-XXXX", () => {
-    expect(formatPhone("2022503846")).toBe("202-250-3846");
-    expect(formatPhone("(202) 250-3846")).toBe("202-250-3846");
+    expect(formatPhone("2015550142")).toBe("201-555-0142");
+    expect(formatPhone("(201) 555-0142")).toBe("201-555-0142");
   });
 
   it("formats 11-digit leading-1 numbers", () => {
-    expect(formatPhone("12022503846")).toBe("1-202-250-3846");
-    expect(formatPhone("+1 202 250 3846")).toBe("1-202-250-3846");
+    expect(formatPhone("12015550142")).toBe("1-201-555-0142");
+    expect(formatPhone("+1 201 555 0142")).toBe("1-201-555-0142");
   });
 
   it("leaves international / unexpected / empty values unchanged", () => {
