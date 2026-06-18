@@ -157,7 +157,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
           href={`/signup/thanks?id=${row.id}&admin=1`}
           className="text-sm font-medium text-amber-400 hover:underline"
         >
-          Edit child(ren) details →
+          Edit family + child(ren) details →
         </Link>
       </div>
     </form>

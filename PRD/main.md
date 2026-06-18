@@ -1,6 +1,14 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 5:42 PM Pacific
+
+### Summary of changes since last update
+Copy tweak on the admin parent-edit form: the link to the family/child editor now reads "Edit family + child(ren) details →" (was "Edit child(ren) details →"), reflecting that it edits family-level fields too.
+
+### Detail of changes made:
+- **`app/(authed)/admin/parents/[id]/edit/edit-form.tsx`:** link text updated. (The row-action tooltip in `children-table.tsx` still says "Edit child(ren) details" — left as-is; only the requested string changed.)
+
 ## Progress Update as of June 17, 2026 — 5:40 PM Pacific
 
 ### Summary of changes since last update
