@@ -16,7 +16,7 @@ export function MentionText({
       {segments.map((s, i) =>
         s.kind === "mention" ? (
           <span key={i} className="font-medium text-amber-400">
-            @{s.name}
+            {s.name}
           </span>
         ) : (
           <span key={i}>{s.text}</span>

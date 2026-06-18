@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSharedProfileByToken } from "@/lib/db/signups";
@@ -63,25 +62,46 @@ export default async function SharedProfilePage({
 
   const location = [signup.city, signup.state].filter(Boolean).join(", ");
   const interests = signup.parentInterests ?? [];
-  const photos = signup.photos ?? [];
   const showContact = visible.has("phone") || visible.has("email");
 
-  // Private blobs need presigned URLs to render.
-  const photoUrls =
-    visible.has("photos") && photos.length > 0
-      ? await signedPhotoUrls(photos.map((p) => p.pathname))
-      : [];
+  // Family photos + each child's photos, all in one gallery. Child photos are
+  // labelled with the child's name only when "children" is also shared (privacy).
+  // Presign every photo (family-level + per-child) once; look up by pathname.
+  const photoPaths = visible.has("photos")
+    ? [
+        ...(signup.photos ?? []).map((p) => p.pathname),
+        ...kids.flatMap((k) => (k.photos ?? []).map((p) => p.pathname)),
+      ]
+    : [];
+  const signedAll = photoPaths.length > 0 ? await signedPhotoUrls(photoPaths) : [];
+  const urlByPath = new Map<string, string>();
+  photoPaths.forEach((p, i) => {
+    if (signedAll[i]) urlByPath.set(p, signedAll[i]);
+  });
+  // Mentions render as the plain name (no @) in captions.
+  const stripMentions = (c?: string | null): string | null =>
+    c ? c.replace(/@\[([^\]]+)\]\([^)]+\)/g, "$1") : null;
+  const toCarousel = (ph: { pathname: string; caption?: string }[]) =>
+    ph
+      .map((p) => ({ url: urlByPath.get(p.pathname), caption: stripMentions(p.caption) }))
+      .filter((s): s is { url: string; caption: string | null } => Boolean(s.url));
+  const familyCarousel = toCarousel(signup.photos ?? []);
+
+  // The /p banner is the family's main (first) photo, if any — not the generic
+  // signup banner (which only belongs on the signup flow).
+  const bannerUrl = familyCarousel[0]?.url ?? null;
 
   return (
     <main className="min-h-dvh bg-black text-white">
-      <Image
-        src="/images/banner.webp"
-        alt=""
-        width={2000}
-        height={1125}
-        priority
-        className="aspect-[13/5] w-full object-cover object-top"
-      />
+      {bannerUrl && (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={bannerUrl}
+          alt=""
+          referrerPolicy="no-referrer"
+          className="aspect-[13/5] w-full object-cover object-top"
+        />
+      )}
       <div className="border-b border-white/10 bg-white/[0.03]">
         <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-6 py-2.5 text-sm text-white/55">
           <span aria-hidden>🔒</span>
@@ -104,20 +124,10 @@ export default async function SharedProfilePage({
           </section>
         )}
 
-        {visible.has("photos") && photos.length > 0 && (
+        {familyCarousel.length > 0 && (
           <section className="mt-9">
             <Label>Photos</Label>
-            <PhotoCarousel
-              photos={photos
-                .map((p, i) => ({
-                  url: photoUrls[i],
-                  // Strip @[Name](id) mention markers down to plain "@Name".
-                  caption: p.caption
-                    ? p.caption.replace(/@\[([^\]]+)\]\([^)]+\)/g, "@$1")
-                    : null,
-                }))
-                .filter((s): s is { url: string; caption: string | null } => Boolean(s.url))}
-            />
+            <PhotoCarousel photos={familyCarousel} />
           </section>
         )}
 
@@ -125,27 +135,35 @@ export default async function SharedProfilePage({
           <section className="mt-9">
             <Label>Children at OHS</Label>
             <div className="flex flex-col gap-3.5">
-              {kids.map((kid) => (
-                <div
-                  key={kid.id}
-                  className="rounded-2xl border border-white/10 bg-white/[0.02] p-5"
-                >
-                  <h3 className="text-lg font-semibold">{kid.firstName}</h3>
-                  {kid.grade && (
-                    <div className="mt-0.5 text-sm font-semibold text-amber-400">
-                      {kid.grade}
-                    </div>
-                  )}
-                  {kid.interests && kid.interests.length > 0 && (
-                    <div className="mt-3">
-                      <Pills items={kid.interests} />
-                    </div>
-                  )}
-                  {kid.notes && (
-                    <p className="mt-3 text-sm text-white/55">{kid.notes}</p>
-                  )}
-                </div>
-              ))}
+              {kids.map((kid) => {
+                const kidPhotos = toCarousel(kid.photos ?? []);
+                return (
+                  <div
+                    key={kid.id}
+                    className="rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+                  >
+                    <h3 className="text-lg font-semibold">{kid.firstName}</h3>
+                    {kid.grade && (
+                      <div className="mt-0.5 text-sm font-semibold text-amber-400">
+                        {kid.grade}
+                      </div>
+                    )}
+                    {kid.interests && kid.interests.length > 0 && (
+                      <div className="mt-3">
+                        <Pills items={kid.interests} />
+                      </div>
+                    )}
+                    {kid.notes && (
+                      <p className="mt-3 text-sm text-white/55">{kid.notes}</p>
+                    )}
+                    {kidPhotos.length > 0 && (
+                      <div className="mt-4">
+                        <PhotoCarousel photos={kidPhotos} />
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </section>
         )}
