@@ -1,6 +1,31 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 5:44 PM Pacific (branch: `worktree-autosave`, PR)
+
+### Summary of changes since last update
+Auto-save **step 2**: rewrote `/signup/thanks` `family-form.tsx`. Family fields +
+children now auto-save (debounced) — no Save/Done. Children became a **live
+add/remove list** (each card auto-saves independently); the old Done / add-another
+/ skip / click-to-edit model is gone, replaced by **"+ Add a child"**, per-card
+**Remove**, and a **"Finish →"** link. (Step 1 already shipped to prod via PR #23.)
+
+### Detail of changes made:
+- **`family-form.tsx`:** full rewrite. New `PhotoUploader` (self-contained upload +
+  caption, emits the photo array → parent auto-saves; uses a ref to avoid stale-closure
+  bugs on multi-file upload), `ChildCard` (one child, own `useAutoSave`→`patchChild`),
+  and the `FamilyForm` shell (family fields→`patchSignup`, live child list via
+  `addChild`/`removeChild`). Per-card `SaveStatus`.
+- **`thanks/actions.ts`:** `addChild` / `patchChild` / `removeChild` (scoped by
+  (childId, signupId); no bot re-check — signup already exists behind step-1 BotID).
+- Verified: `tsc`, eslint, `next build` all clean.
+
+### Potential concerns to address:
+- **Needs browser verification before merge** — children's-data flow; multi-child
+  auto-save + per-child photo uploads can't be checked headlessly. Test on the PR preview.
+- **Dead code:** the old `saveFamily` action (+ `FamilyState`, `parseStringArray`,
+  `parsePhotos`, `isAdminRequest`) in `thanks/actions.ts` is now unused — remove in cleanup.
+- Admin edit pages still pending (same beads `qek`).
 ## Progress Update as of June 17, 2026 — 5:31 PM Pacific
 
 ### Summary of changes since last update
