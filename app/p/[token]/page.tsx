@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { getSharedProfileByToken } from "@/lib/db/signups";
 import { shareFieldsOrDefault } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
+import { PhotoCarousel } from "./photo-carousel";
 
 export const dynamic = "force-dynamic";
 
@@ -106,19 +107,17 @@ export default async function SharedProfilePage({
         {visible.has("photos") && photos.length > 0 && (
           <section className="mt-9">
             <Label>Photos</Label>
-            <div className="grid grid-cols-3 gap-2.5 sm:grid-cols-4">
-              {photos.map((p, i) =>
-                photoUrls[i] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    key={p.pathname}
-                    src={photoUrls[i]}
-                    alt=""
-                    className="aspect-square w-full rounded-xl object-cover"
-                  />
-                ) : null,
-              )}
-            </div>
+            <PhotoCarousel
+              photos={photos
+                .map((p, i) => ({
+                  url: photoUrls[i],
+                  // Strip @[Name](id) mention markers down to plain "@Name".
+                  caption: p.caption
+                    ? p.caption.replace(/@\[([^\]]+)\]\([^)]+\)/g, "@$1")
+                    : null,
+                }))
+                .filter((s): s is { url: string; caption: string | null } => Boolean(s.url))}
+            />
           </section>
         )}
 

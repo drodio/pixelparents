@@ -1,6 +1,22 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 5:31 PM Pacific
+
+### Summary of changes since last update
+Replaced the photo grid on the public /p/<token> share page with a hand-rolled
+festival.so-style carousel: a hero photo with side photos fanned out behind it,
+click-to-expand lightbox, arrow + keyboard nav, and a position counter.
+
+### Detail of changes made:
+- **`app/p/[token]/photo-carousel.tsx`:** client component, no external libs
+  (CSS transforms for the fan-out, fixed-overlay lightbox, Esc/arrow keys).
+- **`app/p/[token]/page.tsx`:** builds slides from the presigned photo URLs +
+  captions (mention markers stripped to plain @Name) and renders the carousel.
+- tsc + eslint + build clean.
+
+### Potential concerns to address:
+- Uses presigned photo URLs already computed server-side; expiry caveat unchanged.
 ## Progress Update as of June 17, 2026 — 5:12 PM Pacific
 
 ### Summary of changes since last update
