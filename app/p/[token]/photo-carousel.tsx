@@ -2,7 +2,52 @@
 
 import { useCallback, useEffect, useState } from "react";
 
-export type CarouselPhoto = { url: string; caption?: string | null };
+// A caption is a list of parts so @-mentioned names can render as links that
+// jump to that child's section (href is null when that child isn't shown).
+export type CaptionPart =
+  | { kind: "text"; text: string }
+  | { kind: "mention"; name: string; href: string | null };
+
+export type CarouselPhoto = { url: string; caption?: CaptionPart[] | null };
+
+function captionText(parts?: CaptionPart[] | null): string {
+  return (parts ?? []).map((p) => (p.kind === "text" ? p.text : p.name)).join("");
+}
+
+// Renders caption parts; @-mentions show as gold names, linked when an anchor
+// exists. onNavigate fires on a link click (used to close the lightbox first).
+function Caption({
+  parts,
+  className,
+  onNavigate,
+}: {
+  parts: CaptionPart[];
+  className?: string;
+  onNavigate?: () => void;
+}) {
+  return (
+    <span className={className}>
+      {parts.map((p, i) =>
+        p.kind === "text" ? (
+          <span key={i}>{p.text}</span>
+        ) : p.href ? (
+          <a
+            key={i}
+            href={p.href}
+            onClick={onNavigate}
+            className="font-medium text-amber-400 hover:underline"
+          >
+            {p.name}
+          </a>
+        ) : (
+          <span key={i} className="font-medium text-amber-400">
+            {p.name}
+          </span>
+        ),
+      )}
+    </span>
+  );
+}
 
 // Hand-rolled hero + fan-out carousel with a click-to-expand lightbox
 // (festival.so style; no external libraries).
@@ -68,7 +113,7 @@ export function PhotoCarousel({ photos }: { photos: CarouselPhoto[] }) {
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={p.url}
-                alt={p.caption ?? ""}
+                alt={captionText(p.caption)}
                 className="h-44 w-72 rounded-xl object-cover shadow-2xl ring-1 ring-white/10 sm:h-56 sm:w-96 md:h-64"
               />
             </button>
@@ -100,8 +145,8 @@ export function PhotoCarousel({ photos }: { photos: CarouselPhoto[] }) {
         <span className="rounded-full bg-white/[0.06] px-2.5 py-0.5 text-xs text-white/50">
           {center + 1} / {n}
         </span>
-        {current?.caption ? (
-          <span className="text-right text-white/70">{current.caption}</span>
+        {current?.caption && current.caption.length > 0 ? (
+          <Caption parts={current.caption} className="text-right text-white/70" />
         ) : (
           <span />
         )}
@@ -125,16 +170,16 @@ export function PhotoCarousel({ photos }: { photos: CarouselPhoto[] }) {
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={current.url}
-            alt={current.caption ?? ""}
+            alt={captionText(current.caption)}
             onClick={(e) => e.stopPropagation()}
             className="max-h-[85vh] max-w-[92vw] rounded-lg object-contain"
           />
-          {current?.caption && (
+          {current?.caption && current.caption.length > 0 && (
             <p
               onClick={(e) => e.stopPropagation()}
               className="mt-3 max-w-2xl text-center text-sm text-white/70"
             >
-              {current.caption}
+              <Caption parts={current.caption} onNavigate={() => setLightbox(false)} />
             </p>
           )}
         </div>

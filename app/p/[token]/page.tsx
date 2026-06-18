@@ -4,7 +4,8 @@ import { notFound } from "next/navigation";
 import { getSharedProfileByToken } from "@/lib/db/signups";
 import { shareFieldsOrDefault } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
-import { PhotoCarousel } from "./photo-carousel";
+import { renderCaption } from "@/lib/mentions";
+import { PhotoCarousel, type CaptionPart } from "./photo-carousel";
 
 export const dynamic = "force-dynamic";
 
@@ -78,13 +79,28 @@ export default async function SharedProfilePage({
   photoPaths.forEach((p, i) => {
     if (signedAll[i]) urlByPath.set(p, signedAll[i]);
   });
-  // Mentions render as the plain name (no @) in captions.
-  const stripMentions = (c?: string | null): string | null =>
-    c ? c.replace(/@\[([^\]]+)\]\([^)]+\)/g, "$1") : null;
+  // @-mentioned children become links that scroll to their section — but only
+  // when children are shown (anchors exist) and the mentioned child is in this
+  // shared profile. Otherwise the name renders as plain (unlinked) text.
+  const childrenShown = visible.has("children") && kids.length > 0;
+  const kidIds = new Set(kids.map((k) => k.id));
+  const toParts = (caption?: string | null): CaptionPart[] | null => {
+    const segs = renderCaption(caption ?? "");
+    if (segs.length === 0) return null;
+    return segs.map((s) =>
+      s.kind === "text"
+        ? { kind: "text", text: s.text }
+        : {
+            kind: "mention",
+            name: s.name,
+            href: childrenShown && kidIds.has(s.id) ? `#kid-${s.id}` : null,
+          },
+    );
+  };
   const toCarousel = (ph: { pathname: string; caption?: string }[]) =>
     ph
-      .map((p) => ({ url: urlByPath.get(p.pathname), caption: stripMentions(p.caption) }))
-      .filter((s): s is { url: string; caption: string | null } => Boolean(s.url));
+      .map((p) => ({ url: urlByPath.get(p.pathname), caption: toParts(p.caption) }))
+      .filter((s): s is { url: string; caption: CaptionPart[] | null } => Boolean(s.url));
   const familyCarousel = toCarousel(signup.photos ?? []);
 
   // The /p banner is the family's main (first) photo, if any — not the generic
@@ -140,7 +156,8 @@ export default async function SharedProfilePage({
                 return (
                   <div
                     key={kid.id}
-                    className="rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+                    id={`kid-${kid.id}`}
+                    className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-5 target:ring-2 target:ring-amber-400/60"
                   >
                     <h3 className="text-lg font-semibold">{kid.firstName}</h3>
                     {kid.grade && (
