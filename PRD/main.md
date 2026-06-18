@@ -1,32 +1,25 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
-## Progress Update as of June 17, 2026 — 5:44 PM Pacific (branch: `worktree-autosave`, PR)
+## Progress Update as of June 17, 2026 — 5:48 PM Pacific
 
 ### Summary of changes since last update
-Auto-save **step 2**: rewrote `/signup/thanks` `family-form.tsx`. Family fields +
-children now auto-save (debounced) — no Save/Done. Children became a **live
-add/remove list** (each card auto-saves independently); the old Done / add-another
-/ skip / click-to-edit model is gone, replaced by **"+ Add a child"**, per-card
-**Remove**, and a **"Finish →"** link. (Step 1 already shipped to prod via PR #23.)
+Changelog auto-generator now uses the Vercel AI Gateway (VERCEL_AI_GATEWAY key)
+instead of requiring a direct Anthropic key. Verified working end-to-end —
+generated 2 entries from conventional-commit history.
 
 ### Detail of changes made:
-- **`family-form.tsx`:** full rewrite. New `PhotoUploader` (self-contained upload +
-  caption, emits the photo array → parent auto-saves; uses a ref to avoid stale-closure
-  bugs on multi-file upload), `ChildCard` (one child, own `useAutoSave`→`patchChild`),
-  and the `FamilyForm` shell (family fields→`patchSignup`, live child list via
-  `addChild`/`removeChild`). Per-card `SaveStatus`.
-- **`thanks/actions.ts`:** `addChild` / `patchChild` / `removeChild` (scoped by
-  (childId, signupId); no bot re-check — signup already exists behind step-1 BotID).
-- Verified: `tsc`, eslint, `next build` all clean.
+- **scripts/build-changelog.mjs:** prefers VERCEL_AI_GATEWAY (OpenAI-compatible
+  gateway endpoint, model 'anthropic/claude-haiku-4-5'); falls back to a direct
+  Anthropic call if only ANTHROPIC_API_KEY is set.
+- **.env.example:** documents VERCEL_AI_GATEWAY as the preferred key.
+- Ran a --backfill via the gateway; changelog now has 7 curated + 2 auto entries.
 
 ### Potential concerns to address:
-- **Needs browser verification before merge** — children's-data flow; multi-child
-  auto-save + per-child photo uploads can't be checked headlessly. Test on the PR preview.
-- **Dead code:** the old `saveFamily` action (+ `FamilyState`, `parseStringArray`,
-  `parsePhotos`, `isAdminRequest`) in `thanks/actions.ts` is now unused — remove in cleanup.
-- Admin edit pages still pending (same beads `qek`).
-
+- Generator runs locally / in CI (needs git history); only matches
+  conventional-commit-prefixed subjects (feat/fix/perf/...). A GitHub Action on
+  push-to-main could automate it (would need VERCEL_AI_GATEWAY + DATABASE_URL as
+  repo secrets).
 ## Progress Update as of June 17, 2026 — 5:42 PM Pacific
 
 ### Summary of changes since last update
