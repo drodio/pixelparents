@@ -9,3 +9,15 @@
 - **What we protect:** We are careful to ensure that any personally identifying information (PII) and confidential school information is handled carefully and only seen by current OHS families, especially when it involves our kids' information. We do allow adult individuals and families to share their own PII if desired, i.e., they are fully in control of their data (they own it; they decide what happens to it).
 
 - **Our ethos:** We lean into the latest technologies, including artificial intelligence (AI). We do it in safe ways. We do not train LLMs on user data (like the PII and sensitive data discussed above). Our goal is to be power users of the types of technologies that will be awaiting our children when they graduate from high school and college so we can understand it and prepare them well for that future.
+
+## How to get involved as a Pixel Parent Builder
+
+We welcome any parent to join us — even if you do not consider yourself technical. We lean heavily into AI-assisted coding, and if you have curiosity, then you have all you need to explore becoming a _builder_ with us.
+
+- **1) Sign up to be a Pixel Parent builder** using [our signup form](/signup).
+
+- **2) Subscribe to [our changelog](/changelog)** so you can see what's being built (it's public; you can invite anyone to subscribe).
+
+- **3) Join our Tech: OHS Parents Informal Software Build Group WhatsApp channel.** (If you're not sure how, reach out to DROdio directly.)
+
+That's it! We'll help you get involved from there.
