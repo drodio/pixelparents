@@ -1,10 +1,27 @@
 import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SHARE_FIELDS,
+  canViewProfile,
   generateShareToken,
   sanitizeShareFields,
   shareFieldsOrDefault,
 } from "@/lib/share";
+
+describe("canViewProfile (the /p visibility gate)", () => {
+  const cases = [
+    // [visibility, isOwner, isOhsFamily, expected]
+    ["link", false, false, true], // anyone with the link
+    ["link", false, true, true],
+    ["ohs", false, false, false], // signed-out / non-family blocked
+    ["ohs", false, true, true], // signed-in OHS family
+    ["ohs", true, false, true], // owner always
+    ["private", false, true, false], // only the owner
+    ["private", true, false, true],
+  ] as const;
+  it.each(cases)("%s owner=%s ohs=%s -> %s", (v, isOwner, isOhsFamily, expected) => {
+    expect(canViewProfile(v, { isOwner, isOhsFamily })).toBe(expected);
+  });
+});
 
 describe("shareFieldsOrDefault", () => {
   it("falls back to defaults only when never set (null/undefined)", () => {

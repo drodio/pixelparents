@@ -1,6 +1,31 @@
 # Pixel Parents — Progress Log (branch: `main`)
 *(Most recent updates at top)*
 
+## Progress Update as of June 17, 2026 — 8:11 PM Pacific
+
+### Summary of changes since last update
+Replaced the binary share on/off with a 3-tier visibility model on the /p share
+page and the thanks/account panels: Anyone with the link / OHS Families / Just me,
+shown as a 'Privacy' segmented slider that the owner can change live.
+
+### Detail of changes made:
+- **Schema:** signups.share_visibility (link|ohs|private, default private); migrated
+  shareEnabled rows to 'link', backfilled tokens for all signups.
+- **lib/share.ts:** SHARE_VISIBILITY + helpers. **lib/share-actions.ts:**
+  setShareVisibility (signupId capability, thanks page) + setShareVisibilityByToken
+  (Clerk owner/admin auth, /p). **lib/db/signups.ts:** getSharedProfileByToken no
+  longer filters on shareEnabled (the page gates).
+- **components/visibility-control.tsx:** the slider — signed-out shows only the
+  'Anyone with the link' segment; signed-in non-owner shows all three read-only;
+  owner can change.
+- **/p page:** viewer/owner/OHS-family gate (private=owner only; ohs=signed-in
+  family; link=anyone), the ribbon replaced by the Privacy slider on the name row.
+- **thanks/account ShareSettings:** the on/off toggle replaced by the slider.
+- tsc + eslint + build clean.
+
+### Potential concerns to address:
+- 'OHS family' = any signed-in viewer who is themselves a signup. shareEnabled is
+  kept loosely in sync (= visibility != private) for any legacy reads.
 ## Progress Update as of June 17, 2026 — 7:58 PM Pacific
 
 ### Summary of changes since last update

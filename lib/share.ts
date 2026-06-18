@@ -13,6 +13,30 @@ export const SHARE_FIELDS = [
 
 export type ShareFieldKey = (typeof SHARE_FIELDS)[number]["key"];
 
+// Visibility tiers for the /p share page.
+export type ShareVisibility = "link" | "ohs" | "private";
+
+export const SHARE_VISIBILITY = [
+  { value: "link", label: "Anyone with the link" },
+  { value: "ohs", label: "OHS Families" },
+  { value: "private", label: "Just me" },
+] as const satisfies ReadonlyArray<{ value: ShareVisibility; label: string }>;
+
+export function isShareVisibility(v: unknown): v is ShareVisibility {
+  return v === "link" || v === "ohs" || v === "private";
+}
+
+// Can a viewer see a profile at the given visibility? Pure + unit-tested so the
+// security-critical gate can't silently regress.
+export function canViewProfile(
+  visibility: ShareVisibility,
+  opts: { isOwner: boolean; isOhsFamily: boolean },
+): boolean {
+  if (visibility === "link") return true;
+  if (visibility === "ohs") return opts.isOwner || opts.isOhsFamily;
+  return opts.isOwner; // "private"
+}
+
 const VALID_KEYS = new Set<string>(SHARE_FIELDS.map((f) => f.key));
 
 // Sensible default when a parent first enables sharing: profile yes, contact no.

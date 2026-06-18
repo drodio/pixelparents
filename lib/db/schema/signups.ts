@@ -42,6 +42,9 @@ export const signups = pgTable("signups", {
   shareEnabled: boolean("share_enabled").default(false).notNull(),
   shareToken: text("share_token").unique(),
   shareFields: text("share_fields").array(),
+  // Who can view the /p share page: 'link' (anyone with the link),
+  // 'ohs' (signed-in OHS families), 'private' (just the owner).
+  shareVisibility: text("share_visibility").default("private").notNull(),
 
   // Reserved for future follow-up question sets.
   extra: jsonb("extra").$type<Record<string, unknown>>().default({}),

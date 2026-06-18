@@ -1,4 +1,4 @@
-import { and, eq, desc, sql } from "drizzle-orm";
+import { eq, desc, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { signups, children, type SignupRow, type ChildRow } from "@/lib/db/schema/signups";
 
@@ -36,14 +36,15 @@ export async function getSignupForEdit(
   return { signup, kids };
 }
 
-// Public secret page: the parent + their children, only when sharing is on.
+// Public secret page: the parent + their children. Returns the row for any valid
+// token; the /p page itself applies the share_visibility gate (link/ohs/private).
 export type SharedProfile = { signup: SignupRow; kids: ChildRow[] };
 
 export async function getSharedProfileByToken(token: string): Promise<SharedProfile | null> {
   const [signup] = await getDb()
     .select()
     .from(signups)
-    .where(and(eq(signups.shareToken, token), eq(signups.shareEnabled, true)))
+    .where(eq(signups.shareToken, token))
     .limit(1);
   if (!signup) return null;
 

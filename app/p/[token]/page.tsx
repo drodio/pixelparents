@@ -1,11 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getSharedProfileByToken } from "@/lib/db/signups";
-import { shareFieldsOrDefault } from "@/lib/share";
+import { currentUser } from "@clerk/nextjs/server";
+import { primaryEmail } from "@/lib/clerk";
+import { getSharedProfileByToken, getSignupByEmail } from "@/lib/db/signups";
+import { shareFieldsOrDefault, isShareVisibility, canViewProfile } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
 import { renderCaption } from "@/lib/mentions";
 import { PhotoCarousel, type CaptionPart } from "./photo-carousel";
+import { VisibilityControl } from "@/components/visibility-control";
 
 export const dynamic = "force-dynamic";
 
@@ -60,6 +63,50 @@ export default async function SharedProfilePage({
 
   const { signup, kids } = profile;
   const visible = new Set(shareFieldsOrDefault(signup.shareFields));
+
+  // Viewer + the visibility gate (link / ohs / private).
+  const viewer = await currentUser();
+  const viewerEmail = primaryEmail(viewer);
+  const loggedIn = Boolean(viewer);
+  const isOwner = Boolean(
+    viewerEmail && viewerEmail.toLowerCase() === signup.email.toLowerCase(),
+  );
+  const visibility = isShareVisibility(signup.shareVisibility)
+    ? signup.shareVisibility
+    : "private";
+  // An "OHS family" = a signed-in viewer who is themselves a signup. Only needed
+  // for the "ohs" tier — skip the DB lookup for link/private profiles.
+  const isOhsFamily =
+    visibility === "ohs"
+      ? isOwner || (loggedIn && Boolean(viewerEmail && (await getSignupByEmail(viewerEmail))))
+      : false;
+  const canView = canViewProfile(visibility, { isOwner, isOhsFamily });
+
+  if (!canView) {
+    return (
+      <main className="flex min-h-dvh flex-col items-center justify-center gap-4 bg-black px-6 text-center text-white">
+        <h1 className="text-2xl font-semibold">This profile isn&apos;t available</h1>
+        <p className="max-w-md text-white/55">
+          {visibility === "private"
+            ? "This Pixel Parents profile is private — only the owner can view it."
+            : loggedIn
+              ? "This profile is shared with OHS families, and your account isn't recognized as one."
+              : "This profile is shared with OHS families. Sign in with your OHS family account to view it."}
+        </p>
+        {!loggedIn && visibility === "ohs" && (
+          <Link
+            href="/sign-in"
+            className="rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black hover:bg-amber-300"
+          >
+            Sign in
+          </Link>
+        )}
+        <Link href="/" className="text-sm text-white/50 hover:underline">
+          Pixel Parents →
+        </Link>
+      </main>
+    );
+  }
 
   const location = [signup.city, signup.state].filter(Boolean).join(", ");
   const interests = signup.parentInterests ?? [];
@@ -119,17 +166,19 @@ export default async function SharedProfilePage({
           className="aspect-[13/5] w-full object-cover object-top"
         />
       )}
-      <div className="border-b border-white/10 bg-white/[0.03]">
-        <div className="mx-auto flex w-full max-w-2xl items-center gap-2 px-6 py-2.5 text-sm text-white/55">
-          <span aria-hidden>🔒</span>
-          Shared privately by {signup.firstName} · Pixel Parents
-        </div>
-      </div>
-
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
-        <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-          {signup.firstName} {signup.lastName}
-        </h1>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            {signup.firstName} {signup.lastName}
+          </h1>
+          <VisibilityControl
+            id={token}
+            mode="token"
+            value={visibility}
+            editable={isOwner}
+            loggedIn={loggedIn}
+          />
+        </div>
         {visible.has("location") && location && (
           <p className="mt-1.5 text-white/55">{location}</p>
         )}
