@@ -3,11 +3,10 @@
 import Link from "next/link";
 import { Fragment, useMemo, useState } from "react";
 import { abbrState } from "@/lib/options";
-import { setAdmin, setPhotoCaption } from "./actions";
+import { setAdmin, setPhotoCaption, deleteSignup } from "./actions";
 import { Pills } from "./pills";
 import { TableWrap, thCls, tdCls } from "./ui";
-import { PencilIcon } from "./icons";
-import { DeleteButton } from "./delete-button";
+import { NameCell } from "./name-cell";
 import { compare, SortHeader, type Dir } from "./sortable";
 import { PhotoGallery, type GalleryPhoto } from "./photo-gallery";
 
@@ -100,7 +99,6 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
           <SortHeader label="Location" k="location" {...hp} />
           <SortHeader label="Parent interests" k="interests" {...hp} />
           <SortHeader label="Photos" k="photos" {...hp} />
-          <th className={thCls}>Actions</th>
           <SortHeader label="Submitted" k="submitted" {...hp} />
         </tr>
       </thead>
@@ -134,8 +132,14 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
                 </form>
               )}
             </td>
-            <th scope="row" className={`${tdCls} whitespace-nowrap text-left font-bold text-white`}>
-              {r.firstName} {r.lastName}
+            <th scope="row" className={`${tdCls} whitespace-nowrap text-left`}>
+              <NameCell
+                name={`${r.firstName} ${r.lastName}`}
+                editHref={`/admin/parents/${r.id}/edit`}
+                deleteAction={deleteSignup}
+                id={r.id}
+                confirmMessage={`Delete ${r.firstName} ${r.lastName} and any associated children? This can't be undone.`}
+              />
             </th>
             <td className={tdCls}>
               {r.kids.length === 0 ? (
@@ -199,23 +203,11 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
                 <span className="text-white/50">—</span>
               )}
             </td>
-            <td className={`${tdCls} whitespace-nowrap`}>
-              <div className="flex items-center gap-1">
-                <Link
-                  href={`/admin/parents/${r.id}/edit`}
-                  title="Edit"
-                  className="rounded-md p-1.5 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-                >
-                  <PencilIcon />
-                </Link>
-                <DeleteButton id={r.id} name={`${r.firstName} ${r.lastName}`} />
-              </div>
-            </td>
             <td className={`${tdCls} whitespace-nowrap text-white/50`}>{r.submittedLabel}</td>
           </tr>
           {expanded.has(r.id) && r.photos.length > 0 && (
             <tr className="border-t border-white/10 bg-black/40">
-              <td colSpan={14} className="px-4 py-4">
+              <td colSpan={13} className="px-4 py-4">
                 <PhotoGallery
                   photos={r.photos}
                   candidates={[
