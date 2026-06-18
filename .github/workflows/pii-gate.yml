@@ -12,7 +12,7 @@ name: PII gate
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, labeled, unlabeled]
+    types: [opened, synchronize, reopened, labeled, unlabeled, edited]
   schedule:
     - cron: "0 8 * * *" # nightly full-tree scan
   workflow_dispatch: {}
@@ -39,5 +39,8 @@ jobs:
           MODE: ${{ github.event_name == 'schedule' && 'full' || 'diff' }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          # Passed via env (NOT inlined into the run script) to avoid injection.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_BODY: ${{ github.event.pull_request.body }}
           PII_OVERRIDE: ${{ contains(github.event.pull_request.labels.*.name, 'pii-reviewed') && '1' || '' }}
         run: node scripts/pii-gate.mjs

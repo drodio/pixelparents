@@ -130,55 +130,90 @@ function allTrackedLines() {
   return out;
 }
 
-const lines = MODE === "full" ? allTrackedLines() : addedLines();
+// --- static patterns (for PR metadata, where there's no DB value to match) ---
+const PHONE_RE = /(\+?1[-. ])?\(?\d{3}\)?[-. ]\d{3}[-. ]\d{4}/;
+const FIVE55_RE = /555[-. ]?555|555[-. ]?01\d\d/; // reserved/test numbers
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+const ALLOWED_EMAIL = (e) =>
+  /@(pixelparents\.org|resend\.dev|example\.(com|org|net)|sentry\.io)$/i.test(e) ||
+  e.toLowerCase() === "drodio+ohs@gmail.com"; // public CTA
+const CONSUMER_RE =
+  /@(gmail|googlemail|yahoo|ymail|hotmail|outlook|live|msn|icloud|me|mac|aol|proton(mail)?|pm|gmx|zoho|fastmail)\./i;
 
-// --- Scan ---
 const blocks = [];
 const warns = [];
 const seen = new Set();
+const add = (bucket, where, line, type, value) => {
+  const k = `${type}:${where}:${line}:${value}`;
+  if (seen.has(k)) return;
+  seen.add(k);
+  bucket.push({ where, line, type, m: mark(value) });
+};
+
+// --- Scan changed file content ---
+const lines = MODE === "full" ? allTrackedLines() : addedLines();
 for (const { file, line, text } of lines) {
   const low = text.toLowerCase();
   const dig = digitsOf(text);
-  for (const e of emails) {
-    if (low.includes(e)) {
-      const k = `e:${file}:${line}:${e}`;
-      if (!seen.has(k)) { seen.add(k); blocks.push({ file, line, type: "email", m: mark(e) }); }
-    }
+  for (const e of emails) if (low.includes(e)) add(blocks, file, line, "email", e);
+  if (dig.length >= 10)
+    for (const p of phones) if (dig.includes(p)) add(blocks, file, line, "phone", p);
+  for (const n of names) if (low.includes(n)) add(warns, file, line, "name", n);
+}
+
+// --- Scan PR metadata: title, body, commit messages (the file diff misses these) ---
+function scanMeta(where, text) {
+  if (!text) return;
+  const low = text.toLowerCase();
+  const dig = digitsOf(text);
+  for (const e of emails) if (low.includes(e)) add(blocks, where, 0, "db-email", e);
+  for (const p of phones) if (dig.includes(p)) add(blocks, where, 0, "db-phone", p);
+  for (const n of names) if (low.includes(n)) add(warns, where, 0, "name", n);
+  const pm = text.match(PHONE_RE);
+  if (pm && !FIVE55_RE.test(pm[0])) add(blocks, where, 0, "phone-pattern", pm[0]);
+  for (const em of text.match(EMAIL_RE) || []) {
+    if (ALLOWED_EMAIL(em)) continue;
+    if (CONSUMER_RE.test(em)) add(blocks, where, 0, "email-pattern", em.toLowerCase());
+    else add(warns, where, 0, "email?", em.toLowerCase());
   }
-  if (dig.length >= 10) {
-    for (const p of phones) {
-      if (dig.includes(p)) {
-        const k = `p:${file}:${line}:${p}`;
-        if (!seen.has(k)) { seen.add(k); blocks.push({ file, line, type: "phone", m: mark(p) }); }
+}
+if (MODE !== "full") {
+  scanMeta("PR title", process.env.PR_TITLE || "");
+  scanMeta("PR body", process.env.PR_BODY || "");
+  try {
+    const base = process.env.BASE_SHA;
+    const head = process.env.HEAD_SHA || "HEAD";
+    if (base) {
+      const log = execSync(`git log --no-color --format=%H%x1f%B%x1e ${base}..${head}`, {
+        encoding: "utf8",
+        maxBuffer: 64 * 1024 * 1024,
+      });
+      for (const rec of log.split("\x1e")) {
+        const [sha, body] = rec.split("\x1f");
+        if (sha && body) scanMeta(`commit ${sha.trim().slice(0, 7)}`, body);
       }
     }
-  }
-  for (const n of names) {
-    if (low.includes(n)) {
-      const k = `n:${file}:${line}:${n}`;
-      if (!seen.has(k)) { seen.add(k); warns.push({ file, line, type: "name", m: mark(n) }); }
-    }
+  } catch {
+    /* ignore commit-log read errors */
   }
 }
 
+// --- Report (logs only file:line / source + type + sha marker, never the value) ---
+const loc = (x) => (x.line ? `${x.where}:${x.line}` : x.where);
 if (warns.length) {
-  console.log(`\n⚠️  ${warns.length} possible name match(es) (warn-only — names are noisy):`);
-  for (const w of warns) console.log(`    ${w.file}:${w.line}  name  sha:${w.m}`);
+  console.log(`\n⚠️  ${warns.length} warn-only match(es) (names / non-consumer emails — noisy):`);
+  for (const w of warns) console.log(`    ${loc(w)}  ${w.type}  sha:${w.m}`);
 }
-
 if (blocks.length) {
-  console.log(`\n✖ ${blocks.length} DB-sourced PII match(es) (email/phone) in changes:`);
-  for (const b of blocks) console.log(`    ${b.file}:${b.line}  ${b.type}  sha:${b.m}`);
+  console.log(`\n✖ ${blocks.length} PII match(es) in changed files or PR metadata:`);
+  for (const b of blocks) console.log(`    ${loc(b)}  ${b.type}  sha:${b.m}`);
   if (OVERRIDE) {
     console.log("\n'pii-reviewed' label present — overriding the block (exit 0).");
     process.exit(0);
   }
-  console.log(
-    "\nThis is real PII from the database. Remove it (use env / the DB / a placeholder).",
-  );
-  console.log("If this is a reviewed false positive, add the 'pii-reviewed' label to the PR.");
+  console.log("\nReal PII must not land in this public repo — including in PR titles/bodies and");
+  console.log("commit messages. Remove it (env / DB / placeholder), or add the 'pii-reviewed' label.");
   process.exit(1);
 }
-
-console.log("\n✓ DB-aware PII gate: no DB emails/phones found in the scanned changes.");
+console.log("\n✓ PII gate: no emails/phones found in changed files or PR metadata.");
 process.exit(0);
