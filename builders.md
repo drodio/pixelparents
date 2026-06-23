@@ -34,4 +34,4 @@ That's it! We'll help you get involved from there.
 
 - **Q: I'm not that into coding but my child really is. Can I add my child?**
 
-  A: Not to the Tech Builders WhatsApp group — it's for parents only. However, the entire reason we're meeting is to figure out what to build for your child(ren) at OHS (including things like developer APIs that allow _them_ to become better builders), so we'd love to hear more about what interests your child has. Please join the group and tell us all about them!
+  A: Not to the Tech Builders WhatsApp group — it's for parents only. However, the entire reason we're meeting is to figure out what to build for your child(ren) at OHS (including things like [developer APIs](/developers) that allow _them_ to become better builders), so we'd love to hear more about what interests your child has. Please join the group and tell us all about them!

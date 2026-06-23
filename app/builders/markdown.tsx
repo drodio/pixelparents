@@ -29,7 +29,7 @@ export default function Markdown({ content }: { content: string }) {
           <ul className="flex flex-col gap-5">{children}</ul>
         ),
         li: ({ children }) => (
-          <li className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-base leading-relaxed text-white/70 [&>strong]:text-white">
+          <li className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-base leading-relaxed text-white/70 [&>strong]:text-white [&_em]:!italic [&_em]:!text-white/70">
             {children}
           </li>
         ),
