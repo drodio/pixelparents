@@ -1,0 +1,1 @@
+ALTER TABLE "evaluations" ADD COLUMN "canonical_industries" text[] DEFAULT '{}'::text[] NOT NULL;

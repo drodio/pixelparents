@@ -1,0 +1,156 @@
+@import "tailwindcss";
+
+@theme inline {
+  /* `font-sans` (default body) → Inter; `font-display` (Tailwind utility) → Fraunces.
+     The CSS variables themselves are set on <html> by next/font in layout.tsx. */
+  --font-sans: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-display: var(--font-display), Georgia, "Times New Roman", serif;
+}
+
+body {
+  font-family: var(--font-sans);
+}
+
+/* iOS Safari zooms into any focused form control whose font-size is < 16px,
+   which on phones cuts off the right edge of the page and feels jarring. Force
+   16px on small screens so focusing an input never triggers the zoom. Scoped
+   below the `sm` breakpoint (640px) so desktop keeps its Tailwind text sizes;
+   !important is needed to beat utility classes like `text-sm`. (Keep this on a
+   plain integer max-width — Lightning CSS drops the rule if given a fractional
+   value like 639.98px.) */
+@media (max-width: 639px) {
+  input,
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* No underlined links anywhere on the site. */
+a {
+  text-decoration: none;
+}
+
+/* Inline text-link style. Gold, no underline. Add `.link` to any anchor
+   you want to render as a plain inline link. CTA buttons styled as <a>
+   should NOT use this class. */
+.link {
+  color: #dfa43a;
+  text-decoration: none;
+  transition: opacity 0.15s ease;
+}
+.link:hover {
+  opacity: 0.75;
+}
+
+/* Subtle gold pulsing glow on the splash LinkedIn URL input to draw the
+   eye to it. Intensifies slightly when the field has focus. */
+@keyframes ff-input-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 14px rgba(223, 164, 58, 0.18);
+  }
+  50% {
+    box-shadow: 0 0 22px rgba(223, 164, 58, 0.32);
+  }
+}
+.input-glow {
+  animation: ff-input-glow 2.6s ease-in-out infinite;
+}
+.input-glow:focus-within {
+  box-shadow: 0 0 26px rgba(223, 164, 58, 0.42);
+  animation: none;
+}
+
+/* Clerk UserButton dropdown: color the "Delete my profile" custom action
+   destructive-red so it visually reads as a dangerous link. Clerk v7
+   slugifies custom UserButton.Action labels for the class name, so this
+   targets "Delete my profile" specifically. The :last-of-type fallback
+   catches the same button in case the slug pattern shifts on a future
+   Clerk version (Delete is always the last custom action in our menu). */
+.cl-userButtonPopoverCustomItemButton__deleteMyProfile,
+.cl-userButtonPopoverCustomItemButton__delete-my-profile,
+.cl-userButtonPopoverActionButton__deleteMyProfile,
+.cl-userButtonPopoverActionButton__delete-my-profile,
+.cl-userButtonPopoverCustomItemButton:last-of-type {
+  color: #ef4444 !important;
+}
+.cl-userButtonPopoverCustomItemButton__deleteMyProfile:hover,
+.cl-userButtonPopoverCustomItemButton__delete-my-profile:hover,
+.cl-userButtonPopoverActionButton__deleteMyProfile:hover,
+.cl-userButtonPopoverActionButton__delete-my-profile:hover,
+.cl-userButtonPopoverCustomItemButton:last-of-type:hover {
+  color: #fca5a5 !important;
+}
+
+/* @-mention chips (TipTap MentionLink renders <a class="mention">Label</a>).
+   Gold, never wrapping mid-name — both in the compose editor and in rendered
+   content. No underline; the label carries no leading "@". */
+.mention {
+  color: #dfa43a;
+  font-weight: 500;
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+}
+.mention:hover {
+  text-decoration: underline;
+}
+
+/* The in-progress "@query" being typed (before a member is picked). TipTap's
+   suggestion plugin wraps it in this decoration span — render it gold too so the
+   text turns gold as you type, matching the picked chips. */
+.mention-suggestion-active {
+  color: #dfa43a;
+  font-weight: 500;
+}
+
+/* Rendered markdown for the /docs section (no tailwind-typography plugin). */
+.docs-prose { color: #d4d4d8; line-height: 1.7; font-size: 0.975rem; }
+.docs-prose h1 { font-size: 1.875rem; font-weight: 700; color: #fff; margin: 0 0 0.75rem; letter-spacing: -0.01em; }
+.docs-prose h2 { font-size: 1.35rem; font-weight: 600; color: #fff; margin: 2rem 0 0.6rem; }
+.docs-prose h3 { font-size: 1.1rem; font-weight: 600; color: #f4f4f5; margin: 1.5rem 0 0.4rem; }
+.docs-prose p { margin: 0.75rem 0; }
+.docs-prose ul, .docs-prose ol { margin: 0.75rem 0; padding-left: 1.4rem; }
+.docs-prose ul { list-style: disc; }
+.docs-prose ol { list-style: decimal; }
+.docs-prose li { margin: 0.3rem 0; }
+.docs-prose li::marker { color: rgba(223,164,58,0.7); }
+.docs-prose a { color: #dfa43a; text-decoration: none; }
+.docs-prose a:hover { text-decoration: underline; }
+.docs-prose strong { color: #fff; font-weight: 600; }
+.docs-prose code { background: rgba(255,255,255,0.06); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.875em; }
+.docs-prose pre { background: rgba(255,255,255,0.04); padding: 0.9rem 1rem; border-radius: 8px; overflow-x: auto; margin: 1rem 0; }
+.docs-prose pre code { background: none; padding: 0; }
+.docs-prose img { max-width: 100%; height: auto; border-radius: 8px; border: 1px solid #27272a; margin: 1rem 0; }
+.docs-prose blockquote { border-left: 3px solid rgba(223,164,58,0.5); padding-left: 1rem; margin: 1rem 0; color: #a1a1aa; }
+.docs-prose hr { border: 0; border-top: 1px solid #27272a; margin: 1.5rem 0; }
+.docs-prose table { width: 100%; border-collapse: collapse; margin: 1rem 0; }
+.docs-prose th, .docs-prose td { border: 1px solid #27272a; padding: 0.5rem 0.7rem; text-align: left; }
+
+/* Per-section copy-link anchor: hidden until the heading is hovered/focused.
+   Used by docs (.docs-prose h2/h3) and other pages via the .section-h marker
+   on a heading (see SectionHeading / SectionAnchors). */
+.docs-prose h2, .docs-prose h3, .section-h { position: relative; scroll-margin-top: 1.5rem; }
+.section-anchor {
+  display: inline-flex; align-items: center; vertical-align: middle;
+  margin-left: 0.45rem; color: rgba(223,164,58,0.85);
+  opacity: 0; transition: opacity 0.12s ease; cursor: pointer;
+}
+.docs-prose h2:hover .section-anchor, .docs-prose h3:hover .section-anchor,
+.section-h:hover .section-anchor, .section-anchor:focus-visible { opacity: 1; }
+.section-anchor:hover { color: #f4c869; text-decoration: none; }
+/* Brief highlight when arriving via a ?section= link. */
+.docs-section-target { animation: docsSectionFlash 1.6s ease; border-radius: 4px; }
+@keyframes docsSectionFlash {
+  0%, 15% { background: rgba(223,164,58,0.18); }
+  100% { background: transparent; }
+}
+
+/* Diff view for /docs suggested updates (red = removed, green = added). */
+.docs-diff { white-space: pre-wrap; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; color: #d4d4d8; }
+.docs-diff .diff-add { background: rgba(34,197,94,0.25); color: #bbf7d0; border-radius: 2px; }
+.docs-diff .diff-del { background: rgba(239,68,68,0.22); color: #fecaca; text-decoration: line-through; border-radius: 2px; }
+/* Inline legend swatches in the review header. */
+.diff-add { background: rgba(34,197,94,0.25); color: #bbf7d0; border-radius: 2px; padding: 0 3px; }
+.diff-del { background: rgba(239,68,68,0.22); color: #fecaca; border-radius: 2px; padding: 0 3px; }

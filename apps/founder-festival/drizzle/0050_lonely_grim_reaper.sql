@@ -1,0 +1,2 @@
+ALTER TABLE "claim_messages" ADD COLUMN "provider_event_id" text;--> statement-breakpoint
+CREATE UNIQUE INDEX "claim_messages_provider_event_unique" ON "claim_messages" USING btree ("provider_event_id");

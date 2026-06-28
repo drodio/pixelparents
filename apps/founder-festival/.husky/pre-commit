@@ -1,0 +1,110 @@
+#!/usr/bin/env sh
+# 1. Reminder: update PRD/<branch>.md before committing.
+# 2. Schema-drift guard: if src/db/schema.ts is staged, drizzle-kit check
+#    must find no pending migrations (otherwise the deploy would crash
+#    when reading columns that don't exist on the prod Neon branch).
+# See CLAUDE.md for the entry format.
+
+branch="$(git symbolic-ref --short HEAD 2>/dev/null || echo HEAD)"
+prd="PRD/${branch}.md"
+
+if [ ! -f "$prd" ]; then
+  echo "⚠️  No PRD log found for branch '$branch'. Create $prd before committing."
+  echo "    See CLAUDE.md for the entry format."
+  exit 1
+fi
+
+# Warn if the PRD wasn't touched in this commit.
+if ! git diff --cached --name-only | grep -q "^$prd$"; then
+  echo "⚠️  $prd is not staged. Update it with a new progress entry (newest on top),"
+  echo "    then re-run your commit. See CLAUDE.md for the format."
+  echo "    Bypass only in true emergencies (this hook does NOT pass on --no-verify)."
+  exit 1
+fi
+
+# Scoring-rubric-doc sync guard. PRD/scoring-rubric-v0.0.1.md is the
+# human-readable mirror of the scoring logic and MUST stay accurate — it has
+# repeatedly drifted out of sync with the code (dev.to, Neo, and the v0.0.8
+# technical recalibration all shipped before the doc caught up). When any
+# scoring-logic file changes, the rubric doc has to be re-checked for accuracy
+# and updated (version bump + changelog entry) if the change affects how points
+# are awarded. We enforce that by requiring the doc to be staged alongside.
+SCORING_RUBRIC_DOC="PRD/scoring-rubric-v0.0.1.md"
+staged_files="$(git diff --cached --name-only)"
+if echo "$staged_files" | grep -qE '^src/lib/(scoring|eval-pipeline|credibility-vectors|credibility|badges)\.ts$|^src/lib/enrichers/'; then
+  if ! echo "$staged_files" | grep -q "^${SCORING_RUBRIC_DOC}$"; then
+    echo "❌ Scoring logic changed, but ${SCORING_RUBRIC_DOC} is not staged."
+    echo ""
+    echo "   The scoring rubric document is the source-of-truth mirror of how the"
+    echo "   rubric awards points and MUST be kept accurate (it has drifted before)."
+    echo "   Before committing:"
+    echo "     1. RE-READ ${SCORING_RUBRIC_DOC} against this change."
+    echo "     2. If the change affects scoring (points, rules, curves, new signals,"
+    echo "        or enricher behavior the doc describes), UPDATE the doc to match —"
+    echo "        bump the version in the title and add a changelog entry."
+    echo "     3. If you have verified the doc is STILL fully accurate, record that"
+    echo "        explicitly (e.g. a 'verified accurate as of <date>' changelog line)"
+    echo "        so the sync trail stays honest."
+    echo "     4. Stage it:  git add ${SCORING_RUBRIC_DOC}  — then re-run your commit."
+    echo "   Do NOT bypass with --no-verify."
+    exit 1
+  fi
+fi
+
+# Schema-drift guard. Only fires when src/db/schema.ts is part of the commit,
+# so commits that don't touch the schema don't pay the drizzle-kit cost.
+# drizzle-kit generate prints "No schema changes, nothing to migrate" when
+# everything is in sync. Anything else means schema.ts diverges from the
+# committed migration files — and would crash prod once deployed (see the
+# 2026-05-23 leaderboard outage caused by users.clerk_image_url drift).
+if git diff --cached --name-only | grep -q "^src/db/schema.ts$"; then
+  echo "🔎 schema.ts changed — running drizzle-kit to check for missing migrations…"
+  out="$(pnpm drizzle-kit generate 2>&1 || true)"
+  if echo "$out" | grep -q "No schema changes"; then
+    : # migrations are in sync
+  else
+    echo "❌ schema.ts has changes that aren't captured by a migration file."
+    echo "   drizzle-kit just wrote a new file in drizzle/ — review it, then"
+    echo "   stage it alongside your commit:"
+    echo "       git add drizzle/ src/db/schema.ts"
+    echo "       # then re-run your commit."
+    exit 1
+  fi
+fi
+
+# Point-disclosure guard. HARD RULE (DROdio, repeatedly): user-facing reason /
+# bullet text must NEVER disclose how many POINTS a specific item is worth — no
+# "1 point per 1,000 followers", no "+27 points", no "27 points for X". The score
+# column already shows the number; the reason states the FACT only.
+#
+# Scans only ADDED lines in staged .ts/.tsx, skipping pure comment lines, the
+# model-prompt file (scoring-rubric.ts, which legitimately instructs WITH point
+# values), and tests. Patterns are tuned to avoid false positives: HN-style
+# "50+ points" (upvotes; sign AFTER) and Tailwind "pt-3" do NOT match — only
+# "point(s) per", sign-BEFORE values (+N points / -N pts), and "N points for/per".
+disclosure_re='(points?[[:space:]]+per|[+-][0-9]+[[:space:]]?(points?|pts)\b|[0-9]+[[:space:]]?points?[[:space:]]+(for|per|toward)\b)'
+disclosure_hits=""
+for f in $(git diff --cached --name-only --diff-filter=d | grep -E '\.(ts|tsx)$' | grep -vE 'scoring-rubric\.ts$|\.test\.|(^|/)tests/'); do
+  hits="$(git diff --cached -U0 --no-color -- "$f" \
+    | grep -E '^\+' | grep -vE '^\+\+\+' \
+    | sed 's/^+//' \
+    | grep -vE '^[[:space:]]*(//|\*|/\*)' \
+    | grep -inE "$disclosure_re" || true)"
+  if [ -n "$hits" ]; then
+    disclosure_hits="${disclosure_hits}
+  ${f}:
+${hits}"
+  fi
+done
+if [ -n "$disclosure_hits" ]; then
+  echo "❌ Point-disclosure guard: a user-facing string reveals how many POINTS an item is worth."
+  echo "   HARD RULE: reason/bullet text must NEVER state point values or formulas"
+  echo "   (e.g. \"1 point per 1,000 followers\", \"+27 points\", \"27 points for X\")."
+  echo "   State the FACT only — the score column already shows the number. Reword, then re-commit."
+  echo "   Offending added lines:"
+  printf '%s\n' "$disclosure_hits"
+  echo "   (Exempt: src/lib/scoring-rubric.ts model prompt. HN-style \"50+ points\" upvotes don't match.)"
+  exit 1
+fi
+
+exit 0

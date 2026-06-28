@@ -12,6 +12,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Vendored snapshot copy — kept in-repo for reference, not part of this build.
+    "apps/**",
   ]),
 ]);
 

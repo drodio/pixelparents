@@ -1,0 +1,23 @@
+## Progress Update as of 2026-05-28 11:40 AM Pacific
+*(Most recent updates at top)*
+
+### Summary of changes since last update
+Adds an email-invite flow on /admin/access. A user with the `approve_admin_requests` grant (which super-admins always hold) can enter an email + role, hit Invite, and the recipient gets a Resend email with a single-use 14-day link. The link enforces that the recipient signs in with that exact email — case-insensitive match against verified Clerk emails — before access is granted.
+
+### Detail of changes made:
+- `src/db/schema.ts`: new `admin_invites` table — id, email (lowercased), role_id (nullable=full admin), invited_by_email, invited_by_clerk_user_id, token (unique-indexed, 32 random bytes base64url-encoded), created_at, expires_at (default +14d), redeemed_at, redeemed_by_clerk_user_id. Migration `drizzle/0026_narrow_captain_stacy.sql`. Already applied to the dev Neon branch; **prod migration is pending the user's authorization** — see "Concerns" below.
+- `src/lib/admin-invites.ts`: service layer. `createAdminInvite()` validates email shape + role existence, generates the token, stores the row, returns it. `redeemAdminInvite()` validates the user is signed in with the invited email (case-insensitive against verified Clerk emails), atomically marks the invite redeemed (gated by `WHERE redeemedAt IS NULL` to prevent races), and upserts `admin_access` to status="approved" with the role assigned.
+- `src/lib/admin-invite-email.ts`: pure render + thin Resend send wrapper. Subject and body match the user's spec verbatim — "DROdio has invited you to be a Festival admin" + the two-paragraph body with the secret link, the booking URL, and the signature.
+- `src/app/api/admin/invites/route.ts`: POST creates + sends. Gated by `requireGrant("approve_admin_requests")`. Body { email, roleId }. Returns the invite id + expiresAt on success. Errors surface as typed strings the client maps to friendly copy.
+- `src/app/api/admin/invites/redeem/route.ts`: POST redeems by token. Returns role name + inviter email on success; 403 with `invitedEmail` field on email mismatch so the client can show a useful "this invite was sent to X" message.
+- `src/components/admin/InviteAdmin.tsx`: collapsed-by-default form on /admin/access. Email input + role select (matching the existing AddAdmin's options including "no role / full access") + Invite button. Shows the "sent to X, expires Y" confirmation inline.
+- `src/components/admin/AcceptInvite.tsx`: client component for the landing page. Fires the redeem POST on mount and renders one of: redeeming spinner, success card with "Go to /admin", or a typed error (email_mismatch, expired, already_redeemed, not_found, generic).
+- `src/app/(authed)/admin/accept-invite/page.tsx`: thin server wrapper. Requires the user to be signed in (the (authed) layout enforces this) and forwards the token to <AcceptInvite>.
+- Wired into `src/app/(authed)/admin/access/page.tsx` above the existing AddAdmin block.
+- Tests: `tests/lib/admin-invite-email.test.ts` (3 — subject/body shape, HTML escaping, URL escape) and `tests/app/admin-invites.test.ts` (8 — invalid email, invalid role, token uniqueness + lowercase email, unknown token, email mismatch, case-insensitive match → approved row, one-time-use, expired). All 11 pass. Suite is guarded with `describe.skipIf(IS_PROD_DB)`.
+
+### Potential concerns to address:
+- **Prod migration is the gating item.** `drizzle/0026_narrow_captain_stacy.sql` has been applied to the dev Neon branch but NOT to prod. When this PR merges, the new API routes will reference a table that doesn't exist on prod and will 500. The migration is structural-only (one new table, no data touched) so it's safe; just needs your explicit "apply 0026 to prod" so I can run it.
+- **Email deliverability.** The send goes through the existing Resend integration with FROM = "DROdio <drodio@festival.so>". If the Resend domain isn't verified for festival.so, the email could get filtered or rejected. Probably already verified given the other email flows; worth confirming on first real invite.
+- **Token enumeration.** Tokens are 32-byte CSPRNG output (base64url ≈ 43 chars). The keyspace is large enough that guessing is infeasible. Tokens are stored in plaintext (not hashed) — acceptable because they're one-time-use, expire after 14 days, and the email-match guard means stealing a token doesn't let you become an admin unless you can also sign into Clerk with the invited email.
+- **Email mismatch UX.** Today the page tells the user "this invite was sent to X, sign in with that account instead." A future improvement: include a one-click "sign out and try again" button. Out of scope for v1.

@@ -1,0 +1,1 @@
+CREATE INDEX "evaluations_company_stage_idx" ON "evaluations" USING btree ("company_stage");

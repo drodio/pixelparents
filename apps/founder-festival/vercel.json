@@ -1,0 +1,15 @@
+{
+  "crons": [
+    { "path": "/api/cron/refresh-mm", "schedule": "0 3 * * 0" },
+    { "path": "/api/cron/scoring-tick", "schedule": "* * * * *" },
+    { "path": "/api/cron/find-email-tick", "schedule": "* * * * *" },
+    { "path": "/api/cron/lifecycle-emails", "schedule": "*/2 * * * *" },
+    { "path": "/api/cron/jwt-check", "schedule": "0 16 * * 1" },
+    { "path": "/api/cron/changelog-notify", "schedule": "*/15 * * * *" },
+    { "path": "/api/cron/bd-async-sweep", "schedule": "*/3 * * * *" },
+    { "path": "/api/cron/daily-metrics", "schedule": "0 10 * * *" },
+    { "path": "/api/cron/event-email-tick", "schedule": "* * * * *" },
+    { "path": "/api/cron/chief-insights-sweep", "schedule": "* * * * *" },
+    { "path": "/api/cron/chief-dossier-sweep", "schedule": "* * * * *" }
+  ]
+}

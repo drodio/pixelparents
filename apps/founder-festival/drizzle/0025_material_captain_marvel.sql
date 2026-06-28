@@ -1,0 +1,1 @@
+ALTER TABLE "score_items" ADD COLUMN "citations" jsonb DEFAULT '[]'::jsonb NOT NULL;
