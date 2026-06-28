@@ -1,0 +1,1 @@
+ALTER TABLE "message_campaigns" ADD COLUMN "bcc_address" text;

@@ -1,0 +1,1 @@
+ALTER TABLE "event_photos" ADD COLUMN "caption_manual" boolean DEFAULT false NOT NULL;

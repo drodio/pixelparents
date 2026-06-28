@@ -1,0 +1,1 @@
+ALTER TABLE "evaluations" ADD COLUMN "manual_profile_hint" text;

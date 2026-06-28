@@ -1,0 +1,955 @@
+[
+  {
+    "dimension": "security:auth-authorization",
+    "summary": "The authorization model is, on the whole, disciplined and consistent: every mutating/data-exposing API route self-gates (the middleware only protects /dashboard), admin routes use requireGrant/isAdmin/isSuperAdmin plus RBAC scope guards, owner routes use isEvalOwner, account/developer routes scope all queries to the session userId (no IDOR), and public routes are rate-limited with a global circuit-breaker. The principal weakness is the claim/ownership boundary: the LinkedIn name-only match grants full \"high\"-confidence ownership on an attacker-controllable display name, and that ownership unlocks every owner-mutating route (rescore, score-items, badges, recommendations).",
+    "findings": [
+      {
+        "title": "LinkedIn claim grants full profile ownership on attacker-controllable name match alone",
+        "severity": "high",
+        "category": "security",
+        "effort": "M",
+        "files": [
+          "src/lib/identity-match.ts:97-101",
+          "src/lib/identity-match.ts:147-159",
+          "src/app/(authed)/claim/callback/route.ts:55-92"
+        ],
+        "evidence": "In matchConfidence(), the LinkedIn provider Tier B succeeds purely on name overlap: `if (profile?.fullName && claim.firstName && claim.lastName) { if (linkedinNameMatch(`${claim.firstName} ${claim.lastName}`, profile.fullName)) return { kind: 'match', signal: 'linkedin-name-match' }; }`. linkedinNameMatch only requires the last token (surname) to match plus ONE shared given-name token. claim.firstName/lastName come from toClerkClaim(user) reading `user.firstName`/`user.lastName` — Clerk profile fields the user can edit freely. On a match the callback writes `matchConfidence: 'high'` into the users row, which isEvalOwner() treats as full ownership.",
+        "impact": "Any attacker can sign up (LinkedIn OAuth or any session where they control first/last name), set their name to a target founder's name, visit /claim/callback?e=<victimEvalId>, and be granted high-confidence ownership of the victim's profile. Ownership unlocks /api/rescore (re-roll/grief the victim's score, real Exa+Claude spend), /api/score-items/[id] and /api/badges (rewrite the victim's breakdown to 'pending'), /api/recommendations + visibility (mutate/expose private recommendation rows), and /api/account/* edits (slug/nickname/location) on the claimed eval. Names are public and non-unique, so this is a trivial account-takeover of any leaderboard profile.",
+        "recommendation": "Treat name-only as low/medium confidence, not 'high'. Require a stronger second factor for LinkedIn ownership: gate Tier B behind the email tiers (Tier A) actually firing, or store matchConfidence:'medium' for name-only and require an additional verified signal (verified email domain match, or admin review) before unlocking owner-mutating routes. At minimum, isEvalOwner should require 'high' (drop 'medium') and 'high' should never be reachable by name alone.",
+        "verification": {
+          "confirmed": true,
+          "severityAdjusted": "high",
+          "reasoning": "Traced the full exploit chain against the real code and confirmed every link.\n\n1) Attacker-controllable name source: src/app/(authed)/claim/callback/route.ts:120-132 `toClerkClaim()` builds the linkedin claim from `user.firstName`/`user.lastName` — the top-level Clerk user profile fields, which are user-editable. The codebase itself documents this in src/lib/welcome-emails.ts:35 (\"Clerk's `firstName` is user-controlled\"). The provider is set to \"linkedin\" solely because a LinkedIn external account is linked (line 124, `accounts.find(a => a.provider.includes(\"linkedin\"))`), which is independent of the editable name fields.\n\n2) The name-only Tier B is reachable with no identity binding: src/lib/identity-match.ts:97-101. Tier A (email, line 86-89) is attempted first but on failure execution falls through to Tier B, which only requires `profile?.fullName && claim.firstName && claim.lastName`. The `_evaluationLinkedinUrl` arg is explicitly ignored (line 81), so there is no vanity-URL verification. There is no requirement that the attacker's verified email relate to the target.\n\n3) `linkedinNameMatch` (identity-match.ts:147-159) is loose: it requires only surname (last non-trivial token) equality plus ONE shared given-name token. For common/non-unique names this is trivially forgeable (e.g. firstName=\"John\", lastName=\"Smith\"). Names on the leaderboard are public.\n\n4) On match, callback lines 76 & 87 upsert the `users` row with `matchConfidence: \"high\"`, conflict target `clerkUserId` — so a single attacker account can be re-pointed at any victim eval by hitting /claim/callback?e=<victimEvalId>.\n\n5) `isEvalOwner` (src/lib/authz.ts:21-24) returns true for high|medium, and is the sole ownership gate on /api/rescore (route.ts:39-45; its own comment warns this gate is what stops anyone re-rolling/griefing a stranger's score with real Exa+Claude spend), plus /api/recommendations, /api/recommendations/visibility, /api/score-items, /api/score-items/[id], /api/badges (all confirmed via grep to check matchConfidence high|medium).\n\nMitigating controls considered but found insufficient: (a) src/lib/auto-claim.ts is conservative (exact GitHub username / exact LinkedIn URL / exact verified email only, no name fuzzing) — but it does NOT gate /claim/callback, which is the vulnerable path and is directly reachable. (b) src/proxy.ts only force-protects /dashboard, so the callback route is reachable by any authenticated session. (c) Rate limiting on rescore (rs:<userId>, 25/day) caps abuse volume but does not prevent the takeover itself; account/recommendation mutations have no such cap.\n\nNo control refutes the finding. Severity high is appropriate: trivial account-takeover of any leaderboard profile with attacker-controlled, public, non-unique data; unlocks data mutation, private-recommendation exposure, and attacker-funded compute spend on the victim's eval.",
+          "exploit": "1) Sign up to the app via LinkedIn OAuth (so a LinkedIn external account is linked to the Clerk user). 2) In Clerk account settings, edit the editable profile firstName/lastName to the target founder's public leaderboard name (e.g. firstName=\"John\", lastName=\"Smith\", matching victim eval `fullName`). 3) GET /claim/callback?e=<victimEvalId> while signed in. toClerkClaim() returns {provider:\"linkedin\", firstName, lastName}; matchConfidence() Tier A (email) fails, Tier B calls linkedinNameMatch(\"John Smith\",\"John Smith\") -> surname match + shared \"john\" -> {kind:\"match\", signal:\"linkedin-name-match\"}. 4) Callback upserts users row with matchConfidence:\"high\", evaluationId=victimEvalId. 5) isEvalOwner(attackerClerkId, victimEvalId) now returns true, so attacker can POST /api/rescore (real Exa+Claude spend, overwrites victim score), mutate /api/recommendations + /api/recommendations/visibility, rewrite /api/score-items and /api/badges, and edit /api/account/* for the victim profile."
+        }
+      },
+      {
+        "title": "Claim callback uses a possibly-unverified, possibly-non-primary Clerk email for the email-match tiers",
+        "severity": "medium",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/(authed)/claim/callback/route.ts:128",
+          "src/app/(authed)/claim/callback/route.ts:140",
+          "src/lib/identity-match.ts:50-77"
+        ],
+        "evidence": "toClerkClaim() builds the claim email as `user.emailAddresses?.[0]?.emailAddress` for both the linkedin and email providers — it does NOT filter on `verification?.status === 'verified'` and just takes the first address in the array. matchConfidence() then runs checkEmailTiers() against it: Tier 1 exact-matches the profile's publicEmail and Tier 2 matches company-domain + name, both yielding matchConfidence:'high' ownership. Contrast with auto-claim.ts (pickVerifiedEmail) and admin.ts (verifiedEmails) which deliberately require verified status.",
+        "impact": "If a Clerk instance permits adding an email without forcing verification before it lands in emailAddresses[0] (or if a secondary unverified address sorts first), a user could add the victim's publicEmail (or a same-domain address whose local-part matches the victim's name) as an unverified address and claim 'high'-confidence ownership without proving control of the inbox. This is the exact escalation admin.ts warns against ('an unverified email is just a string the user typed').",
+        "recommendation": "In toClerkClaim(), select the email the same way the rest of the codebase does: only verified addresses, preferring the primary (`user.primaryEmailAddressId`). Reuse a shared helper (e.g. the verifiedEmails/pickVerifiedEmail logic) so the claim path can never diverge from the admin path on this check.",
+        "verification": null
+      },
+      {
+        "title": "Event-apply endpoint is unauthenticated, unthrottled, and trusts a client-supplied email",
+        "severity": "medium",
+        "category": "security",
+        "effort": "M",
+        "files": [
+          "src/app/api/events/[slug]/apply/route.ts:21-92",
+          "src/app/api/events/[slug]/apply/route.ts:90"
+        ],
+        "evidence": "POST /api/events/[slug]/apply has no auth() call, no isEvalOwner check, and no rate-limit/circuit-breaker (unlike every other public route — /api/eval, /api/redeem, /api/find-handle all call checkAndIncrementRateLimit + withinGlobalDailyLimit). It accepts an arbitrary `evaluationId` and `email` from the body, inserts an eventApplicants row with that email, then calls `await processEventApplicantAutoRule(newApplicant.id)` which can auto-admit and trigger downstream work. The only guard is a per-(event,linkedinUrl) dedupe.",
+        "impact": "Anyone can submit any scored person (any evaluationId) to any open event under an arbitrary email they control, attaching themselves to events they weren't invited to and forging the applicant's contact email (which may receive event/badge emails). With no rate limit, an attacker can mass-enroll every evaluation into an event or flood the applicants table and the auto-rule processing path, and any spend inside processEventApplicantAutoRule is uncapped by the global breaker the other public routes share.",
+        "recommendation": "Add per-IP + global rate limiting consistent with the other public POST routes. Do not trust the body email when the eval is claimed — derive it from the eval/owner, or require the submitter to be the eval owner (isEvalOwner) for self-application while keeping an admin/invite path for adding others. Validate that processEventApplicantAutoRule cannot incur unbounded external spend from anonymous callers.",
+        "verification": null
+      },
+      {
+        "title": "GitHub OAuth username treated as 'high' confidence without confirming Clerk verified the account",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/auto-claim.ts:32-50",
+          "src/app/(authed)/claim/callback/route.ts:133-139",
+          "src/lib/identity-match.ts:105-113"
+        ],
+        "evidence": "Both tryAutoClaim() and toClerkClaim() read the GitHub username off `externalAccounts` (`acct.username` / `(github as { username?: string }).username`) and feed it to matchConfidence(), which returns matchConfidence:'high' on a case-insensitive equality with profile.githubUsername. Neither path checks `acct.verification?.status === 'verified'` on the external account before trusting it.",
+        "impact": "In normal Clerk OAuth this is verified by construction, so risk is low. But the code relies on an implicit invariant rather than asserting it; if a Clerk config change or a non-OAuth external-account linking path ever populates an unverified username, an attacker could claim a profile whose githubUsername matches a handle they assert but don't control.",
+        "recommendation": "Explicitly require `verification?.status === 'verified'` on the GitHub external account before using its username for a claim, mirroring the verified-email discipline already enforced in admin.ts and auto-claim's pickVerifiedEmail. Fail closed if the account isn't verified.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "security:api-input-injection",
+    "summary": "The codebase is notably disciplined on the classic risks: every raw-SQL site uses drizzle parameterized placeholders (no string concatenation), the one sql.raw call only receives hardcoded badge keys, LinkedIn-URL validation is strict enough to prevent SSRF, account/profile PATCH routes use explicit field allowlists (no mass-assignment), and the per-IP/global rate-limit design correctly treats only x-vercel-forwarded-for as trustworthy. The main weakness is the unauthenticated, unthrottled event-application endpoint, which accepts an attacker-chosen recipient email and can be driven to send emails and create unbounded rows.",
+    "findings": [
+      {
+        "title": "Unauthenticated event-apply endpoint is an open email relay + row-flood vector",
+        "severity": "high",
+        "category": "security",
+        "effort": "M",
+        "files": [
+          "src/app/api/events/[slug]/apply/route.ts:21",
+          "src/app/api/events/[slug]/apply/route.ts:84",
+          "src/lib/events.ts:87"
+        ],
+        "evidence": "POST has no auth() check, no requireGrant, no checkAndIncrementRateLimit, and no global circuit-breaker. The body email is only checked for truthiness (`if (!body?.evaluationId || !isUuid(...) || !body?.email)`) — never validated as an email format — then stored verbatim: `.values({ ...email: body.email, status: 'scored' })`. Downstream transitions email that stored address: in src/lib/events.ts `to: current.email` is passed to sendFutureEventsEmail / approval mail.",
+        "impact": "Any anonymous caller who knows (or enumerates) a real evaluationId can register an application for any event with an arbitrary recipient email. The auto-approval rule (processEventApplicantAutoRule) or a later admin bulk action then sends Founder-Festival branded emails to attacker-chosen addresses — using the app as a spam/phishing relay and damaging sender reputation. With no rate limit, the same endpoint also lets an attacker create unbounded event_applicants rows (storage/cost DoS) and inflate event metrics.",
+        "recommendation": "Add a per-IP daily limit and a global circuit-breaker (mirror /api/eval): `checkAndIncrementRateLimit(`apply:${ip}`, N)` + `withinGlobalDailyLimit('apply', M)`. Validate email with a real format check (reject non-RFC addresses) and bound length. Strongly consider requiring the applicant to prove control of the email (the same email-eligible / claim flow already exists) before any outbound mail is sent to it, or only send to emails already verified on the matched evaluation/claim — never to a raw request-body value.",
+        "verification": {
+          "confirmed": true,
+          "severityAdjusted": "high",
+          "reasoning": "Traced the full chain against the real code. (1) src/proxy.ts:4 only force-protects /dashboard(.*); POST /api/events/[slug]/apply has NO auth(), NO requireGrant, NO checkAndIncrementRateLimit, NO circuit-breaker (route.ts:21-93). (2) The body email is validated only for truthiness at route.ts:29 (`!body?.email`) — never format-checked — then stored verbatim at route.ts:83. (3) Valid evaluationIds are not even hard to enumerate: the same-origin public endpoint src/app/api/leaderboard/page/route.ts returns LeaderboardRow rows whose `id` IS evaluations.id (src/lib/leaderboard.ts:222), so an attacker harvests real IDs directly. (4) Spam relay: route.ts:90 calls processEventApplicantAutoRule; for events with approvalMode 'auto'/'hybrid' a criteria match calls transitionApplicant(approved) (scoring-tick/route.ts:58-66) → src/lib/events.ts:93-100 sendApprovedEmail({ to: current.email }) which sends a Founder-Festival-branded mail via Resend with a fixed FROM to the attacker-chosen address. (5) Row-flood DoS: the only throttle is the per-(eventId, linkedinUrl) dedupe at route.ts:52-59; an attacker varying evaluationId (each maps to a distinct linkedinUrl) bypasses it, creating unbounded event_applicants rows with no rate limit. Mitigating nuances the finder partly glossed: default approvalMode is 'manual' (schema.ts:592), where processEventApplicantAutoRule is a no-op (scoring-tick/route.ts:44), so inline auto-email needs a non-default event config; for manual events the malicious recipient is sent only on a later admin bulk action. The finder explicitly acknowledged the 'later admin bulk action' path, and any event configured auto/hybrid is an immediate relay. These caveats lower neither the relay nor the DoS to non-issues. High stands.",
+          "exploit": "1) GET /api/leaderboard/page to harvest a real evaluationId (LeaderboardRow.id === evaluations.id). 2) For any non-draft, non-closed event slug whose approvalMode is auto/hybrid: POST /api/events/<slug>/apply with JSON {\"evaluationId\":\"<harvested-uuid>\",\"email\":\"victim@attacker-target.com\"} — no auth header. 3) Route inserts applicant (status 'scored') and runs processEventApplicantAutoRule; if criteria pass, transitionApplicant('approved') fires sendApprovedEmail({to:'victim@attacker-target.com'}) — Founder-Festival-branded Resend mail to attacker-chosen recipient. For manual events the same insert lands an attacker-controlled email that an admin bulk-approve later mails. Repeat with different harvested evaluationIds (distinct linkedinUrls) to bypass the (eventId,linkedinUrl) dedupe and flood event_applicants rows with no rate limit."
+        }
+      },
+      {
+        "title": "bulkTransition trusts an unvalidated status string from the request body",
+        "severity": "low",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/app/api/admin/events/[id]/applicants/bulk/route.ts:9",
+          "src/app/api/admin/events/[id]/applicants/bulk/route.ts:26"
+        ],
+        "evidence": "type Body = { applicantIds: string[]; status: ApplicantStatus; reason?: string } — `status` is a TypeScript cast only (`(await req.json()) as Body`); the handler validates applicantIds is a non-empty array but passes `toStatus: body.status` straight into bulkTransition with no runtime check against the allowed ApplicantStatus values.",
+        "impact": "An authorized but careless/over-privileged caller (or a malformed client) can drive applicants into an arbitrary/unexpected status string, corrupting state-machine invariants and any status-keyed logic (emails, counts). Gated behind requireGrant('manage_events') so blast radius is admins, not the public.",
+        "recommendation": "Validate body.status against the ApplicantStatus enum at the top of the handler and return 400 on mismatch, e.g. `if (!APPLICANT_STATUSES.includes(body.status)) return 400`. Apply the same to the per-applicant route.",
+        "verification": null
+      },
+      {
+        "title": "Recommendations POST stores unbounded, unvalidated category/text from owner",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/api/recommendations/route.ts:41",
+          "src/app/api/recommendations/route.ts:57"
+        ],
+        "evidence": "Only rating (1..4) and evaluationId/itemId presence are validated. `category` and `text` are written straight through — `category: category ?? null, editedText: text ?? null` — with no length cap and no allowlist on `category`. itemId is likewise free-form (the comment notes clients send `custom-<random>`).",
+        "impact": "An authenticated owner of an eval can store arbitrarily large text blobs (storage/cost growth, oversized payloads on the public profile render) and arbitrary `category` values that downstream code may assume come from a fixed set. React JSX escaping prevents stored XSS on render, so this is integrity/DoS-flavored rather than injection.",
+        "recommendation": "Cap text/category length (e.g. text <= 2000 chars, category <= 64) and validate category against the known category set (reject otherwise). Bound itemId length too.",
+        "verification": null
+      },
+      {
+        "title": "/api/v1/score consumes a per-key rate-limit slot on free cache hits",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/app/api/v1/score/route.ts:60",
+          "src/app/api/v1/score/route.ts:65"
+        ],
+        "evidence": "checkAndIncrementRateLimit(`apikey:${key.keyId}`, PER_DAY_LIMIT) is called and increments BEFORE the cache lookup `const cached = await fetchScorePayload(url)`. The header comment says 'Cache hit → free', and the sibling /api/eval route deliberately checks the cache first and returns without consuming a slot.",
+        "impact": "Cache hits (which cost nothing) still burn the developer's per-key daily quota, so legitimate high-cache-hit-rate integrations hit 429 far sooner than the documented 1000/day budget implies. Not a security hole, but an availability/contract inconsistency between the two scoring paths.",
+        "recommendation": "Move the cache lookup before checkAndIncrementRateLimit (return cached payloads without incrementing), matching /api/eval. Keep the increment on the miss/paid path only.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "security:billing-credits",
+    "summary": "The core credit primitives are well-built: reserveCredits uses a single conditional UPDATE (race-proof against oversell) and topUpCredits gates idempotency on a UNIQUE index over stripe_payment_intent_id (retry-safe, no double-grant). The main money risk is on the refund side — the bulk-job hold reconciliation in the every-minute scoring-tick cron is not concurrency-guarded and can double-refund a credit hold when overlapping ticks complete the same job, and the Stripe webhook ignores refund/dispute events so charged-back money keeps its credits.",
+    "findings": [
+      {
+        "title": "Bulk-job credit-hold reconciliation can double-refund under overlapping cron ticks",
+        "severity": "high",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/app/api/cron/scoring-tick/route.ts:288-334",
+          "src/lib/credits.ts:64-78"
+        ],
+        "evidence": "The job-completion block reads the job, then refunds, then zeroes the hold as three separate statements: `const [j] = await db.select({... creditHoldCents ...})` then `if (j && j.status !== \"completed\" && (j.creditHoldCents ?? 0) > 0 ...) { ... if (refundCents > 0) await refundCredits(...); await db.update(scoringJobs).set({ creditHoldCents: 0 }) ... }`. The guard against re-running is `j.status !== \"completed\"`, but the status flip to completed (line 311-321) is unconditional (`.where(eq(scoringJobs.id, jobId))`, no `status != completed` predicate) and is a separate statement from the read. The file itself documents that ticks overlap: line 104 — 'prod fires this every minute, but a tick runs ~200s'. Item claiming is protected by FOR UPDATE SKIP LOCKED, but the per-jobId completion block at the bottom is not — two ticks that both drove the last items of the same job to terminal can both see `tally.pending === 0`, both read `status='running'` and a non-zero `creditHoldCents`, and both call `refundCredits`. refundCredits is an unconditional `balanceCents + cents` with no idempotency key.",
+        "impact": "When ADMIN_CREDIT_ENFORCEMENT is on, a job's hold can be refunded twice (or more), minting credits the user never paid for. Two duplicate 'refund' ledger rows are written and the balance is inflated by the refund amount. This is real money leaking out of the credit system.",
+        "recommendation": "Make the completion transition the idempotency gate: flip status with a conditional UPDATE that returns the row only on the first transition — e.g. `UPDATE scoring_jobs SET status='completed', credit_hold_cents=0, ... WHERE id=$1 AND status <> 'completed' RETURNING credit_hold_cents, estimated_cents, actual_cents, created_by_clerk_user_id` — and only compute/apply the refund when that UPDATE returns a row (i.e. this tick won the transition). This collapses the read, the refund decision, and the hold-zeroing into one atomic claim so exactly one tick refunds.",
+        "verification": null
+      },
+      {
+        "title": "Stripe webhook ignores refunds and disputes — charged-back money keeps its credits",
+        "severity": "high",
+        "category": "security",
+        "effort": "M",
+        "files": [
+          "src/app/api/stripe/webhook/route.ts:24-45",
+          "src/lib/credits.ts:83-119"
+        ],
+        "evidence": "The webhook handler only branches on `event.type === \"checkout.session.completed\"`. There is no handler for `charge.refunded`, `charge.dispute.created`/`closed`, or `payment_intent.payment_failed`. topUpCredits grants credits keyed on payment_intent and there is no inverse path that debits credits when that payment is later refunded or disputed.",
+        "impact": "A buyer can purchase a credit pack, spend or hoard the credits, then refund/chargeback via Stripe. The money returns to the buyer but the credits remain on their balance — net loss equal to the pack value, repeatable. This is a classic carding/refund-abuse vector against a prepaid balance.",
+        "recommendation": "Handle `charge.refunded` and `charge.dispute.created` in the webhook: look up the topup ledger row by payment_intent and reverse it (deduct the granted cents, write a 'chargeback'/'refund_reversal' ledger row, idempotent on a `${pi}:refund` key via the same UNIQUE-index pattern). Decide policy for balances that have already been spent below the reversal amount (allow negative, or flag the account). At minimum, alert an operator on these events so they aren't silently dropped.",
+        "verification": {
+          "confirmed": true,
+          "severityAdjusted": "high",
+          "reasoning": "Verified against the real code. src/app/api/stripe/webhook/route.ts has exactly one event branch: `if (event.type === \"checkout.session.completed\")` (line 24). Any other event type — `charge.refunded`, `charge.dispute.created/closed`, `payment_intent.payment_failed` — falls straight through to `return NextResponse.json({ received: true })` (line 45) with no action. I grepped the whole codebase (src/**) for refund/dispute/chargeback handling: the only inverse-credit function is `refundCredits` (credits.ts:64-78), and its only callers are src/app/api/v1/score/route.ts:104 and src/app/api/cron/scoring-tick/route.ts:331 — both internal scoring-failure reversals, neither wired to Stripe. The ledger `reason` enum (schema.ts:824-825) is only 'topup' | 'score_debit' | 'refund', confirming there is no Stripe-reversal concept. There is exactly one webhook route (the two other Stripe files, admin/credits/checkout and developers/checkout, are checkout-session creators, not webhook handlers — confirmed no constructEvent/event.type in them). So topUpCredits grants credits on payment, and when that same payment is later refunded/disputed the credits are never debited. The finder missed no mitigating control. Severity: high, not critical — credits are spendable on LLM/Exa scoring compute (value extraction), not withdrawable cash, and a real chargeback incurs a Stripe dispute fee plus ban risk, which bounds (but does not eliminate) repeatable abuse.",
+          "exploit": "1) Buyer completes a credit-pack Stripe checkout; `checkout.session.completed` fires; topUpCredits grants credits keyed on payment_intent (webhook/route.ts:42). 2) Buyer spends or hoards credits. 3) Buyer requests a refund or files a chargeback in Stripe. 4) Stripe sends `charge.refunded` / `charge.dispute.created`; the webhook signature-verifies it then ignores it (no matching branch, returns {received:true}). 5) Money returns to buyer; credit balance is untouched. Repeatable per pack. No inverse debit path exists anywhere (grep of src/** for charge.refunded/dispute/chargeback/reverse-topup returns nothing relevant)."
+        }
+      },
+      {
+        "title": "v1/score refunds the full price even when scoring succeeded (post-score throw)",
+        "severity": "medium",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/app/api/v1/score/route.ts:93-106"
+        ],
+        "evidence": "The try block wraps the scoring AND the post-processing: `const result = await runEval(...); await linkDebitEvaluation(...); const payload = await fetchScorePayload(...); return ...` and the catch does `await refundCredits(key.clerkUserId, price, null);`. If runEval succeeds (we spent real Exa+Claude money and persisted an evaluation) but linkDebitEvaluation or fetchScorePayload throws, control falls into the catch and the full price is refunded.",
+        "impact": "A failure in the cheap bookkeeping/serialization steps after a successful, already-paid-for score causes the customer to be refunded for work we actually performed and paid our vendors for. The evaluation also persists (cacheable), so a subsequent request hits the free cache — net: we eat the full Exa+Claude cost. Low-frequency but a direct revenue leak.",
+        "recommendation": "Scope the catch to runEval only. Move linkDebitEvaluation/fetchScorePayload after the try, or wrap only `runEval` in the try/refund and let the post-score steps fail without triggering a refund (the debit already stands; worst case return a 200 with the score even if the cosmetic payload fetch fails). Alternatively, on a post-score error, link the debit to the eval that was created rather than refunding.",
+        "verification": null
+      },
+      {
+        "title": "topUpCredits backfill of balance_after_cents is non-atomic with the balance upsert",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/credits.ts:93-119"
+        ],
+        "evidence": "After the idempotent ledger insert and the `INSERT ... ON CONFLICT DO UPDATE` on credit_balances returning the new balance, the code does a third statement `await db.update(creditLedger).set({ balanceAfterCents: balanceAfter }).where(...)`. The three statements are not in a transaction. The ledger 'topup' row is briefly persisted with balanceAfterCents=0, and if the process dies between the balance upsert and the backfill, the audit column stays 0 forever (the actual credit grant is correct, only the audit snapshot is wrong).",
+        "impact": "Audit/ledger reconciliation (balanceAfterCents is the running-balance audit trail) can show a 0 or stale snapshot for a topup row even though the balance was correctly incremented. No money is lost; it weakens the auditability the ledger exists to provide.",
+        "recommendation": "Wrap the ledger insert, balance upsert, and balanceAfter backfill in a single db.transaction (or compute balanceAfter in the balance UPDATE's RETURNING and insert the ledger row with the correct value in one statement using a CTE). The same applies to reserveCredits/refundCredits, which split the balance update and ledger insert across two statements.",
+        "verification": null
+      },
+      {
+        "title": "find-email debit is non-idempotent; a re-queue charges $0.05 again with no per-lookup dedupe key",
+        "severity": "low",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/app/api/cron/find-email-tick/route.ts:94-101",
+          "src/lib/credits.ts:38-55"
+        ],
+        "evidence": "On a billable hit the cron calls `reserveCreditsFor(e.queuedBy ?? \"\", CHARGE_CENTS, \"find_email_debit\")` and writes a ledger row with no reference to the evaluation or queue request (evaluationId is not set for this reason, and there's no unique key). Claiming is atomic via FOR UPDATE SKIP LOCKED so a single queue entry isn't double-processed, but nothing prevents the same evaluation being re-queued (find_email_queued_at set again) and charged a second $0.05 even if a valid email was already found and stored.",
+        "impact": "Repeated re-queueing of an already-resolved profile bills the queuer multiple times for the same email. Small per-event ($0.05) and requires re-queue, so low severity, but the charge has no audit link (evaluationId null) making disputes hard to reconcile.",
+        "recommendation": "Skip the AnyMailFinder call + charge when the evaluation already has foundEmailStatus='valid' (short-circuit before reserveCreditsFor), and set evaluationId on the find_email_debit ledger row so each charge is auditable and a unique (clerkUserId, evaluationId, reason) constraint can enforce one-charge-per-profile.",
+        "verification": null
+      },
+      {
+        "title": "Webhook trusts metadata.clerkUserId to route credits with no ownership check",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/api/stripe/webhook/route.ts:31-43",
+          "src/app/api/developers/checkout/route.ts:28-29"
+        ],
+        "evidence": "The webhook grants credits to `s.metadata?.clerkUserId`. That value is set server-side at checkout creation from the authenticated `auth().userId`, so it is trustworthy for sessions this app created. However the webhook applies credits to whatever clerkUserId appears in metadata of any signature-valid event without verifying that id corresponds to a real/active Clerk user or that the session originated from one of this app's checkout routes.",
+        "impact": "Limited because the signature is verified and our own routes set the id from auth(). Residual risk: a manually-created Stripe session (e.g. via the dashboard or another integration on the same Stripe account) with an arbitrary or typo'd clerkUserId in metadata would mint credits onto that id. No external attacker path, but a misconfiguration or compromised Stripe dashboard becomes a credit-minting tool.",
+        "recommendation": "Validate the clerkUserId against Clerk (or against an existing credit_balances/api_keys row) before granting, and/or stamp a known marker in metadata (e.g. source: 'ff_checkout') and require it. Log/skip grants whose metadata id doesn't resolve to a real user.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "security:secrets-ssrf-cron",
+    "summary": "The security posture is solid on the highest-risk axes: the LinkedIn-URL entry point is strictly validated, every enricher fetch targets a hardcoded host with user input confined to encodeURIComponent'd query params (no internal-host SSRF), all 5 cron routes and the admin/job routes are authenticated, API keys are SHA-256 hashed, and the public leaderboard/v1 API/profile payloads deliberately exclude PII columns (phone, foundEmail, location). The remaining issues are defense-in-depth gaps: non-constant-time secret comparison, an over-permissive secret fallback on one cron, and unbounded response-body reads from partially attacker-influenced external hosts.",
+    "findings": [
+      {
+        "title": "Enrichers read unbounded response bodies from attacker-influenceable external hosts",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/enrichers/sec-edgar.ts:31",
+          "src/lib/enrichers/neo.ts:89",
+          "src/lib/exa.ts:44",
+          "src/lib/enrichers/github.ts:17",
+          "src/lib/enrichers/wikidata.ts:37"
+        ],
+        "evidence": "Every enricher fetch helper consumes the full body with no size cap: sec-edgar `return await res.text()` (line 33) on a `docUrl()` derived from CIK/accession/filename pulled out of the FTS hit (`hit._id.split(\":\")`), neo `return (await res.json())` (line 94), and exa.ts `fetchLinkedinPageText` only caps via Exa's `maxCharacters: 10000` request param, not the actual transport. The fullName that seeds the SEC and Exa queries is itself derived from scraped LinkedIn/search text in src/lib/enrichers/extract.ts, so an attacker who controls a profile's public page text can influence which downstream documents get fetched and parsed.",
+        "impact": "A hostile or compromised upstream (or a poisoned search result steering an enricher to an attacker-controlled doc URL) can return a multi-hundred-MB body. `await res.text()` / `res.json()` buffers it entirely in the Function's memory, risking OOM / Function crash during a scoring tick, which stalls the per-minute scoring-tick cron and the whole queue. This is a DoS / resource-exhaustion vector rather than classic SSRF.",
+        "recommendation": "Add a hard byte cap to every enricher fetch: check `Content-Length` and abort, and/or stream `res.body` through a counting reader that aborts past N bytes (e.g. 2-5MB). Centralize this in one `safeFetchText/safeFetchJson` helper (most enrichers already have near-identical wrappers) and route all of them through it. Keep the existing AbortController timeout (neo already has one at 3s) and add the size guard alongside it.",
+        "verification": null
+      },
+      {
+        "title": "Cron/secret comparison is not constant-time (timing side channel on CRON_SECRET)",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/cron-auth.ts:14",
+          "src/app/api/cron/jwt-check/route.ts:17",
+          "src/app/api/cron/refresh-mm/route.ts:12"
+        ],
+        "evidence": "Authorization is `return auth === \\`Bearer ${secret}\\`` (cron-auth.ts:14) and `authHeader !== \\`Bearer ${secret}\\`` (jwt-check:17, refresh-mm:12). JS `===` on strings short-circuits at the first differing byte, and no `crypto.timingSafeEqual` is used anywhere in src (grep returned zero hits).",
+        "impact": "A remote attacker who can hit these public cron endpoints could in theory recover CRON_SECRET / MM_REFRESH_SECRET byte-by-byte via response-timing analysis, then forge cron triggers (force scoring ticks, trigger the Majestic Million CSV reload, send NFX test emails). Real-world exploitability is reduced by network jitter and Vercel's edge, so severity is low, but the secrets are long-lived.",
+        "recommendation": "Compare with a constant-time check: hash both sides (e.g. `crypto.timingSafeEqual(Buffer.from(sha256(auth)), Buffer.from(sha256(expected)))`) or use a length-checked `timingSafeEqual` on the raw bearer token. Factor it into a single `safeEqual` helper and use it in cron-auth.ts plus the two hand-rolled routes.",
+        "verification": null
+      },
+      {
+        "title": "refresh-mm cron accepts CRON_SECRET as a fallback for MM_REFRESH_SECRET, widening the secret's blast radius",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/api/cron/refresh-mm/route.ts:10"
+        ],
+        "evidence": "`const secret = process.env.MM_REFRESH_SECRET ?? process.env.CRON_SECRET;` then `if (!secret || authHeader !== \\`Bearer ${secret}\\`)`. If MM_REFRESH_SECRET is unset in an environment, the route silently authenticates with the general CRON_SECRET instead.",
+        "impact": "MM_REFRESH_SECRET exists to scope the destructive Majestic Million reload (it fetches a 1M-row CSV from downloads.majestic.com, writes it to tmpdir, and bulk-loads it into Neon via loadCsvIntoNeon — a heavyweight, table-replacing operation). The fallback means anyone holding the broader CRON_SECRET can trigger this even when the operator intended a dedicated, separately-rotatable secret. It also means a missing env var fails open to a different secret rather than failing closed.",
+        "recommendation": "Drop the `?? process.env.CRON_SECRET` fallback and require MM_REFRESH_SECRET explicitly (return 500 'not_configured' if unset, mirroring find-email-tick's ANYMAILFINDER_API_KEY check). If a single secret is genuinely desired, standardize on isAuthorizedCron(req) like the other routes instead of a silent fallback.",
+        "verification": null
+      },
+      {
+        "title": "OG image and profile pages are fully public by design — confirm this matches the intended privacy model for scored-but-unclaimed people",
+        "severity": "low",
+        "category": "security",
+        "effort": "M",
+        "files": [
+          "src/app/api/og/route.tsx:53",
+          "src/proxy.ts:4",
+          "src/app/(authed)/profile/page.tsx:224"
+        ],
+        "evidence": "Middleware only force-protects `/dashboard(.*)` (proxy.ts:4); the `(authed)` route group is a layout group, not an auth gate, so `/profile?e=<uuid>` and `/api/og?e=<uuid>` render for any anonymous visitor who has the UUID. The OG route returns name + FounderScore/InvestorScore + percentile for any valid eval id with `cache-control: public`. These pages cover people who were scored from a CSV import and never opted in / claimed.",
+        "impact": "Not a leak of admin-only PII (phone/foundEmail/location are correctly NOT exposed here — verified: og/route.tsx reads only fullName + scores, and the profile page never passes the phone/foundEmail columns to a client component). But the scores and names of non-consenting, scored-but-unclaimed individuals are publicly enumerable by UUID. Whether that is acceptable is a product/privacy decision, not strictly a bug.",
+        "recommendation": "Confirm with product that public exposure of unclaimed profiles is intended. If not, gate `/profile` and `/api/og` for unclaimed evals behind auth (or a noindex + signed-link scheme), the way private score_items are already scrubbed for non-owners (profile/page.tsx:447 `viewerCanReadPrivate`). At minimum, ensure these pages are not indexable for unclaimed subjects.",
+        "verification": null
+      },
+      {
+        "title": "Non-production localhost cron bypass relies on a client-controllable Host header",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/cron-auth.ts:7"
+        ],
+        "evidence": "`if (process.env.VERCEL_ENV !== \"production\") { const host = req.headers.get(\"host\") ?? \"\"; if (host.startsWith(\"localhost\") || host.startsWith(\"127.0.0.1\")) return true; }`. The code comment already acknowledges the Host header is client-controllable.",
+        "impact": "In preview deployments (VERCEL_ENV='preview', not 'production'), an attacker who can send a request with a spoofed `Host: localhost` header bypasses cron auth entirely and can trigger every cron job (scoring-tick, find-email-tick which spends AnyMailFinder credits at $0.05/lookup, lifecycle-emails, refresh-mm). Preview deployments are often publicly reachable. Production is correctly safe because the whole branch is skipped there.",
+        "recommendation": "Tighten the bypass so it cannot trigger spend or external side effects on preview: either restrict it to VERCEL_ENV unset/'development' (true local dev) rather than any non-production env, or additionally require the request to actually originate locally (not just claim a localhost Host). Given find-email-tick spends real money, preview should require CRON_SECRET like production.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "arch:data-pipeline-scalability",
+    "summary": "The pipeline is functionally solid and notably defensive at the edges (allSettled-wrapped enrichers, idempotent insert, atomic SKIP-LOCKED job claim, schema .catch() defaults), but it is structurally brittle for growth: enrichers are hard-coded into a single 16-line Promise.allSettled array with no registry/interface, almost no per-source timeouts (so the slowest of ~16 external APIs gates every eval), and two 1000+-LOC \"god files\" tangle research, LLM scoring, cost accounting, post-processing, and persistence together. Throughput is capped at a hand-tuned 5 items/minute polling loop with no per-source rate budgeting or backpressure, so 10x/100x volume requires architectural change, not config.",
+    "findings": [
+      {
+        "title": "Enrichers are hard-coded in a single Promise.allSettled array — no registry or interface, so adding/removing a source is a multi-file edit",
+        "severity": "high",
+        "category": "refactor",
+        "effort": "M",
+        "files": [
+          "src/lib/enrichers/index.ts:44-61",
+          "src/lib/enrichers/index.ts:1-16",
+          "src/lib/enrichers/types.ts:7-26"
+        ],
+        "evidence": "runEnrichments() calls 16 enrichers as positional literals: `Promise.allSettled([ enrichWithGithub(ctx, known.github), enrichWithProductHunt(...), ... enrichWithHnTokenmaxxing(ctx, known.hackernews) ])`. Each enricher has a different signature (some take a second `known.X` arg, some don't), and the `source` union in types.ts is a hand-maintained string literal list. Adding a source touches: a new import line, a new array entry, the `source` union, and the prompt-render path — with no shared contract enforcing it.",
+        "impact": "The user's #1 goal (scalable, less-brittle multi-source pipeline) is directly blocked here. Each new data source is a coordinated edit across ≥3 sites with no compile-time guarantee they stay in sync; enrichers can't be independently enabled/disabled, A/B'd, weighted, or feature-flagged per environment, and there is no place to attach per-source config (timeout, cost budget, identity-confidence policy).",
+        "recommendation": "Introduce an `Enricher` interface (`{ source; run(ctx): Promise<EnrichmentResult>; timeoutMs?; enabled?(env) }`) and an `ENRICHERS: Enricher[]` registry array. Normalize the `known.X` extraction into the ctx (precompute `ctx.knownUrls` once, let each enricher read what it needs) so every enricher has a uniform `run(ctx)` signature. Drive `runEnrichments` by iterating the registry, and derive the `source` union from the registry via `typeof ENRICHERS[number]['source']`. This makes add/remove a single-file, single-object change.",
+        "verification": null
+      },
+      {
+        "title": "Almost no per-enricher timeout — the slowest of ~16 external APIs gates every eval, and the whole research phase has no wall-clock bound",
+        "severity": "high",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/enrichers/index.ts:44-61",
+          "src/lib/enrichers/github.ts:16",
+          "src/lib/enrichers/sec-edgar.ts:31",
+          "src/lib/enrichers/neo.ts:86-87",
+          "src/lib/eval-pipeline.ts:544-553"
+        ],
+        "evidence": "Only neo.ts uses an AbortController (TIMEOUT_MS=3000). Every other enricher's fetch (github.ts:16, sec-edgar.ts:31, nfx.ts, devto.ts, etc.) is a bare `await fetch(url, { headers })` with NO timeout signal. They run inside `Promise.allSettled([...])` (index.ts:44), which resolves only when the LAST promise settles. researchSubject() then `Promise.all`s that with the Exa grounding call (eval-pipeline.ts:544). A single hung SEC EDGAR or GitHub socket can stall an eval until Vercel kills the function at maxDuration=300.",
+        "impact": "Tail latency is unbounded and set by the worst external dependency on any given eval. One slow/hanging third-party API (SEC EDGAR and unauthenticated GitHub are common offenders) inflates p99 eval time, reduces how many items a 300s tick can clear, and can cause the whole function to time out — failing an item that would otherwise have degraded gracefully by just omitting that one source.",
+        "recommendation": "Wrap every enricher in a shared `withTimeout(promise, ms)` (or pass `AbortSignal.timeout(ms)` into each fetch) with a per-source default (e.g. 4–5s) configurable in the registry above. Add an overall research-phase budget so `runEnrichments` returns whatever has resolved by deadline. Treat a timeout exactly like the existing allSettled rejection path: drop that source, keep the eval.",
+        "verification": null
+      },
+      {
+        "title": "eval-pipeline.ts (1089 LOC) and scoring.ts (1060 LOC) are god files mixing research, LLM I/O, cost accounting, post-processing, and persistence",
+        "severity": "high",
+        "category": "maintainability",
+        "effort": "L",
+        "files": [
+          "src/lib/eval-pipeline.ts:1-1089",
+          "src/lib/scoring.ts:1-1060"
+        ],
+        "evidence": "eval-pipeline.ts alone owns: model-gateway IDs + pricing tables (96-259), raw JSON extraction from model text (314-335), the Claude call with prompt-cache wiring + retry (337-471), three different cascade strategies (652-723), MM bonus + verification-weighting orchestration (179-199, 602-630), JSONB sanitization (748-767), investor-facet projection (800-836), and both INSERT (runEval) and UPDATE (reEvaluate) persistence (1003-1089). scoring.ts mixes a ~590-line prompt string constant, all Zod schemas, the clamp/weighting/escalation math, AND prompt-injection sanitization.",
+        "impact": "High cognitive load and change-risk: a pricing tweak, a cascade experiment, and a persistence-column change all live in one file and can collide. The benchmark/cascade logic is interleaved with the production score path, making it hard to reason about which model ran. New contributors must read 2000+ LOC to safely touch scoring.",
+        "recommendation": "Split along clear seams: (1) `model-client.ts` — MODEL_GATEWAY_ID, pricing, scoreWithClaude, extractJsonObject, usage/cost extraction; (2) `cascade.ts` — scoreWithCascade / scoreWith3TierCascade / shouldEscalate / isConfident; (3) `post-process.ts` — clamp, verification-weighting, MM bonus, total recompute; (4) `persistence.ts` — payloadToWriteFields, persistScoreItems, sanitizeForJsonb, investorFacets, runEval/reEvaluate; (5) keep `scoring-prompt.ts` (rubric + buildScoringPrompt + sanitizeUntrusted) separate from `scoring-schema.ts` (Zod). eval-pipeline.ts becomes a thin orchestrator: research → score → post-process → persist.",
+        "verification": null
+      },
+      {
+        "title": "Throughput is a fixed 5-items/minute DB-polling loop processed sequentially — will not keep up at 10x/100x",
+        "severity": "high",
+        "category": "scalability",
+        "effort": "L",
+        "files": [
+          "src/app/api/cron/scoring-tick/route.ts:26",
+          "src/app/api/cron/scoring-tick/route.ts:108-128",
+          "src/app/api/cron/scoring-tick/route.ts:162"
+        ],
+        "evidence": "ITEMS_PER_TICK=5 (route.ts:26) and the items are processed in a strictly SEQUENTIAL `for (const c of claimable)` loop (route.ts:162) — no intra-tick parallelism even though runPool exists in concurrency.ts. The cron fires once/minute, so steady-state ceiling is ~5 evals/min (~300/hr) regardless of how fast each eval is. The comment at line 24-25 ties the limit to 'Exa / Claude burst limits and the worker's maxDuration' but there is no actual rate-limit consumption in the cron path (grep found none).",
+        "impact": "A 10,000-row bulk job takes ~33 hours at the current ceiling. There is no queue with worker scaling, no per-tick parallelism, and no per-external-source rate budgeting — so you can't safely raise ITEMS_PER_TICK without risking GitHub/Exa/SEC rate-limit bans. Scaling is currently a manual constant-tuning exercise, not an architectural capability.",
+        "recommendation": "Two steps: (a) immediate — process the claimed batch with runPool(claimable, N, …) so a tick clears items concurrently up to maxDuration; (b) structural — move to a real queue (Vercel Queues/Workflow, or a leased-job table with multiple concurrent cron lanes) and add a token-bucket per external source (GitHub, Exa, SEC) so concurrency is bounded by source budgets, not a single global magic number. The SKIP-LOCKED claim (route.ts:108) already makes horizontal worker scaling safe.",
+        "verification": null
+      },
+      {
+        "title": "GitHub enricher probes up to 4 guessed handles sequentially against a 60 req/hr unauthenticated limit, silently null on rate-limit",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/lib/enrichers/github.ts:79-111",
+          "src/lib/enrichers/github.ts:8-22",
+          "src/lib/enrichers/devto.ts:183-199"
+        ],
+        "evidence": "enrichWithGithub loops `for (const handle of handles)` (up to 4 from guessHandlesFromContext) doing `await gh('/users/...')` one at a time (github.ts:83), then per match issues 2 more repo calls. Unauthenticated GitHub is 60 req/hr per IP (github.ts:3 comment). At 4 probes/eval, ~15 evals exhausts the hourly budget on a single Vercel egress IP; gh() returns null on a 403 (github.ts:17) so the signal silently vanishes with no backoff and no distinction between 'not found' and 'rate-limited'. devto.ts:183 has the same sequential-probe shape.",
+        "impact": "At scale the GitHub builder signal degrades to mostly-null (rate-limited) without any error surfaced — evals look 'successful' but systematically under-score technical founders. Sequential probing also adds avoidable latency to the research phase (compounding the gating concern above).",
+        "recommendation": "Require GITHUB_TOKEN in production (5,000 req/hr) and fail loud if absent under load. Detect 403/rate-limit in gh() and surface it distinctly from 404 so the pipeline can record 'github: rate-limited' rather than silently 0. Prefer resolving the GitHub handle once from confirmed Exa URLs instead of brute-forcing 4 name permutations, and cache negative lookups.",
+        "verification": null
+      },
+      {
+        "title": "Cost/pricing logic is tangled into the scoring path and three parallel cascade strategies coexist in production code",
+        "severity": "medium",
+        "category": "maintainability",
+        "effort": "M",
+        "files": [
+          "src/lib/eval-pipeline.ts:205-259",
+          "src/lib/eval-pipeline.ts:652-740",
+          "src/lib/eval-pipeline.ts:447-470"
+        ],
+        "evidence": "MODEL_PRICING_USD_PER_1M, computeScoringCostUsd, buildCostFields, and gateway-cost extraction live inline in scoreWithClaude/scoreInputs (eval-pipeline.ts:205-259, 447-470). Three separate cascade orchestrators — scoreInputs (single), scoreWithCascade (binary Sonnet→Opus), scoreWith3TierCascade (Haiku→Sonnet→Opus) — are selected by a SCORING_CASCADE env string at runtime (731-740), each manually summing costUsd across passes (668, 699, 720). The default prod path is Opus-only; the cascades are gated behind env and partly benchmark-driven.",
+        "impact": "Cost accounting is duplicated across each cascade branch (every branch re-adds costUsd by hand — easy to miss a pass and under-report spend), and three live strategies mean the actual model used per eval depends on an env var that's easy to get wrong. The pricing table is a hardcoded constant that silently drifts from real Anthropic prices, masked only because the gateway cost usually wins.",
+        "recommendation": "Extract a `CostMeter` that accumulates LLM+Exa cost across passes in one place so cascades just `meter.add(usage)` instead of hand-summing. Move pricing to a single source-of-truth module. Collapse the three cascades behind one `ScoringStrategy` interface with a factory keyed off env, so the production path and benchmark paths share identical cost+post-process code.",
+        "verification": null
+      },
+      {
+        "title": "LLM output parsing relies on hand-rolled brace-matching plus broad Zod .catch() defaults that can silently zero out high-value signal",
+        "severity": "medium",
+        "category": "correctness",
+        "effort": "M",
+        "files": [
+          "src/lib/eval-pipeline.ts:314-335",
+          "src/lib/eval-pipeline.ts:369-446",
+          "src/lib/scoring.ts:679-689",
+          "src/lib/scoring.ts:911-926"
+        ],
+        "evidence": "extractJsonObject (eval-pipeline.ts:314) is a custom balanced-brace scanner over the model's free text (they abandoned generateObject due to a gateway double-wrap bug, 347-350); on failure it retries once then throws (445). The schema uses `.catch()` defaults aggressively: VERIFICATION_ENUM defaults to 'single-source' (scoring.ts:679), RULE_ID_ENUM `.catch(undefined)` (689), confidence/sources/citations all `.catch([])`/`.catch(50)`. The `rule` field is what exempts a row from the +200 clamp (scoring.ts:913,921); so a garbled `rule` enum silently caps a $1.5B founder_valuation row (meant to be +1500) at +200 — the exact failure the rubric repeatedly warns about (scoring.ts:38-40).",
+        "impact": "Malformed model output has two quiet failure modes: (1) unparseable JSON fails the whole eval after 2 attempts (item marked failed); (2) a subtly-wrong field (e.g. mistyped `rule`) passes schema via .catch(undefined) and the clamp silently destroys the magnitude signal. There is no telemetry distinguishing these — only TEMP console.logs (eval-pipeline.ts:400-434) that currently run on every prod eval.",
+        "recommendation": "Emit a structured metric (not console.log) when a parse-retry fires and when each schema .catch() fallback triggers, so silent degradations are observable. For the high-stakes `rule` field, prefer re-deriving uncapped-ness from points magnitude + presence of a dollar figure rather than trusting a single .catch(undefined)-able enum. Remove the TEMP citation-diag logging (eval-pipeline.ts:400-434) from the prod path.",
+        "verification": null
+      },
+      {
+        "title": "Re-score always re-runs full (billed) research; enricher failures are baked into scores with no per-source provenance",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "L",
+        "files": [
+          "src/lib/eval-pipeline.ts:731-740",
+          "src/lib/eval-pipeline.ts:1048-1089",
+          "src/lib/enrichers/index.ts:64-72"
+        ],
+        "evidence": "computeFreshScore (731) always re-runs the full researchSubject() (16 enrichers + 2 Exa calls + grounding) before any scoring, even on reEvaluate. runEnrichments silently drops any source that rejected (index.ts:70 only pushes when facts.length>0) and records no status — so an eval scored during a GitHub outage is indistinguishable from one where the person genuinely has no GitHub, and a later re-score can't know to retry just the missing source.",
+        "impact": "Every re-score pays full research cost (Exa is billed per call) even when only the model changed. Transient enricher outages get permanently baked into scores with no failure provenance, so there's no way to selectively re-enrich. This couples cost and freshness to the most expensive operation in the pipeline.",
+        "recommendation": "Persist per-source enrichment status (ok/empty/failed/timeout) alongside the facts, and cache the research inputs (searchHighlights, enrichmentBlock, grounding) on the row so a model-only re-score can reuse them. The ResearchInputs type (eval-pipeline.ts:499) already cleanly separates research from scoring — surface that boundary to persistence so re-score can skip re-research when inputs are fresh.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "arch:god-files-coupling",
+    "summary": "Two 1000+ LOC god files, no service layer, fragmented identity.",
+    "findings": [
+      {
+        "title": "eval-pipeline.ts and scoring.ts are god files",
+        "severity": "high",
+        "category": "maintainability",
+        "effort": "L",
+        "files": [
+          "src/lib/eval-pipeline.ts:114",
+          "src/lib/scoring.ts:4"
+        ],
+        "evidence": "eval-pipeline.ts 1089 LOC, sole generateText caller, also does cost 251, cascade 652, sanitize 748, writes 935. scoring.ts 1060 LOC, 56pct prompt, rubric lines 4 to 595.",
+        "impact": "Layers welded; scoring untestable without DB; billing regression risk.",
+        "recommendation": "Split into scoring-llm, scoring-cost, eval-persist; extract the rubric.",
+        "verification": null
+      },
+      {
+        "title": "No service layer: inline Drizzle queries",
+        "severity": "medium",
+        "category": "refactor",
+        "effort": "L",
+        "files": [
+          "src/app/api",
+          "src/lib/profiles-scored.ts:192"
+        ],
+        "evidence": "29 of 55 routes import db; from-evaluations in 19 app and 16 lib spots despite listScoredProfilesPage.",
+        "impact": "A forgotten claim or confidence filter is a correctness risk across 35 files.",
+        "recommendation": "Add a repo layer of canonical reads; route src/app through it.",
+        "verification": null
+      },
+      {
+        "title": "Fragmented identity, duplicate nameTokens",
+        "severity": "medium",
+        "category": "refactor",
+        "effort": "M",
+        "files": [
+          "src/lib/name-match.ts:17",
+          "src/lib/enrichers/identity.ts:16"
+        ],
+        "evidence": "Two divergent nameTokens; three slugify copies; three identity modules; dead namesPlausiblyMatch; 51 dup groups in DEFERRED-DUPLICATES.md.",
+        "impact": "Merging nameTokens breaks one path; root of the duplicate profiles.",
+        "recommendation": "Shared normalize primitive, consolidate slugify, rename, delete dead export.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "arch:database-schema-queries",
+    "summary": "The schema is well-modeled with good FK hygiene and thoughtful indexing on most lookup paths (slug, linkedin_url, source_code, hidden_at, company_stage), and migration history is clean (no destructive ops, slug_kind index properly dropped, no drift vs schema.ts). The two structural risks are: (1) the leaderboard's primary sort/rank columns (score, founder_score, investor_score) and the find-email job-poll column have NO indexes, forcing full table scans on every leaderboard page, search, percentile, and admin rank computation; and (2) the rate_limit table grows unbounded with no cleanup, while every leaderboard facet/badge filter and search relies on unindexed JSONB extraction inside evaluations.profile.",
+    "findings": [
+      {
+        "title": "No index on the leaderboard's ORDER BY columns (score, founder_score, investor_score)",
+        "severity": "high",
+        "category": "scalability",
+        "effort": "S",
+        "files": [
+          "src/db/schema.ts:148-164",
+          "src/lib/leaderboard.ts:220-241",
+          "drizzle/meta/0032_snapshot.json"
+        ],
+        "evidence": "The latest snapshot lists exactly six indexes on evaluations: linkedin_url_unique, source_code_idx, request_ip_idx, slug_unique, hidden_at_idx, company_stage_idx. None covers score/founder_score/investor_score. Yet getLeaderboard() does `.orderBy(desc(orderCol), desc(evaluations.id)).limit(...)` where orderCol is evaluations.score / founderScore / investorScore (leaderboard.ts:192-196, 240), and the keyset cursor predicate filters `(${orderCol} < cursor.score OR (${orderCol} = cursor.score AND id < cursor.id))` (leaderboard.ts:213-214).",
+        "impact": "Every leaderboard page load — the app's most-trafficked query — does a full sequential scan + sort of the entire evaluations table, then discards all but 50 rows. Keyset pagination gives no benefit without a matching index: deeper pages still scan everything. As evaluations grows past tens of thousands of rows this becomes the dominant latency and DB-CPU cost, and on Neon serverless it inflates compute billing on every public page view.",
+        "recommendation": "Add composite btree indexes that match the (sort col DESC, id DESC) keyset ordering, partial on the baseWhere predicate so the index stays small and covers the hot path: e.g. `CREATE INDEX evaluations_combined_rank_idx ON evaluations (score DESC, id DESC) WHERE signal_quality <> 'low' AND source <> 'code' AND hidden_at IS NULL;` and the same for founder_score and investor_score. Declare them in schema.ts as index('...').on(desc(t.score), desc(t.id)) and ship a migration.",
+        "verification": null
+      },
+      {
+        "title": "Full-table window-function rank() scan per /admin/profiles page render",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/lib/profiles-scored.ts:312-321",
+          "src/lib/leaderboard.ts:457-463"
+        ],
+        "evidence": "profiles-scored.ts runs `SELECT id, rank() OVER (ORDER BY score DESC) FROM evaluations WHERE signal_quality != 'low' AND source != 'code'` on every page build to compute leaderboardRank, materializing a rank for the ENTIRE table just to map a handful of displayed ids. computePercentile() (leaderboard.ts:457) similarly does `COUNT(*) FILTER (...)` over the whole table for each profile view. Both lack a supporting index on score.",
+        "impact": "Each admin profiles page and each public profile page (percentile) triggers a full scan + sort of all rankable evaluations. The window query computes ranks for every row even though only the page's ~25 ids are used. Cost scales linearly with total rows and is paid per request.",
+        "recommendation": "Back the score ordering with the index from the previous finding so the window/COUNT scans become index-only. For leaderboardRank, prefer a targeted approach: compute rank for only the displayed ids via a correlated `COUNT(*) WHERE score > thisScore` using the index, or cache the full ranking in app_stats / a materialized view refreshed on score writes (the avg_cost_cents pattern already exists in app_stats).",
+        "verification": null
+      },
+      {
+        "title": "rate_limit table grows unbounded — no cleanup of old (ip, day) rows",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "S",
+        "files": [
+          "src/lib/rate-limit.ts:1-40",
+          "src/db/schema.ts:567-577"
+        ],
+        "evidence": "checkAndIncrementRateLimit only ever INSERT ... ON CONFLICT DO UPDATE; grep for DELETE FROM rate_limit / delete(rateLimit) across src and drizzle returns zero hits. The table is keyed (ip, day) and accumulates one row per distinct IP per UTC day, plus global:<bucket> rows, forever. There is no cron or sweep that prunes prior days.",
+        "impact": "On a public endpoint behind IPv6/proxies/botnets, distinct-IP cardinality per day can be large; rows are never reclaimed, so the table and its PK index bloat indefinitely. Today's upsert still hits the right row via PK, but unbounded growth wastes storage and slows VACUUM/autovacuum over time. There is also no index to efficiently delete by day later.",
+        "recommendation": "Add a daily cleanup (extend an existing cron, e.g. lifecycle-emails or a dedicated weekly tick) that runs `DELETE FROM rate_limit WHERE day < current_date - interval '2 days'`. Optionally add an index on (day) to make the delete cheap. The current-day counter rows are all that's needed for enforcement.",
+        "verification": null
+      },
+      {
+        "title": "find_email job-poll column (find_email_queued_at) is unindexed despite a per-minute FOR UPDATE SKIP LOCKED claim",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "S",
+        "files": [
+          "src/app/api/cron/find-email-tick/route.ts:45-58",
+          "src/db/schema.ts:134-136",
+          "drizzle/0029_overrated_scourge.sql"
+        ],
+        "evidence": "The find-email cron claims work with `SELECT id FROM evaluations WHERE find_email_queued_at IS NOT NULL ORDER BY find_email_queued_at ASC LIMIT N FOR UPDATE SKIP LOCKED`. Migration 0029 added the three find_email_queued_* columns but no index, and the 0032 snapshot confirms no such index exists. By contrast the scoring-tick poll (scoring-tick/route.ts:108-122) is over scoring_job_items which IS indexed on (job_id) and (status).",
+        "impact": "Every find-email-tick (1/min) sequentially scans the full evaluations table to find the (usually tiny) set of queued rows, ordering by find_email_queued_at. With queued_at NOT NULL on only a handful of rows, a partial index would make this an index scan of just those rows; today it scans everything each minute.",
+        "recommendation": "Add a partial index: `CREATE INDEX evaluations_find_email_queued_idx ON evaluations (find_email_queued_at) WHERE find_email_queued_at IS NOT NULL;` and declare it in schema.ts. This keeps the index to only queued rows and makes the claim O(queued) instead of O(table).",
+        "verification": null
+      },
+      {
+        "title": "Leaderboard facet/badge filters and full-DB search run unindexed JSONB extraction over every row",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/lib/leaderboard.ts:134-167",
+          "src/lib/leaderboard-badge-sql.ts:7-28",
+          "src/lib/leaderboard.ts:407-437"
+        ],
+        "evidence": "Badge/outcome/raised/team filters compile to predicates like `(profile->'extractedMetrics'->>'totalRaisedUsd')::bigint >= ?` and `(profile->'extractedMetrics'->>'isUnicornFounder')::boolean = true` (leaderboard.ts:148-157, leaderboard-badge-sql.ts:14-28). searchLeaderboard() ILIKEs full_name, linkedin_url, AND three JSONB paths with a leading-% needle (`%q%`) across the table (leaderboard.ts:397, 407-413). The schema comment at schema.ts:160-163 explicitly defers a GIN index ('add ... only if those filters prove slow under load').",
+        "impact": "Any filtered leaderboard view or any search box query performs a full scan with per-row JSON parsing and casts; the leading-wildcard ILIKE can never use a btree index. Combined with the missing score index (the ORDER BY still needs a sort), filtered/search traffic is the most expensive path and degrades fastest as the dataset and traffic grow.",
+        "recommendation": "For search, add a pg_trgm GIN index on full_name (and optionally a generated text column concatenating the searchable JSON fields) to support ILIKE '%q%'. For facets, either project the hot extractedMetrics fields into real typed columns (the schema already does this for investor_* facets, per schema.ts:64-85) and index those, or add a GIN index on the profile JSONB (jsonb_path_ops) for the containment-style predicates. Start with the most-used facets (raised, employees, unicorn/yc badges).",
+        "verification": null
+      },
+      {
+        "title": "Single neon-http connection — no pooled vs unpooled split for long-running crons",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/db/index.ts:1-6",
+          "src/app/api/cron/scoring-tick/route.ts:21",
+          "src/app/api/cron/find-email-tick/route.ts:67"
+        ],
+        "evidence": "src/db/index.ts builds the only db client from `neon(process.env.DATABASE_URL!)` via drizzle-orm/neon-http — one HTTP-per-query driver, DATABASE_URL only; grep finds no DATABASE_URL_UNPOOLED, neon-serverless Pool, or neonConfig anywhere in src. The same client serves request paths AND long crons (scoring-tick maxDuration=300, find-email-tick runs runPool with CONCURRENCY). The neon-http driver issues each statement as a separate stateless HTTP round-trip and cannot run multi-statement transactions.",
+        "impact": "Crons that fire many sequential statements per item (scoring-tick does ~6-8 db calls per claimed item in a loop, find-email-tick fans out concurrent updates) pay a full HTTP round-trip per statement instead of pipelining over a pooled WebSocket, increasing wall-clock time toward the 300s ceiling and per-invocation latency. The atomic claim is safely done in a single UPDATE...RETURNING, so correctness is fine, but there's no real transaction available if multi-statement atomicity is ever needed.",
+        "recommendation": "For the cron/long-job paths, add a second client using drizzle-orm/neon-serverless Pool over DATABASE_URL_UNPOOLED (WebSocket, supports transactions and statement pipelining), and keep neon-http for request paths. At minimum, batch the per-item update sequences and wrap the per-item multi-write sequence so a mid-item failure can't leave scoring_job_items/scoring_jobs counters inconsistent.",
+        "verification": null
+      },
+      {
+        "title": "evaluations.profile JSONB is a large unbounded blob read in full on every leaderboard row",
+        "severity": "low",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/db/schema.ts:34",
+          "src/lib/leaderboard.ts:229-236"
+        ],
+        "evidence": "evaluations.profile is an untyped jsonb holding all 20 enrichers' raw output plus extractedMetrics, identity, mmHits, exaGrounding, etc. Both getLeaderboard and searchLeaderboard SELECT the entire `profile` column for every row (leaderboard.ts:229, 431) only to read a few fields (primaryCompanyDomain, identity.companyName, extractedMetrics, mmHits) in decorateRows (leaderboard.ts:330-368).",
+        "impact": "Each leaderboard page transfers the full enrichment blob for 50 rows when only ~5 JSON fields are needed, inflating row width, TOAST de-compression, network bytes, and JSON deserialization cost in the Node layer. As enrichers accumulate (dev.to was just added per recent commits) the blob — and this per-page overhead — keeps growing.",
+        "recommendation": "Select only the needed JSON subpaths in SQL (profile->'identity'->>'companyName', profile->>'primaryCompanyDomain', profile->'extractedMetrics', profile->'mmHits') instead of the whole column, or denormalize the handful of leaderboard-display fields (companyName, primaryCompanyDomain) into real columns the way investor_* facets already are. This shrinks per-row payload dramatically on the hot path.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "arch:frontend-rsc-perf",
+    "summary": "The frontend is competently built — server components fetch data and hydrate focused client islands (tables, forms), keyset pagination is implemented correctly, and the team clearly understands the server/client boundary (e.g. moving ClerkProvider out of the root layout). The main gaps are structural rather than cosmetic: no loading/error boundaries or streaming anywhere in the app, a render-path DB write plus a sequential data-fetching waterfall on the most-trafficked page (/profile), and a few correctness/a11y rough edges in the large admin table.",
+    "findings": [
+      {
+        "title": "No loading.tsx or error.tsx boundaries anywhere in the app",
+        "severity": "high",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/app/layout.tsx",
+          "src/app/(authed)/layout.tsx",
+          "src/app/(authed)/profile/page.tsx",
+          "src/app/(authed)/leaderboard/page.tsx"
+        ],
+        "evidence": "`find src/app -name loading.tsx -o -name error.tsx -o -name not-found.tsx` returns nothing. Only one `Suspense` exists in the entire app (src/app/(authed)/claim/page.tsx). Every async page (/profile, /leaderboard, all /admin) renders its full server tree before any HTML streams.",
+        "impact": "Two concrete problems. (1) No error.tsx means any thrown error in a server component (e.g. a Neon hiccup in the ~10 sequential DB calls on /profile) bubbles to the framework default error screen with no branded fallback and no recovery affordance. (2) No loading.tsx + no Suspense means the user sees a blank/previous page until ALL server work (DB reads, Clerk currentUser, credibility radar, founder matrix) completes — the page has no streamed shell, so perceived latency tracks the slowest query.",
+        "recommendation": "Add `error.tsx` at `src/app/(authed)/` (and ideally root) with a branded reset boundary, and `loading.tsx` for /profile, /leaderboard, and /admin segments. Then wrap the expensive, below-the-fold sections of /profile (FounderMatrix, CredibilityRadarSection, Recommendations) in `<Suspense>` so the score header + name stream immediately while peer-comparison queries resolve. This is the single highest-leverage change for perceived performance.",
+        "verification": null
+      },
+      {
+        "title": "/profile page performs a database WRITE during GET render",
+        "severity": "high",
+        "category": "correctness",
+        "effort": "M",
+        "files": [
+          "src/app/(authed)/profile/page.tsx:178",
+          "src/app/(authed)/profile/page.tsx:254",
+          "src/app/(authed)/profile/page.tsx:115-190"
+        ],
+        "evidence": "`loadScoreItems()` is awaited during page render (line 254) and, when an eval has no score_items rows, runs `await db.insert(scoreItems).values(seeds).onConflictDoNothing()` (line 178) followed by a re-read. This is a mutation inside a Server Component render.",
+        "impact": "Page renders are supposed to be side-effect-free and idempotent. Doing a write here means (a) bots/crawlers/prefetches and OG-image fetches can trigger writes, (b) the write happens on the critical render path adding insert+reread latency to first paint, and (c) it's fragile under Next 16 caching/PPR — if this segment were ever cached or partially prerendered the backfill would silently stop running. The deterministic-PK + onConflictDoNothing makes it race-safe, but the architectural placement is the problem.",
+        "recommendation": "Move the score_items backfill out of render: write score_items at scoring time in the pipeline (not read time), or behind a server action / one-off migration. The render path should only SELECT. If a lazy fallback is truly needed, gate it so it never runs for unauthenticated/bot requests.",
+        "verification": null
+      },
+      {
+        "title": "Sequential await waterfall on /profile before the Promise.all",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/app/(authed)/profile/page.tsx:212-271",
+          "src/app/(authed)/profile/page.tsx:298-361"
+        ],
+        "evidence": "Render awaits run strictly sequentially: canonicalProfileUrl (212) → evaluations select (224) → headers/isSuperAdmin (231-234) → loadScoreItems incl. its own 2 queries (254) → getCredibilityRadars (260) → getMatrixCandidates (270) → auth (298) → getCurrentViewerContext (302) → isAdmin (311) → users match select (313) → currentUser (322) → claimRows select (342) → overrideRows select (421). Only at line 396 are 5 queries batched in Promise.all. That's ~13 round-trips mostly in series against Neon (HTTP driver — each is a fresh network hop).",
+        "impact": "On a cold/loaded Neon connection each query is a separate HTTP round-trip; serializing ~13 of them stacks their latencies (easily 300-800ms added vs. parallelizing). This is the app's most-shared page (every scored profile link), so the waterfall directly hits the funnel that drives growth.",
+        "recommendation": "After the initial `evaluations` fetch (which gates everything), batch the independent reads into Promise.all: claimRows, overrideRows, the users-match query, credibility radars, and matrix candidates don't depend on each other. getCurrentViewerContext + auth + isAdmin can also run concurrently. Combined with Suspense streaming, this collapses the waterfall.",
+        "verification": null
+      },
+      {
+        "title": "Empty onChange handler on selection checkbox triggers React controlled-input warning",
+        "severity": "low",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/components/admin/ProfilesScoredTable.tsx:777-784"
+        ],
+        "evidence": "Row checkbox is `<input type=\"checkbox\" checked={selected.has(p.id)} onChange={() => {}} onClick={(e) => onRowCheck(i, e.shiftKey)} ... />`. State is mutated in onClick (to capture shiftKey) while onChange is a no-op stub.",
+        "impact": "Functionally works, but it's a fragile pattern: keyboard activation (Space) fires onClick on the input in most browsers so it mostly works, but the no-op onChange is exactly the anti-pattern React flags for controlled inputs, and relying on onClick for state means assistive-tech/programmatic toggles that fire `change` (not `click`) won't update selection. The header 'select all' checkbox (line 690) does this correctly via onChange.",
+        "recommendation": "Capture the shift state without abusing onClick: use an onClick that reads e.shiftKey but does the toggle in onChange, or track the last pointer/keyboard modifier in a ref and handle selection in onChange. At minimum, replace `onChange={() => {}}` so the input is honestly controlled.",
+        "verification": null
+      },
+      {
+        "title": "Admin table sorts/filters/exports entire dataset in-render on the client",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "L",
+        "files": [
+          "src/components/admin/ProfilesScoredTable.tsx:271-316",
+          "src/components/admin/ProfilesScoredTable.tsx:92-161",
+          "src/components/admin/ProfilesScoredTable.tsx:530-552"
+        ],
+        "evidence": "The table uses infinite scroll (`/api/admin/profiles/list?cursor=...`) to load ALL rows into `extraRows`, then on every sort/filter change recomputes `allRows` (spread+map), `filterLabels`, and a full `.sort()` of the merged array in useMemo (271-316). `exportCsv` (530) builds the entire CSV string in memory via toCsv() over `sorted`. totalCount is rendered as 'Loaded X of Y' implying the set can be large.",
+        "impact": "For a growing profile corpus this is O(n) work per keystroke/sort-click on the main thread, plus the entire dataset held in React state and re-spread on each pagination append (`[...rows, ...extraRows]` plus per-row `.map` overlay). At a few thousand rows this causes jank on sort/filter; the in-memory CSV blob also scales with total rows loaded.",
+        "recommendation": "Two options depending on expected scale: (a) virtualize the table body (e.g. @tanstack/react-virtual) and memoize sortValue, or (b) push sort/filter/export to the server (the list API already paginates) so the client never holds the full set. For CSV specifically, consider a server endpoint that streams the export rather than building the whole string in the browser.",
+        "verification": null
+      },
+      {
+        "title": "DeveloperConsole fetches its own data client-side in useEffect instead of via RSC",
+        "severity": "low",
+        "category": "refactor",
+        "effort": "S",
+        "files": [
+          "src/components/developers/DeveloperConsole.tsx:72-100",
+          "src/app/(authed)/developers/page.tsx:14-17"
+        ],
+        "evidence": "The developers page is `force-dynamic` and already async, but DeveloperConsole (a 'use client' component) fetches API keys and credits in two separate `useEffect` → `fetch('/api/developers/keys')` / `fetch('/api/developers/credits')` calls on mount (lines 72-100). The server page only passes a price estimate.",
+        "impact": "Client-side mount fetching creates a request waterfall (page HTML → JS hydrate → 2 sequential fetches → render) and a flash of empty state, where the data could be fetched on the server and passed as props for an instant first paint. Minor here (authed, low-traffic), but it's a duplicated pattern (loadKeys + credits) that should be the server's job.",
+        "recommendation": "Fetch keys + credits in the server page (the same lib functions the API routes call) and pass them as initial props to DeveloperConsole; keep the client refetch only for post-mutation refresh. Removes the empty-state flash and the on-mount waterfall.",
+        "verification": null
+      },
+      {
+        "title": "Deep prop drilling of action/identity props through ScoreTable's component tree",
+        "severity": "low",
+        "category": "maintainability",
+        "effort": "M",
+        "files": [
+          "src/components/ScoreTable.tsx:461-531",
+          "src/components/ScoreTable.tsx:157-177",
+          "src/components/ScoreTable.tsx:317-338"
+        ],
+        "evidence": "The same cluster — isAdminViewer, canDirectlyAct/isOwner, ownerNeedsSetup, onRoute, onClaimNeeded, plus onUpdated/onAdded — is threaded ScoreTable → Section → ItemRow and → AddItemRow, with each leaf re-declaring 7-9 props. patchRow logic is also duplicated across both Sections' onUpdated handlers (593-596, 610-613).",
+        "impact": "Adds friction to every change in the dispute flow (a new gating condition touches 4 components) and the duplicated cross-rubric patchRow is an easy place for the founder/investor lists to drift out of sync. Not a bug today, but the surface area is large for the behavior.",
+        "recommendation": "Lift the identity/action context (isOwner, isAdminViewer, ownerNeedsSetup, onRoute, onClaimNeeded) into a small React context provided once in ScoreTable and consumed by the leaves, leaving only row-specific data + onUpdated/onAdded as props. Extract the shared patchRow-both-lists logic into one handler.",
+        "verification": null
+      },
+      {
+        "title": "No revalidate/caching strategy — every dynamic page is fully recomputed per request",
+        "severity": "low",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "next.config.ts",
+          "src/app/(authed)/leaderboard/page.tsx",
+          "src/app/(authed)/profile/page.tsx"
+        ],
+        "evidence": "next.config.ts is empty (no cacheComponents flag, no experimental config). Grep for `use cache`/`cacheLife`/`cacheTag`/`unstable_cache`/`revalidate`/`experimental_ppr` across src returns zero hits. /leaderboard and /profile have no segment config and become dynamic only implicitly via headers()/auth(). The leaderboard's first 100 rows are re-queried on every anonymous request.",
+        "impact": "The public leaderboard first page (identical for all anonymous visitors with no filter) and OG metadata generation re-hit Neon on every request with no caching layer, which won't scale gracefully under a traffic spike or a shared link going viral. The codebase has adopted none of Next 16's caching primitives.",
+        "recommendation": "For the default-filter leaderboard first page, wrap getLeaderboard in `unstable_cache` with a short revalidate + a cacheTag invalidated when scores change (refresh-mm cron is weekly, so even 60s is safe), or adopt Cache Components ('use cache' + cacheLife) for the public, filter-less path while keeping personalized/admin views dynamic. Evaluate per-route rather than globally.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "arch:reliability-error-obs",
+    "summary": "The financial idempotency core is genuinely strong — Stripe top-ups and credit reserves use atomic conditional UPDATEs and unique-index gates, and the scoring-tick cron claims work with FOR UPDATE SKIP LOCKED so overlapping ticks stay disjoint. The weak spots are uniform absence of timeouts on every external call (enrichers, Exa, AnyMailFinder, Resend, AI Gateway), a find-email cron that can charge a user and then lose the result with no re-queue path, and thin observability/test coverage on the money paths (only 6 of 55 API routes report errors; the Stripe webhook and credit deduction have no tests).",
+    "findings": [
+      {
+        "title": "find-email cron can charge a user, then drop the result with no re-queue path",
+        "severity": "high",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/app/api/cron/find-email-tick/route.ts:45-117",
+          "src/lib/concurrency.ts:1-19"
+        ],
+        "evidence": "The claim at line 45 sets find_email_queued_at = NULL for the whole batch up front. Per row: reserveCreditsFor() charges 5 cents (line 95), THEN db.update(...foundEmail...) + upsertProfileEmail() run (lines 103-115) OUTSIDE any try/catch (the try only wraps findPersonEmail, lines 74-83). runPool's contract: 'Errors thrown by fn reject the whole call' (concurrency.ts:3). So if the post-charge db.update or upsertProfileEmail throws, the worker throws, Promise.all rejects, and every still-unprocessed claimed row is abandoned. Those rows already had find_email_queued_at nulled, so they are invisible to the next tick and can never be retried.",
+        "impact": "A transient DB blip after the credit reserve means: (a) the queuing admin/developer is debited 5 cents but gets no email and no record, and (b) all sibling rows in the same batch are silently lost — never re-queued, never marked not_found. At BATCH=50 a single failure can strand up to 49 paid-for lookups.",
+        "recommendation": "Wrap the entire per-row body (charge + both DB writes) in try/catch so one row's failure can't reject runPool. On a post-charge failure, refund via refundCredits() and re-set find_email_queued_at so the row is re-queueable (or mark it failed for admin visibility). Separately, make runPool resilient by catching inside the worker and collecting errors rather than rejecting the whole pool.",
+        "verification": null
+      },
+      {
+        "title": "No timeout/abort on any external HTTP call — one slow upstream can blow the route maxDuration",
+        "severity": "high",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/enrichers/github.ts:16",
+          "src/lib/enrichers/index.ts:44-63",
+          "src/lib/anymailfinder.ts:23",
+          "src/lib/eval-pipeline.ts:370",
+          "src/lib/email.ts:38",
+          "src/lib/exa.ts"
+        ],
+        "evidence": "Grep for AbortSignal/signal:/timeout across enrichers returns no matches for github, devto, hackernews, npm, huggingface, sec-edgar, openalex, producthunt, wikipedia, stackoverflow, nfx, yc, wikidata. github.ts:16 is a bare fetch(`https://api.github.com${path}`). anymailfinder.ts:23 fetch() has no signal. eval-pipeline.ts:370 generateText({...}) passes no abortSignal. runEnrichments (index.ts:44) uses Promise.allSettled — resilient to a thrown error but NOT to a hang: allSettled waits for the SLOWEST enricher. email.ts and exa.ts likewise call the SDKs with no timeout.",
+        "impact": "If GitHub/Exa/AnyMailFinder/an enricher upstream hangs (no RST, slow loris), the awaiting promise never settles. In scoring-tick (maxDuration 300) or find-email-tick (300) this can consume the whole budget, the function is killed mid-flight, items stay in 'scoring' state, and Exa/Claude spend already incurred is billed with no result. There is no per-call ceiling anywhere.",
+        "recommendation": "Add AbortSignal.timeout(Nms) to every fetch in enrichers/anymailfinder/exa helpers and pass abortSignal to generateText. Wrap runEnrichments' allSettled members in a per-enricher Promise.race against a timeout so a single hung source degrades gracefully instead of starving the whole pipeline.",
+        "verification": null
+      },
+      {
+        "title": "Stripe webhook ignores async-payment and refund/dispute events; no event-id dedupe table",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/app/api/stripe/webhook/route.ts:24-45",
+          "src/lib/credits.ts:83-119"
+        ],
+        "evidence": "The handler only acts on event.type === 'checkout.session.completed' (line 24). There is no case for checkout.session.async_payment_succeeded (ACH/bank-debit complete after the session, with payment_status != 'paid' at completed time → credits never granted) nor charge.refunded / charge.dispute.created (a refunded/charged-back buyer keeps their credits). Idempotency relies solely on the credit_ledger payment_intent unique index inside topUpCredits — there's no record of processed Stripe event ids, so non-grant events have no replay protection.",
+        "impact": "Customers paying via delayed methods get charged but no credits (support burden). Refunds and chargebacks do not claw back credits, so a buyer can dispute a charge yet keep the API credits they bought — direct revenue leak.",
+        "recommendation": "Handle async_payment_succeeded (grant on success) and async_payment_failed. Add charge.refunded / dispute handlers that debit credits via a negative ledger row keyed to the original payment_intent. Consider a stripe_events table keyed on event.id for belt-and-suspenders idempotency across all event types.",
+        "verification": null
+      },
+      {
+        "title": "Money-path code is the least-tested: no tests for Stripe webhook or credit deduction core",
+        "severity": "high",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "tests/",
+          "src/app/api/stripe/webhook/route.ts",
+          "src/lib/credits.ts",
+          "src/app/api/cron/find-email-tick/route.ts"
+        ],
+        "evidence": "117 test files exist under /tests, but there is no stripe-webhook test and no credits.ts test (no tests/lib/credits.test.ts; grep of tests/ for topUpCredits/reserveCredits/refundCredits finds none). There IS admin-credit-enforcement.test.ts and credit-pricing/credit-packs tests, but the atomic reserve/refund/topup primitives and the webhook→grant flow — the parts that move real dollars — are untested. find-email-tick (charge path) and scoring-tick's reconcileHold refund path also lack route-level tests (scoring-tick-events.test.ts only covers the event-applicant branch).",
+        "impact": "The double-grant/double-charge guards are exactly the invariants you most want regression-locked. A refactor to topUpCredits' onConflict gate or to reserveCredits' conditional WHERE could silently reintroduce double-spend with no failing test to catch it.",
+        "recommendation": "Add unit tests for topUpCredits (duplicate payment_intent is a no-op; concurrent calls grant once), reserveCredits (two concurrent reserves can't overspend a balance), and refund symmetry. Add a webhook test asserting credits = min(amount_total, claimed) and that unpaid status grants nothing.",
+        "verification": null
+      },
+      {
+        "title": "Lifecycle/welcome sweep aborts the whole pass on a single unhandled Clerk-resolve failure",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/lib/welcome-email-sweep.ts:117-149",
+          "src/lib/welcome-email-sweep.ts:39-54",
+          "src/app/api/cron/lifecycle-emails/route.ts:17-19"
+        ],
+        "evidence": "Per-recipient isolation is correctly implemented (try/catch around each send, lines 130-148, leaving the row unmarked to retry) and markSent uses onConflictDoNothing on a (clerkUserId,kind) unique index so double-send across overlapping runs is structurally prevented — good. But resolveClerk (line 45) does one batched getUserList with no try/catch; if that Clerk Backend API call throws (network/429), runClaimWelcomePass throws and the whole pass aborts. The route (lifecycle-emails/route.ts:17-18) awaits runClaimWelcomePass() then runDevApiWelcomePass() with no catch, so a throw in the first 500s the cron and the second pass never runs.",
+        "impact": "A Clerk API outage aborts the entire lifecycle pass each tick (no email progress, and the dev-API pass is skipped when the claim pass throws) rather than degrading; observability is only a console.error. This is the memory-noted 'loop-abort fragility'.",
+        "recommendation": "Wrap resolveClerk in try/catch and treat a failure as 'skip this run' (return zeros) instead of throwing. In lifecycle-emails/route.ts wrap each pass in its own try/catch + reportServerError so one pass failing doesn't 500 the cron and lose the other pass's progress.",
+        "verification": null
+      },
+      {
+        "title": "Only 6 of 55 API routes report errors to PostHog/admin-alert; caught errors are invisible",
+        "severity": "medium",
+        "category": "maintainability",
+        "effort": "M",
+        "files": [
+          "src/lib/report-server-error.ts:1-16",
+          "src/app/api/cron/scoring-tick/route.ts:268-284",
+          "src/app/api/stripe/webhook/route.ts:20"
+        ],
+        "evidence": "reportServerError is referenced in only 6 of 55 api route files. report-server-error.ts's own header explains it exists precisely because a handler that CATCHES an error never bubbles to instrumentation.ts's onRequestError→PostHog wiring. scoring-tick's main per-item catch (lines 268-284) formats the error into the item's `error` column and calls failItem — but never calls reportServerError, so item-level pipeline failures (Claude parse errors, Exa failures, DB errors) are visible only in the admin jobs table, not in PostHog or via alert. The Stripe webhook's signature-verify catch (webhook/route.ts:20) silently returns 400 with no report.",
+        "impact": "Whole classes of prod failures (scoring items failing en masse, webhook signature mismatches after a secret rotation, find-email upstream errors) produce no alert and no aggregatable PostHog signal — you only find out by manually inspecting tables. Debugging a prod incident lacks centralized signal.",
+        "recommendation": "Call reportServerError in the scoring-tick per-item catch (with itemId/jobId context), in the webhook invalid-signature path, and standardize a thin wrapper so every /api route's top-level catch reports. Consider a structured logger (route, requestId, userId) instead of ad-hoc console.error so logs are queryable.",
+        "verification": null
+      },
+      {
+        "title": "Admin-alert dedupe is per-instance in-memory — alert storms still possible across serverless instances",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/lib/report-server-error.ts:21-37"
+        ],
+        "evidence": "lastAlertAt is a module-level Map (line 22); the file's own comment (lines 13-16) notes 'The dedupe map is per-instance (serverless cold starts reset it).' On Fluid Compute with multiple concurrent instances, each instance has its own Map, so a fingerprint that fires across N instances emails up to N times per hour, and a burst that spawns many cold instances multiplies it further.",
+        "impact": "During a real incident (e.g. an enricher upstream down, throwing the same error across many concurrent scoring functions), the operator inbox can still be flooded despite the intended 1/hour cap — the opposite of what's needed mid-incident.",
+        "recommendation": "Move dedupe to the durable store the comment already suggests: a small Postgres table keyed on (fingerprint, last_sent_at) with an atomic conditional insert/update, so the 1/hour cap holds globally across instances.",
+        "verification": null
+      },
+      {
+        "title": "Cron secret compared with non-constant-time string equality",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/cron-auth.ts:14"
+        ],
+        "evidence": "return auth === `Bearer ${secret}` — a plain JS === comparison that short-circuits on the first differing byte, leaking timing information about CRON_SECRET. The same pattern is worth checking in src/lib/api-keys.ts (public-key auth).",
+        "impact": "Theoretically allows a timing side-channel to recover CRON_SECRET byte-by-byte. Low practical risk over the public internet (network jitter dominates), but it gates every cron that spends money (scoring, find-email) and is trivial to harden.",
+        "recommendation": "Use crypto.timingSafeEqual on equal-length buffers (hash both sides to fixed length first to avoid length leakage). Audit src/lib/api-keys.ts for the same comparison.",
+        "verification": null
+      },
+      {
+        "title": "scoring-tick has no stale-claim reaper — a killed/timed-out function strands items in 'scoring' forever",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/app/api/cron/scoring-tick/route.ts:108-128",
+          "src/app/api/cron/scoring-tick/route.ts:162-285",
+          "src/lib/eval-pipeline.ts:369-397"
+        ],
+        "evidence": "The item claim is atomic and idempotent (FOR UPDATE SKIP LOCKED, lines 108-122, good). But the claim WHERE only re-claims status IN ('pending','resolved') (line 115). The per-item pipeline call (runEval/reEvaluate, lines 197-199) has up to 2 generateText attempts with NO abortSignal (eval-pipeline.ts:370). If the function is killed by maxDuration (300s) mid-item, that item stays in status 'scoring' with started_at set, and no later tick ever reclaims it — there is no reaper for stale 'scoring'/'resolving' rows.",
+        "impact": "An item whose function is killed gets stuck in 'scoring' forever: the parent job never reaches all-terminal, so the completion/credit-hold reconciliation (lines 288-333) never fires and the credit hold is never refunded. Exa+Claude spend for the partial attempt is incurred with no terminal state.",
+        "recommendation": "Add a stale-claim reaper at the top of each tick: reset items in 'scoring'/'resolving' with started_at older than a threshold back to 'pending' (or fail after K resets). Pass an abortSignal/timeout to generateText so a single item can't consume the whole maxDuration budget.",
+        "verification": null
+      },
+      {
+        "title": "refundCredits is not idempotent while topUpCredits is — asymmetry risks minting free credits on a double-refund",
+        "severity": "low",
+        "category": "correctness",
+        "effort": "M",
+        "files": [
+          "src/lib/credits.ts:64-78",
+          "src/lib/credits.ts:83-119"
+        ],
+        "evidence": "topUpCredits gates on the credit_ledger payment_intent unique index (lines 93-104), so a retry is a no-op. refundCredits (line 64) has no such guard: it unconditionally increments the balance and inserts a 'refund' row (no unique key tying the refund to the originating score_debit). The reserve→run→refund flow depends on the caller invoking refundCredits exactly once on failure.",
+        "impact": "A retry or duplicate error path that calls refundCredits twice for the same failed eval would over-credit the user (mint free credits). Lower likelihood than the find-email charge bug because the score path is usually single-shot, but the asymmetry (topup idempotent, refund not) is a latent foot-gun.",
+        "recommendation": "Make refunds idempotent: key a refund ledger row to the originating score_debit ledgerId via a unique partial index and onConflictDoNothing, so a double-refund is a no-op. Audit all reserve callers to ensure exactly one refund on the failure path.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "arch:deps-config-build",
+    "summary": "The build foundation is fundamentally healthy: TypeScript strict mode is on with effectively zero escape hatches (0 ts-ignore, 3 `as any`, 8 scoped eslint-disables), cron timeouts are correctly budgeted, and secrets are properly gitignored. The main hygiene gaps are operational rather than structural: two divergent committed lockfiles (npm + pnpm) creating install-nondeterminism, ~30 production env vars (including Stripe and email-finder secrets) undocumented in .env.example, no CI pipeline so lint/test/build are never enforced pre-merge, and an unpinned Stripe API version.",
+    "findings": [
+      {
+        "title": "Two divergent lockfiles committed (package-lock.json AND pnpm-lock.yaml) with no packageManager pin",
+        "severity": "high",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "package-lock.json",
+          "pnpm-lock.yaml",
+          "package.json:1-54",
+          ".husky/pre-commit:33"
+        ],
+        "evidence": "Both `package-lock.json` (706 \"resolved\" entries, lockfileVersion 3) and `pnpm-lock.yaml` (668 resolutions) are tracked and committed together (commit 0c91a89). package.json has no `packageManager` and no `engines` field. The pre-commit hook shells out to `pnpm drizzle-kit generate`, implying pnpm is the intended local tool, yet a full npm lockfile is also maintained. The two lockfiles resolve a different number of packages, so they are already drifting.",
+        "impact": "Vercel and contributors pick an installer by lockfile heuristics. If Vercel installs from package-lock.json while devs run pnpm (or vice-versa), the deployed dependency graph differs from what was tested locally — the classic 'works on my machine' / phantom-version class of production bug. Drift will silently widen on every dependency change because only one lockfile gets updated per `add`.",
+        "recommendation": "Pick one package manager. Add `\"packageManager\": \"pnpm@<version>\"` to package.json, delete package-lock.json, and add it to .gitignore. Set Vercel's install command explicitly to `pnpm install --frozen-lockfile`. Add an `engines.node` field to pin the runtime too.",
+        "verification": null
+      },
+      {
+        "title": ".env.example documents only ~16 of ~42 env vars actually read by the code; Stripe & other secrets undocumented",
+        "severity": "medium",
+        "category": "maintainability",
+        "effort": "S",
+        "files": [
+          ".env.example:1-38",
+          "src/lib/stripe.ts:9",
+          "src/app/api/cron/find-email-tick/route.ts",
+          "src/lib/luma.ts",
+          "src/lib/eval-pipeline.ts:111"
+        ],
+        "evidence": "Code reads ~42 distinct process.env keys (grep over src/ + scripts/) but .env.example lists only 16. Undocumented-but-required secrets include STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, ANYMAILFINDER_API_KEY, LUMA_API_KEY, STACK_EXCHANGE_KEY, NEXT_PUBLIC_POSTHOG_KEY/HOST, ADMIN_ALERT_EMAIL, plus all rate-limit knobs (API_*_PER_DAY_LIMIT, *_GLOBAL_PER_DAY) and feature flags (SCORING_CASCADE, SCORING_EFFORT, CASCADE_HAIKU_MIN/SONNET_MIN, ADMIN_CREDIT_ENFORCEMENT, CLAIM/DEV_API_WELCOME_EMAIL_ENABLED). Conversely APIFY_API_TOKEN is documented and IS used (nfx enricher), and CLERK_SECRET_KEY/NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY are documented and consumed by the @clerk SDK — those are fine.",
+        "impact": "A fresh deploy or new contributor cannot reproduce a working environment from .env.example. Billing (Stripe), email-finding, event sync (Luma), and analytics will silently fail or throw at first use (e.g. stripe.ts throws 'STRIPE_SECRET_KEY is not set'). Operators have no documented inventory of the tunable rate-limit / feature-flag surface.",
+        "recommendation": "Regenerate .env.example from a grep of process.env across src/ and scripts/, grouping into Required vs Optional and documenting defaults for each flag (e.g. SCORING_CASCADE behavior, CASCADE_*_MIN thresholds 95/85). Consider a small zod env-schema module that validates presence at boot for the required set.",
+        "verification": null
+      },
+      {
+        "title": "No CI pipeline — lint, typecheck, and tests are never enforced before merge",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          ".github/workflows (absent)",
+          "package.json:9,13",
+          ".husky/pre-commit"
+        ],
+        "evidence": "There is no .github/workflows directory. The only automated gate is the husky pre-commit hook, which enforces PRD journaling and a drizzle schema-drift check but does NOT run `eslint`, `tsc`, `next build`, or `vitest`. The package has lint/test scripts (lines 9, 13) but nothing invokes them in CI. Vitest config and a tests/ dir exist, so tests are written but their passing status is unverified on push.",
+        "impact": "Type errors, lint violations, and test regressions can land on main and only surface in the Vercel production build (or worse, at runtime). The strict tsconfig and clean codebase are only protected by developer discipline; one bad merge from a less-careful session can break the deploy.",
+        "recommendation": "Add a GitHub Actions workflow (or Vercel-side check) running `pnpm install --frozen-lockfile`, `pnpm lint`, `tsc --noEmit`, and `pnpm test` on every PR; make it a required status check before merge to main.",
+        "verification": null
+      },
+      {
+        "title": "Stripe client instantiated with no pinned apiVersion",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/lib/stripe.ts:11"
+        ],
+        "evidence": "`cached = new Stripe(key);` — no `{ apiVersion: \"...\" }` option is passed. The SDK falls back to the Stripe account's default API version, which Stripe can change out from under the integration (e.g. when the dashboard is upgraded), independent of code deploys.",
+        "impact": "Webhook payload shapes and API response fields can shift without a code change, silently breaking the webhook handler (src/app/api/stripe/webhook) or credit reconciliation. Hard to reproduce because the trigger is an account-level config change, not a deploy.",
+        "recommendation": "Pin explicitly: `new Stripe(key, { apiVersion: \"2025-xx-xx\" })` matching the version the webhook/billing code was written against, and bump deliberately when migrating.",
+        "verification": null
+      },
+      {
+        "title": "next.config.ts and the cron budget are clean — confirmed no build-time error suppression",
+        "severity": "low",
+        "category": "maintainability",
+        "effort": "M",
+        "files": [
+          "next.config.ts:1-7",
+          "vercel.json:1-9",
+          "src/app/api/cron/scoring-tick/route.ts:21-26",
+          "src/app/api/cron/find-email-tick/route.ts:23-26"
+        ],
+        "evidence": "next.config.ts is empty (no `typescript.ignoreBuildErrors` / `eslint.ignoreDuringBuilds` escape hatches — good). tsconfig has `strict: true`. All long-running crons set explicit maxDuration: scoring-tick=300s with ITEMS_PER_TICK=5, find-email-tick=300s with BATCH=50/CONCURRENCY=10 (~30s wall-clock, well inside budget), refresh-mm=300s. vercel.json's 5 cron paths align with the documented jobs and use valid cron expressions. Note: tsconfig `exclude: [\"scripts/**/*\"]` means the ~20 maintenance scripts in scripts/ are NOT typechecked — minor, but worth awareness since they touch prod DBs.",
+        "impact": "Low. This is largely a positive/confirmation finding. The one latent gap is that scripts/ (including prod DB-mutating .mjs/.ts files) bypass strict typechecking and lint, so a bad migration script won't be caught by the build.",
+        "recommendation": "Optionally bring scripts/ under a separate tsconfig include or a lint pass given several of them write to the production Neon branch (per repo memory of past schema-drift outages). Otherwise no action needed on the cron/config side.",
+        "verification": null
+      }
+    ]
+  }
+]

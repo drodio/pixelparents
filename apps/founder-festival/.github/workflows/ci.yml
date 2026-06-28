@@ -1,0 +1,96 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Cancel superseded runs on the same ref to save minutes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  typecheck:
+    name: Typecheck (tsc --noEmit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # pnpm is the source of truth (it's what Vercel builds with). Using npm
+      # here would resolve different dependency versions than production — that
+      # exact drift broke the Stripe apiVersion pin once already.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Next 16 generates the global LayoutProps/PageProps route types at build
+      # time; generate them standalone so tsc sees them without a full build.
+      - run: pnpm exec next typegen
+      - run: pnpm exec tsc --noEmit
+
+  lint:
+    name: Lint (informational)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # NON-BLOCKING for now: the repo has a backlog of pre-existing lint errors.
+      # Once those are cleaned up, drop continue-on-error to make lint a required
+      # gate (see docs/REFACTOR-SECURITY-AUDIT.md, quick win #5).
+      - run: pnpm run lint
+        continue-on-error: true
+
+  # BLOCKING test gate against a dedicated Neon test branch (TEST_DATABASE_URL
+  # secret; gated on the ENABLE_CI_TESTS repo var). Uses vitest.ci.config.ts, which
+  # resets volatile counters before the run and EXCLUDES the handful of suites that
+  # aren't yet data-isolated (they assume a clean/specific DB state or hit an
+  # external API). Runs sequentially to avoid cross-file races on the shared branch.
+  # As those excluded suites get per-test isolation, drop them from the config's
+  # exclude list to widen the gate. RESET_VOLATILE_TABLES is hard-guarded against
+  # the prod host in tests/global-setup.ts.
+  test:
+    name: Test (Neon test branch)
+    runs-on: ubuntu-latest
+    if: ${{ vars.ENABLE_CI_TESTS == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Reconcile the dedicated Neon test branch to match schema.ts BEFORE the
+      # suite. CI runs vitest directly against the branch and never migrated it,
+      # so any table-adding migration (e.g. 0037 admin_audit_log) silently
+      # drifted the branch until applied by hand — which broke unrelated suites.
+      # `push --force` is safe here precisely because this branch is disposable;
+      # it only ever targets TEST_DATABASE_URL (guarded against the prod host in
+      # global-setup.ts), never dev/prod.
+      # Defense-in-depth: refuse to push if the secret somehow points at the
+      # prod host (mirrors the hard guard in tests/global-setup.ts). grep -q
+      # prints nothing, so the (masked) URL never lands in the log.
+      - name: Guard — test DB host is not prod
+        env:
+          URL: ${{ secrets.TEST_DATABASE_URL }}
+        run: |
+          if printf '%s' "$URL" | grep -q "ep-fragrant-surf-aqyi9p6w"; then
+            echo "Refusing to push: TEST_DATABASE_URL points at the prod host"; exit 1
+          fi
+      - name: Sync test-branch schema (drizzle push)
+        run: pnpm exec drizzle-kit push --force
+        env:
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.TEST_DATABASE_URL }}
+      - run: pnpm exec vitest run --config vitest.ci.config.ts --no-file-parallelism
+        env:
+          RESET_VOLATILE_TABLES: "1"
+          TEST_DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}
+          DATABASE_URL: ${{ secrets.TEST_DATABASE_URL }}

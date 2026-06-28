@@ -1,0 +1,1023 @@
+[
+  {
+    "dimension": "security:auth-authorization",
+    "summary": "Authorization is broadly strong: all 114 API routes carry an in-route gate (admin grant, eval-owner, attendee, API-key, cron-secret, or Svix signature), the prior P0-1 isOwningConfidence \"high\"-only mutation gate is consistently used across score-items/recommendations/rescore, and IDOR-prone account/family/developer-key routes correctly scope DB queries by the viewer's own id. The one real gap is an inconsistent RBAC scope check: the event recap/config sub-editors enforce the manage_events grant but omit the canAccessEvent(\"theirs\"-scope) ownership check that their sibling routes apply, letting a scoped event-manager role mutate events it does not own.",
+    "findings": [
+      {
+        "title": "Event recap/config sub-editors skip canAccessEvent() scope check (RBAC scope-bypass IDOR)",
+        "severity": "medium",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/api/admin/events/[id]/date/route.ts:19-24",
+          "src/app/api/admin/events/[id]/slug/route.ts:20-25",
+          "src/app/api/admin/events/[id]/learnings/route.ts:17-22",
+          "src/app/api/admin/events/[id]/hosts/route.ts",
+          "src/app/api/admin/events/[id]/sponsors/route.ts",
+          "src/app/api/admin/events/[id]/priorities/route.ts",
+          "src/app/api/admin/events/[id]/photos/route.ts:33-41",
+          "src/app/api/admin/events/[id]/photos/[photoId]/route.ts",
+          "src/app/api/admin/events/[id]/photos/[photoId]/caption/route.ts",
+          "src/app/api/admin/events/[id]/photos/reorder/route.ts",
+          "src/app/api/admin/events/[id]/photos/caption-all/route.ts",
+          "src/app/api/admin/events/[id]/photos/upload/route.ts"
+        ],
+        "evidence": "These routes gate only on the grant, e.g. learnings/route.ts: `await requireGrant(\"manage_events\")` then immediately `db.update(events)...where(eq(events.id, id))` with no `canAccessEvent(id)` call. Their sibling routes DO add the scope check — e.g. attendees/route.ts has `await requireGrant(\"manage_events\")` followed by `if (!(await canAccessEvent(id))) return ...403`, and ownership.ts canAccessEvent() returns true only when `scopes.events === \"all\"` OR the event's createdByEmail matches the viewer. grep confirms canAccessEvent is present only in applicants/*, attendees/*, rescore-attendees and absent from all 12 routes above.",
+        "impact": "An admin assigned a role with the manage_events grant but Events scope = \"theirs\" (role-scope.ts RoleScope \"theirs\", a shipped RBAC feature) is supposed to manage only events they created. Because these sub-editors omit canAccessEvent, such an admin can POST to /api/admin/events/<any-id>/{slug,date,learnings,hosts,sponsors,priorities,photos,...} and rewrite another owner's event: change its public slug (breaking shared links), alter date, overwrite recap HTML, add/remove hosts & sponsors, or delete/replace photos. Bounded to holders of a scoped admin role (not anonymous users), so it is privilege-escalation-within-admin rather than public exposure.",
+        "recommendation": "Add the same scope guard every sibling route uses, immediately after requireGrant: `const { id } = await params; if (!(await canAccessEvent(id))) return NextResponse.json({ error: \"forbidden\" }, { status: 403 });` in each of the 12 routes. Consider a shared helper (e.g. requireEventAccess(id, \"manage_events\")) so the grant+scope pair can never again be applied half-way, mirroring how canAccessJob is paired with the grant on both admin/jobs routes.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "security:webhooks-ssrf-inbound",
+    "summary": "The security posture on the audited surfaces is strong: both the Resend inbound and Stripe webhooks are signature-verified and idempotent, the enrichers all target fixed third-party API hosts (no SSRF), blob uploads are auth-gated with content-type/size caps, and cron auth fails closed with the localhost bypass restricted to non-prod. The only findings are low-severity/defense-in-depth items — there are no exploitable critical or high vulnerabilities on these surfaces.",
+    "findings": [
+      {
+        "title": "Inbound claim reply is matched by guessable Request # without sender-email verification",
+        "severity": "low",
+        "category": "security",
+        "effort": "M",
+        "files": [
+          "src/lib/claim-thread.ts:87",
+          "src/app/api/inbound/resend/route.ts:79"
+        ],
+        "evidence": "recordInboundReply() matches a thread solely on `eq(claimThreads.requestNumber, opts.requestNumber)` parsed from the subject (`parseRequestNumber` regex `Request\\s*#\\s*(\\d{3,})`), and stores `fromEmail` from the payload without ever checking it equals the claim owner's address: `direction:\"inbound\", fromEmail: opts.fromEmail`.",
+        "impact": "A party who can deliver a signature-valid inbound email (i.e. anyone the Resend inbound address accepts mail from, since the Svix signature only authenticates Resend, not the original sender) and who guesses/knows a sequential Request # can inject an arbitrary message body into another claim's thread, shown to admins in the Claim Review Console. There is no privilege escalation: inbound replies are display-only (no auto-approval — grep shows getThreadForItem is read-only and no claim is approved off an inbound message), and admins manually review, so impact is limited to console spoofing/social-engineering of the reviewer.",
+        "recommendation": "In recordInboundReply, resolve the thread's expected owner email (via scoreItem/evaluation) and flag or reject inbound messages whose fromEmail doesn't match, surfacing a 'sender mismatch' badge in the console so an admin isn't fooled by a spoofed reply. Sequential requestNumber also aids guessing — consider a random token instead.",
+        "verification": null
+      },
+      {
+        "title": "refresh-mm cron downloads a remote CSV fully into memory with no size cap",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/app/api/cron/refresh-mm/route.ts:33"
+        ],
+        "evidence": "`const res = await fetch(url); ... const buf = Buffer.from(await res.arrayBuffer());` reads the entire Majestic Million CSV into a Buffer with no Content-Length check or streaming bound.",
+        "impact": "The URL is a fixed, trusted host (downloads.majestic.com) behind a secret-gated cron, so this is not attacker-steerable. But if that file grows unexpectedly large (or the host is compromised) the function could OOM. Bounded blast radius given the cron gate.",
+        "recommendation": "Stream the download to the temp file and enforce a maximum byte cap, returning 502 if exceeded, instead of buffering the whole response in memory.",
+        "verification": null
+      },
+      {
+        "title": "Cron/secret comparisons use plain === instead of timing-safe equality",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/cron-auth.ts:14",
+          "src/app/api/cron/refresh-mm/route.ts:29"
+        ],
+        "evidence": "isAuthorizedCron returns `auth === \\`Bearer ${secret}\\`` and refresh-mm checks `authHeader !== \\`Bearer ${secret}\\``, both non-constant-time string comparisons of a bearer secret.",
+        "impact": "Theoretical timing side-channel on the CRON_SECRET / MM_REFRESH_SECRET. Practically near-unexploitable over the network (HTTPS + serverless jitter dwarf the signal) and the secrets are high-entropy, so this is hardening only.",
+        "recommendation": "Compare with crypto.timingSafeEqual on equal-length buffers (as svix-verify already does for signatures) for consistency and defense-in-depth.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "security:pii-data-exposure",
+    "summary": "The public read surfaces (v1 developer API, OG image, leaderboard, public profile, public events page, changelog) are, on the whole, well-curated: every API response goes through an explicit allow-list transform (toLeaderboardApiRow, buildScorePayload, toPublicEvent) and the highest-risk private fields (found_email, profile_emails, attendee email, claim message bodies, subscriber emails) never reach public JSON. The prior P0 \"high-confidence-only\" gate for avatar/nickname/location holds independently across the profile page, score-payload, and leaderboard, and the attendee gate (isEventAttendee) correctly fences attendee-only contact data. The one substantive issue is that exact internal per-row scoring point values — which the profile UI deliberately hides — are exposed verbatim through the public /api/v1/score payload (and are already serialized into every public profile page's client bundle).",
+    "findings": [
+      {
+        "title": "Exact internal per-row scoring point values exposed via public /api/v1/score (and serialized into the public profile page client bundle)",
+        "severity": "medium",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/api/score-payload.ts:24",
+          "src/lib/api/score-payload.ts:284",
+          "src/app/(authed)/profile/page.tsx:798",
+          "src/components/ScoreTable.tsx:498"
+        ],
+        "evidence": "score-payload.ts line 24 defines `export type ScoreRow = { reason: string; points: number; confidence: number; status: string };` and line 284-286 maps each score_item to it verbatim: `({ reason: r.reason, points: r.points, confidence: r.confidence, status: r.status })`, returned as `founder_rows`/`investor_rows` to any caller holding a free API key. The profile-page UI deliberately does NOT render the integer points — ScoreTable.tsx only ever consumes `points` for client-side sorting (line 498: `... || b.points - a.points`) and never displays it. The security brief explicitly flags 'no exact scoring point values' as a redaction requirement.",
+        "impact": "The exact integer point contribution of every rubric line item is the core scoring IP / margin-sensitive logic the product otherwise keeps hidden. A competitor can enumerate the scored DB through /api/v1/score (free cache hits) and reverse-engineer the rubric weightings line by line. Note the exposure is partially pre-existing: profile/page.tsx line 798 passes `scoreItemRows` (which include `points`) straight into the client component <ScoreTable>, so the values are already in every public profile page's serialized RSC payload and retrievable via devtools — but the v1 API formalizes and bulk-enables it.",
+        "recommendation": "Drop `points` from the public ScoreRow shape in buildScorePayload/fetchScorePayload (return only reason/confidence/status, matching what the UI shows). Separately, stop passing raw `points` into the ScoreTable client component for non-owner/non-admin viewers (pass only a sort rank or omit it), so the value isn't serialized into the public page bundle. If point values are intentionally public, document that decision and disregard.",
+        "verification": null
+      },
+      {
+        "title": "OG image route runs unfiltered SELECT * and has no hidden/low-signal gate",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/api/og/route.tsx:58",
+          "src/app/api/og/route.tsx:63"
+        ],
+        "evidence": "route.tsx line 58 does `await db.select().from(evaluations).where(eq(evaluations.id, id))` — selecting ALL evaluation columns (including profile blob, breakdown, found-email-adjacent fields) into memory — then only renders name + combined/founder/investor scores. There is no `hiddenAt IS NULL` / signalQuality gate, so a superadmin-hidden profile still renders a score card if its UUID is known. Output is limited to name+scores, so nothing private is drawn, but the full row (incl. `row.profile`) is loaded unnecessarily.",
+        "impact": "No private field reaches the rendered PNG today (only name + 3 scores), so real-world leakage is minimal. The risks are (a) a hidden profile's name+score still being previewable by UUID via the OG endpoint, bypassing the leaderboard's hiddenAt exclusion, and (b) `select()` being a latent footgun: any future code change that reads another column into the JSX would silently leak it.",
+        "recommendation": "Narrow the select to the columns actually rendered (id, fullName, profile.fullName, score, founderScore, investorScore) and add `isNull(evaluations.hiddenAt)` to the where clause so hidden profiles fall through to the generic 'Founder Festival' fallback.",
+        "verification": null
+      },
+      {
+        "title": "open_to_all contact reveal shares attendee email with all co-attendees without mutual connection (verify intent)",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/attendee-connections.ts:380",
+          "src/lib/attendee-connections.ts:388",
+          "src/app/(authed)/events/[slug]/page.tsx:224"
+        ],
+        "evidence": "attendee-connections.ts line 380-388: `const reveal = mode === 'open_to_all'; ... contact: reveal ? { email: r.attendeeEmail, linkedin: r.linkedin } : null`. The reveal gate is solely the target's own sharing mode — any approved attendee who picked 'open_to_all' has their event RSVP email exposed to every other approved attendee in the directory, with no requirement of an accepted connection. Access is correctly fenced to attendees (page.tsx line 224 only builds connection data when `viewer.isAttendee && viewer.evaluationId`, backed by the solid isEventAttendee gate).",
+        "impact": "This appears to be the intended semantics of 'open to all' (opt-in to share contact with the whole attendee list), so it is most likely working as designed rather than a leak. Flagging only to confirm intent: the attendee `eventAttendees.email` (often the same as the private RSVP/found email) becomes visible to the full approved-attendee set on a single opt-in, not gated per-connection.",
+        "recommendation": "Confirm 'open_to_all' is meant to broadcast the email to all co-attendees (vs. only to accepted connections). If broadcast is intended, no change needed; the gating is otherwise correct. If not, move the email reveal behind connectionStatus === 'approved'. No PII reaches non-attendees today.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "api:public-developer-api",
+    "summary": "The v1 API is well-architected for a public surface: every endpoint hard-requires a Bearer API key via verifyApiKey (SHA-256 hashed, revoked-aware), per-key daily rate limits guard all reads, and both paid endpoints (score POST, resolve) sit behind an independent global daily circuit-breaker that trips before any Exa/Claude spend, with idempotent credit reserve/refund on the paid path. Input validation is disciplined (Zod-free but taxonomy-validated facets, clamped limits, escaped ILIKE needles, explicit public column allowlists that exclude PII) — the main gaps are that \"hidden\" profiles remain fully retrievable through score/matrix, and the free search endpoint has no token-count cap.",
+    "findings": [
+      {
+        "title": "Superadmin-hidden profiles are fully exposed via /api/v1/score",
+        "severity": "high",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/api/score-payload.ts:241-271",
+          "src/app/api/v1/score/route.ts:40",
+          "src/lib/leaderboard.ts:208-210"
+        ],
+        "evidence": "fetchScorePayload selects from evaluations WHERE eq(evaluations.linkedinUrl, url) with no isNull(evaluations.hiddenAt) clause — it never filters hidden rows. The leaderboard code documents the intent: \"Hidden profiles still resolve at their canonical URL — only this query excludes them\" (leaderboard.ts:208). So GET/POST /api/v1/score?linkedin_url=... returns a hidden profile's full score, founder/investor rows, radar evidence, current_priorities, badges, and self-set location.",
+        "impact": "The superadmin 'hide' control (/api/admin/profile/[evalId]/hide) is only a leaderboard-suppression toggle, not a privacy control. Any holder of a free API key who knows or guesses a LinkedIn URL can retrieve a hidden person's complete scored profile, including private-scrubbed-but-still-rated priorities and location. If 'hide' is ever used to suppress a profile for takedown/abuse reasons, the API silently defeats it.",
+        "recommendation": "Add isNull(evaluations.hiddenAt) to the WHERE in fetchScorePayload so hidden evals 404 on the public API (and ideally on the public profile page too). If hidden profiles must stay reachable for owners, gate the un-hidden read behind isOwningConfidence/admin rather than a bare API key.",
+        "verification": {
+          "confirmed": false,
+          "severityAdjusted": "not-a-bug",
+          "reasoning": "The factual code claim is accurate: src/lib/api/score-payload.ts:268-269 selects `WHERE eq(evaluations.linkedinUrl, url)` with no `isNull(evaluations.hiddenAt)` clause, so GET/POST /api/v1/score returns hidden profiles' full payloads. However, the finder's IMPACT/severity is wrong because it misreads what \"hide\" is.\n\nThe mitigating control the finder missed: the public profile page ALREADY serves the identical data for hidden profiles to anyone with the URL, no API key required. src/app/(authed)/profile/[handle]/page.tsx and the root profile page (src/app/(authed)/profile/page.tsx:234) load the eval via `eq(evaluations.id, e)` with NO hiddenAt filter — line 563 only passes `initialHidden={row.hiddenAt !== null}` to render an admin toggle UI. The (authed) route group does NOT gate access: src/proxy.ts only force-protects /dashboard(.*), and src/app/(authed)/layout.tsx handles a null clerkUserId gracefully (signed-out users \"see nothing extra\") rather than redirecting. So hidden profiles render fully in a browser to unauthenticated visitors.\n\nThe \"hide\" control is, by explicit design, a leaderboard-suppression toggle only — not a privacy/takedown control. Both the hide route's own header comment and src/lib/leaderboard.ts:207-209 state: \"Hidden profiles still resolve at their canonical URL — only this query excludes them.\" hiddenAt is used in exactly two places: the hide toggle (write) and leaderboard.ts baseWhere (read). It was never wired to restrict profile-data access on any read surface.\n\nFurthermore, fetchScorePayload applies the SAME privacy scrubs as the profile page: owner-private priority items have text/category nulled via recommendationVisibility (lines 296-314), and location comes only from a high-confidence self-set claim (operator/CSV subject_* location is never used, line 352-354). The API exposes nothing beyond what the public profile page already renders. The API is parity with the existing public web surface, not a new exposure vector that \"silently defeats\" a privacy control — because no such privacy control exists. This is a design-consistency observation (if \"hide\" were ever repurposed as takedown, both the page and the API would need the filter), not a current vulnerability.",
+          "exploit": "No incremental exploit. A holder of a free API key calling GET /api/v1/score?linkedin_url=<hidden person's URL> does receive the hidden profile's scored payload — but the exact same data (scores, founder/investor rows, radar evidence, non-private current_priorities, badges, self-set location) is already served, with identical privacy scrubbing, by simply loading the public profile page (/profile/<username> or /profile?e=<id>) in any browser with no authentication and no API key. src/proxy.ts protects only /dashboard(.*); the (authed) layout does not redirect signed-out users; profile/page.tsx:234 loads the eval with no hiddenAt filter. Thus there is no data reachable via the API that is not already reachable via the public web surface, and \"hide\" was never documented or implemented as a control over profile-data access."
+        }
+      },
+      {
+        "title": "Score-payload matrix leaks identity of hidden profiles as peer matches",
+        "severity": "medium",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/founder-matrix.ts:96-107",
+          "src/lib/api/score-payload.ts:402-410",
+          "src/lib/api/score-payload.ts:122-139"
+        ],
+        "evidence": "getMatrixCandidates filters only `ne(signalQuality, \"low\")` and `ne(source, \"code\")` — it omits isNull(hiddenAt), unlike the leaderboard's baseWhereFor (leaderboard.ts:217-223 includes isNull(evaluations.hiddenAt)). fetchScorePayload feeds these candidates into computeMatrix, and toMatch (score-payload.ts:123-130) emits full_name, profile_href, and avatar_url for each similar/complement/opposite peer.",
+        "impact": "Even with the direct-lookup leak fixed, the matrix block of any public score response can surface a hidden profile's name, profile URL, and avatar as a 'similar'/'opposite' peer, leaking the identity of suppressed profiles to API consumers.",
+        "recommendation": "Add isNull(evaluations.hiddenAt) to the getMatrixCandidates WHERE (founder-matrix.ts:107) so hidden evals never appear as matrix peers; mirror the leaderboard's baseWhere exclusion set.",
+        "verification": null
+      },
+      {
+        "title": "Free /api/v1/search has no token-count cap — query-complexity DoS",
+        "severity": "medium",
+        "category": "performance",
+        "effort": "S",
+        "files": [
+          "src/app/api/v1/search/route.ts:34-36",
+          "src/lib/leaderboard.ts:543-545",
+          "src/lib/leaderboard.ts:573-583"
+        ],
+        "evidence": "tokenizeSearchQuery splits q on whitespace with no length/count limit: `raw.trim().split(/\\s+/).filter(Boolean)`. Each token becomes an OR over 5 ILIKE '%token%' predicates (3 on JSON-extracted fields), all AND-ed together (leaderboard.ts:573-583). A caller can send q with hundreds of tokens, producing hundreds of AND-ed non-sargable ILIKE groups against a full table scan. The endpoint is free at 2000/day per key, and keys are mintable via unlimited free Clerk accounts.",
+        "impact": "A single key can issue expensive multi-second full-table-scan queries; across rotated free keys this is a cheap way to exhaust DB CPU. No global circuit-breaker covers search (only score/resolve have withinGlobalDailyLimit).",
+        "recommendation": "Cap tokens (e.g. tokens.slice(0, 8)) and enforce a max q length (e.g. 200 chars) in tokenizeSearchQuery or the route. Consider a global daily breaker bucket for search like the paid endpoints have.",
+        "verification": null
+      },
+      {
+        "title": "Unbounded raised_min/raised_max/team_min can throw Postgres errors → 500 instead of 400",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/lib/leaderboard.ts:105-110",
+          "src/lib/leaderboard.ts:172-176"
+        ],
+        "evidence": "intParam returns any finite truncated number with no range clamp. teamMin is compared via `(profile->...->>'employeesCount')::int >= ${filter.teamMin}` (leaderboard.ts:175). A team_min value exceeding int4 range (e.g. team_min=9999999999) makes Postgres raise an out-of-range/cast error, surfacing as an unhandled 500 on leaderboard/search.",
+        "impact": "Caller-controlled input can trigger 500s rather than a clean 400, degrading API contract quality and producing noisy error logs; minor abuse/DoS-noise vector.",
+        "recommendation": "Clamp raised_min/raised_max/team_min to sane non-negative bounds in parseLeaderboardFilter (or validate and 400 on out-of-range), matching the way `limit` is already clamped to 1..100.",
+        "verification": null
+      },
+      {
+        "title": "Inconsistent error-response shape and no API versioning/deprecation envelope",
+        "severity": "low",
+        "category": "api",
+        "effort": "M",
+        "files": [
+          "src/app/api/v1/score/route.ts:30",
+          "src/app/api/v1/resolve/route.ts:33",
+          "src/app/api/v1/search/route.ts:32",
+          "src/app/api/v1/score/route.ts:25"
+        ],
+        "evidence": "Error bodies use ad-hoc, sometimes human-prose values: `{error:\"invalid linkedin_url\"}` (score:30) and `{error:\"invalid_api_key\"}` (score:25) and `{error:\"name (>= 2 chars) required\"}` (resolve:33) and `{error:\"missing q\"}` (search:32) mix snake_case machine codes with free-text in the same `error` field. Success payloads are also un-enveloped (some return bare objects, some `{results:[...]}`), with no version field beyond the URL path.",
+        "impact": "Consumers can't reliably switch on a stable machine-readable error code, and there's no in-body version/deprecation signal, making future breaking changes harder to roll out cleanly.",
+        "recommendation": "Standardize on a stable machine code (e.g. {error:{code:\"invalid_linkedin_url\", message:\"...\"}}) across all v1 routes, and consider an api_version field in responses. Low priority but cheap to lock in before the surface grows.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "api:design-validation-consistency",
+    "summary": "The API layer is unusually disciplined: every mutating route uses an explicit field allowlist (no mass-assignment), auth is gated in-route via a small set of shared helpers (auth/requireGrant/isAuthorizedCron/verifyApiKey/verifySvix), ownership is enforced in WHERE clauses or via canAccessEvent, raw SQL is parameterized with UUID guards, and unauthenticated/spend-bearing endpoints are rate-limited per-IP and globally. The remaining gaps are input-bound validation holes (unbounded numeric and free-text fields) and an inconsistent-but-not-insecure error/JSON-body convention rather than auth or overposting defects.",
+    "findings": [
+      {
+        "title": "score-items modify accepts unbounded / non-finite points",
+        "severity": "medium",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/app/api/score-items/[id]/route.ts:172",
+          "src/app/api/score-items/[id]/route.ts:14"
+        ],
+        "evidence": "const nextPoints = typeof body.points === \"number\" ? body.points : item.points; — the only check is typeof number, then it is written straight into the integer column points. There is no min/max clamp and no Number.isFinite guard, so an owner can POST {action:\"modify\", reason:\"x\", points: 1e9} or points: NaN. founder_score is documented as 'a plain sum of row points', and applyApprovalSideEffects computes delta = item.points - (item.originalPoints ?? item.points) (line 15), so an admin bulk-approving a NaN/Infinity row would corrupt the headline score math.",
+        "impact": "A claimed owner can stage absurd point values on their own profile rows; if an admin approves them (the queue shows a diff but a careless bulk-approve is plausible), the leaderboard score is inflated or set to NaN. Even unapproved, garbage is persisted and rendered in the admin review console.",
+        "recommendation": "Validate points before write: reject unless Number.isInteger(body.points) and within a sane band (e.g. -100..100, matching the rubric's per-row range). Return 400 otherwise. Apply the same clamp in applyApprovalSideEffects as defense in depth.",
+        "verification": null
+      },
+      {
+        "title": "Event chat title/body have no length cap and are emailed on @mention",
+        "severity": "medium",
+        "category": "api",
+        "effort": "S",
+        "files": [
+          "src/app/api/events/[slug]/chat/route.ts:22",
+          "src/app/api/events/[slug]/chat/[threadId]/reply/route.ts:35",
+          "src/lib/event-chat.ts:241",
+          "src/db/schema.ts:1333"
+        ],
+        "evidence": "The thread-create route only does title = (b.title ?? '').trim() and body = (b.body ?? '').trim() with an emptiness check; the reply route does body = (b.body ?? '').trim(). createComment inserts input.body verbatim. The columns are text(\"title\").notNull() / text(\"body\").notNull() (schema 1333/1357) — unbounded Postgres text. Mentions parsed from this body trigger sendMentionEmails / sendMentionEmails to other attendees.",
+        "impact": "An authenticated attendee can store multi-MB chat posts (DB bloat, slow thread render) and have that payload re-emailed to mentioned attendees, an amplification/abuse vector. Attendee-gated, so not anonymous, but no size ceiling exists anywhere in the path.",
+        "recommendation": "Enforce a server-side cap (e.g. title <= 200, body <= 5000 chars) in both routes before createThread/createComment, returning 400 on overflow; slice as a backstop in createComment. Mirrors the existing caps used elsewhere (family interests slice(0,60), label slice(0,60)).",
+        "verification": null
+      },
+      {
+        "title": "Inconsistent request-body parsing convention: some routes lack try/catch around req.json()",
+        "severity": "low",
+        "category": "api",
+        "effort": "S",
+        "files": [
+          "src/app/api/connections/respond/route.ts:10",
+          "src/app/api/events/[slug]/chat/route.ts:21",
+          "src/app/api/events/[slug]/chat/[threadId]/reply/route.ts:35"
+        ],
+        "evidence": "connections/respond does `const { token, decision } = (await req.json()) as {...}` with no try/catch, while the strong majority of routes (account/*, score-items, claim/verify, v1/score, etc.) wrap it: `try { body = await req.json(); } catch { return 400 invalid json }`. A malformed/empty body on these unwrapped routes throws and surfaces as an unhandled 500 instead of a clean 400.",
+        "impact": "Clients sending a malformed body get a 500 (and a noisy server error / Sentry entry) on a few routes versus a tidy 400 elsewhere — purely a consistency and observability papercut, no security impact.",
+        "recommendation": "Adopt one shared helper, e.g. `async function readJson<T>(req): Promise<T | null>` returning null on parse failure, and standardize on `const body = await readJson<Body>(req); if (!body) return 400`. Apply across all POST/PATCH/DELETE handlers.",
+        "verification": null
+      },
+      {
+        "title": "No shared validation/response convention; error shapes vary across routes",
+        "severity": "low",
+        "category": "maintainability",
+        "effort": "L",
+        "files": [
+          "src/app/api/account/profile-settings/route.ts:187",
+          "src/app/api/account/preferences/route.ts:64",
+          "src/app/api/v1/score/route.ts:88",
+          "src/app/api/admin/org-badges/route.ts:48"
+        ],
+        "evidence": "Error payloads are inconsistent: some return {error, field} (profile-settings fieldError), some {error:\"no valid fields\"}, some {error, message, ...} (v1/score payment_required), some snake_case codes (invalid_api_key, payment_required) and some prose (\"attendees only\", \"ownerType (host|sponsor) and ownerId required\"). Validation is hand-rolled per route (manual typeof checks, ad-hoc allowlists) rather than a shared schema layer.",
+        "impact": "Each route reimplements field validation and error formatting, which is where the points/chat-length gaps above slipped in. Public /api/v1 consumers must handle two error-naming styles. Maintenance burden grows with each of the 114 routes.",
+        "recommendation": "Introduce a thin shared convention: (1) a Zod (or equivalent) schema per route body with a single helper that returns 400 {error:\"validation\", issues:[...]} on failure; (2) a typed json(data,status) / err(code,status) response helper. Roll out incrementally, starting with the public /api/v1 surface for a stable contract. The existing allowlist discipline makes this a mechanical refactor, not a redesign.",
+        "verification": null
+      },
+      {
+        "title": "Unauthenticated /api/redeem creates a real evaluations row per accepted code",
+        "severity": "low",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/app/api/redeem/route.ts:60",
+          "src/app/api/redeem/route.ts:44"
+        ],
+        "evidence": "After an atomic UPDATE...uses_count+1 against bypass_codes, the route does db.insert(evaluations).values({ linkedinUrl: `code:${row.id}`, ... }).returning() with no auth. It is rate-limited (15/IP/day, 300 global/day) and bounded by each code's max_uses, but every successful redeem mints a synthetic evaluations row keyed code:<id>.",
+        "impact": "A multi-use code (max_uses high) lets each redeem create a distinct placeholder evaluation; combined with the per-code reuse this can accrete junk evaluation rows. Bounded by max_uses + global cap so blast radius is small, but unbounded by the redeemer's identity.",
+        "recommendation": "Confirm code max_uses values are intentionally small for multi-use codes, and consider deduping placeholder evals per (code, day) or attaching them to a session rather than minting unconditionally. At minimum document the max_uses operational invariant alongside the rate-limit comment.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "performance:db-queries-indexes",
+    "summary": "The leaderboard keyset/ranking paths are well-indexed (partial DESC keyset indexes + trigram name search in scripts/sql/performance-indexes.sql), but the statistical/aggregate paths that fan out on every profile and leaderboard load are not: three+ distinct full-table scans filter on (signal_quality, source) with no supporting index, the entire `profile` JSONB blob is read on every leaderboard row, and the leaderboard page issues four heavy uncached full-scan aggregations per request. The hottest page (/profile) is also a long sequential await waterfall, and a handful of new tables/paths (event-attendee name resolution, JSONB facet filters) have N+1 or unindexed scan patterns.",
+    "findings": [
+      {
+        "title": "No index on (signal_quality, source) backing the percentile/population/matrix full scans run on every profile view",
+        "severity": "high",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/lib/leaderboard.ts:633-639",
+          "src/lib/credibility.ts:53-58",
+          "src/lib/founder-matrix.ts:96-107",
+          "src/db/schema.ts:172-200",
+          "scripts/sql/performance-indexes.sql:23-49"
+        ],
+        "evidence": "computePercentile runs `FROM evaluations WHERE signal_quality != 'low' AND source != 'code'` and is called THREE times per /profile load (page.tsx:450-452). getPopulation() and getMatrixCandidates() use the identical `and(ne(signalQuality,'low'), ne(source,'code'))` predicate over the whole table. No index in schema.ts or performance-indexes.sql covers signal_quality or source — the only evaluations indexes are the slug/linkedin uniques, source_code, request_ip, hidden_at, company_stage, and the partial score keysets. Every one of these is a Seq Scan over all ~2400 (growing) rows.",
+        "impact": "Each /profile render does 3 sequential full-table scans for percentiles plus full scans in getPopulation/getMatrixCandidates (the latter two TTL-cached for 5 min, but cold/post-score they scan everything). The three computePercentile calls are batched in Promise.all but still each scan the table; cost grows linearly with the eval count and these are the highest-traffic public pages.",
+        "recommendation": "Add a partial covering index `CREATE INDEX CONCURRENTLY evaluations_scored_pop_idx ON evaluations (founder_score, investor_score, score) WHERE signal_quality <> 'low' AND source <> 'code'` (to performance-indexes.sql, matching the existing managed-outside-drizzle convention). For computePercentile, collapse the 3 calls into ONE query returning all three below/total pairs with conditional aggregates instead of 3 round-trips. Consider memoizing the percentile denominators the same way getPopulation already caches.",
+        "verification": null
+      },
+      {
+        "title": "Leaderboard reads the entire `profile` JSONB enrichment blob for every row on every page",
+        "severity": "high",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/lib/leaderboard.ts:332",
+          "src/lib/leaderboard.ts:375",
+          "src/lib/leaderboard.ts:596",
+          "src/db/schema.ts:43"
+        ],
+        "evidence": "getLeaderboard, getLeaderboardRowsForEvalIds, and searchLeaderboard all `select({ ...profile: evaluations.profile })`. The `profile` column (schema.ts:43, `jsonb(\"profile\")`) holds the full per-source enrichment payload (extractedMetrics, mmHits, identity, exaGrounding-adjacent data from 16 enrichers). decorateRows() only reads profile->identity.companyName, extractedMetrics, mmHits, primaryCompanyDomain — a tiny subset — but the whole multi-KB blob is shipped from Postgres for all 50-100 rows per page.",
+        "impact": "Large TOAST-stored JSONB is fetched and deserialized for every leaderboard/search row even though <5% of it is used. At 50-100 rows/page this dominates payload + parse time and grows as enrichers add fields. JSONB bloat on a hot read, exactly as flagged.",
+        "recommendation": "Either (a) project only the needed keys server-side: `sql\\`jsonb_build_object('identity', profile->'identity', 'extractedMetrics', profile->'extractedMetrics', 'mmHits', profile->'mmHits', 'primaryCompanyDomain', profile->'primaryCompanyDomain')\\`` so Postgres returns a slim object, or (b) promote the handful of leaderboard-display fields (companyName, primaryCompanyDomain) to real columns like canonicalIndustries already is. (a) is the low-risk quick win.",
+        "verification": null
+      },
+      {
+        "title": "Leaderboard page fires 4 uncached full-table aggregations per request (badge + industry + counts + main)",
+        "severity": "high",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/app/(authed)/leaderboard/page.tsx:31-37",
+          "src/lib/leaderboard.ts:270-302",
+          "src/lib/leaderboard-badge-sql.ts:30-77"
+        ],
+        "evidence": "Every leaderboard load runs Promise.all of getLeaderboard + getLeaderboardCounts + getBadgeCounts + getIndustryCounts. getBadgeCounts() builds ~28 `count(*) filter (where <predicate>)` aggregates in ONE scan, but several predicates are correlated subqueries: `claimed` = `EXISTS (SELECT 1 FROM users u WHERE u.evaluation_id = evaluations.id ...)` and `mm`/stage-focus run jsonb_array_elements per row. getIndustryCounts() does a separate `unnest(canonical_industries)` GROUP BY full scan. None are cached, yet the badge/industry counts are documented as GLOBAL (not filter-scoped) — i.e. identical across all anonymous viewers.",
+        "impact": "Each leaderboard hit triggers 3 separate full-table scans (counts, badge-counts with correlated EXISTS + JSONB array expansion, industry unnest) on top of the main query. The badge counts in particular execute a per-row correlated subquery into `users` and JSONB array parsing across the whole table — the most expensive of the four — on every page view despite being viewer-independent.",
+        "recommendation": "Cache getBadgeCounts() and getIndustryCounts() (and the unfiltered getLeaderboardCounts) with an in-memory TTL like credibility.ts/founder-matrix.ts already do (5 min), or use Next.js `unstable_cache`/cacheTag invalidated on score writes. They're global and slow-changing. Separately, materialize the `claimed` count from a join/precomputed set rather than a correlated EXISTS-per-row.",
+        "verification": null
+      },
+      {
+        "title": "/profile page is a long sequential await waterfall on the hottest route",
+        "severity": "medium",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/app/(authed)/profile/page.tsx:222-234",
+          "src/app/(authed)/profile/page.tsx:291-304",
+          "src/app/(authed)/profile/page.tsx:342-379",
+          "src/app/(authed)/profile/page.tsx:393-467",
+          "src/app/(authed)/profile/page.tsx:487-514"
+        ],
+        "evidence": "WelcomePage awaits sequentially: canonicalProfileUrl(e) (2 queries) -> evaluations row -> isSuperAdmin -> loadScoreItems -> getCredibilityRadars -> getMatrixCandidates -> auth -> getCurrentViewerContext -> isAdmin -> claim match -> claimRows -> [Promise.all of 3 percentiles + 2 rec queries] -> canonicalProfileUrl AGAIN (line 467, recomputing the same slug/claim lookups already done at 222) -> overrideRows -> getPublicFamilyBadges. Only one Promise.all (449-461) batches; everything else is serial. canonicalProfileUrl is called twice (222 and 467) doing duplicate evaluations+users lookups.",
+        "impact": "Dozens of round-trips run head-to-tail over Neon HTTP (each a fresh TLS request — see db/index.ts neon-http), so DB latency stacks instead of overlapping. The duplicate canonicalProfileUrl pays for 2 extra queries that already ran. This is the single most-viewed authenticated page.",
+        "recommendation": "Hoist independent reads (evaluations row, claim/match rows, overrideRows, family badges, recommendation rows, percentiles, radars) into one or two Promise.all batches once `e` and `clerkUserId` are known. Reuse the canonicalProfileUrl result from line 222 instead of recomputing at 467 (pass the slug/username down). The claim-match query (363) and claimRows query (393) both hit `users` by evaluation_id and could be merged.",
+        "verification": null
+      },
+      {
+        "title": "N+1 in event-attendee name resolution, each query an unindexed lower(full_name) scan",
+        "severity": "medium",
+        "category": "performance",
+        "effort": "S",
+        "files": [
+          "src/lib/events.ts:154-162",
+          "scripts/sql/performance-indexes.sql:48-49"
+        ],
+        "evidence": "resolveEventAttendeeEvalIds loops `for (const name of unresolved)` and runs a separate `SELECT ... WHERE lower(full_name) = lower(name) LIMIT 2` per name. There is NO functional index on `lower(full_name)` — only a `gin_trgm_ops` index for ILIKE search (performance-indexes.sql:48), which does NOT serve an exact `lower(full_name) = ?` equality. So each iteration is a Seq Scan. This runs for every recap/attendee-list render (events.ts:92, 173, 183 all call it).",
+        "impact": "An event with K name-only (un-matched-by-email) attendees fires K sequential full-table scans on every attendee-list / recap / rescore-count render. Grows with both attendee count and eval count; bulk Luma-imported lists are exactly the case where many guests lack an evaluationId.",
+        "recommendation": "Batch the resolution: collect all unresolved names and run ONE query `WHERE lower(full_name) = ANY(<lowercased names>)`, then bucket client-side (keeping the LIMIT-2/ambiguity rule per name). Add `CREATE INDEX CONCURRENTLY evaluations_full_name_lower_idx ON evaluations (lower(full_name))` for the equality lookup.",
+        "verification": null
+      },
+      {
+        "title": "Leaderboard JSONB facet filters (raised/team/outcome/badge) have no GIN index and scan the full table",
+        "severity": "medium",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/lib/leaderboard.ts:152",
+          "src/lib/leaderboard.ts:164-176",
+          "src/lib/leaderboard-badge-sql.ts:30-77",
+          "src/db/schema.ts:185-187"
+        ],
+        "evidence": "buildLeaderboardWhere compiles facets like `(profile->'extractedMetrics'->>'totalRaisedUsd')::bigint >= ?`, `(profile->'extractedMetrics'->>'employeesCount')::int >= ?`, and outcome booleans straight off the JSONB. schema.ts:185-186 explicitly notes 'JSONB metric facets stay unindexed for now; add a GIN index on profile only if those filters prove slow under load.' canonical_industries is text[] and uses arrayOverlaps (`&&`) but has NO GIN index either, so industry filtering is also a scan.",
+        "impact": "When a partial keyset index can't be combined with these JSONB predicates, the planner scans + filters every candidate row. The `&&` industry overlap and `::bigint`/`::int` JSONB extractions are non-sargable without expression/GIN indexes; cost grows with table size as more users apply filters.",
+        "recommendation": "Add `CREATE INDEX CONCURRENTLY evaluations_canonical_industries_gin ON evaluations USING gin (canonical_industries)` to make arrayOverlaps index-assisted (cheap, high-value). For the numeric raised/team facets, add expression indexes (e.g. `((profile->'extractedMetrics'->>'totalRaisedUsd')::bigint)`) only if those filters are common; otherwise the existing keyset index + filter is acceptable at current scale. Revisit the schema.ts:185 TODO now that filtering shipped.",
+        "verification": null
+      },
+      {
+        "title": "All DB traffic — including crons and long bulk jobs — uses the non-pooled neon-http single-shot driver",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/db/index.ts:1-6",
+          "src/app/(authed)/profile/page.tsx:108-111"
+        ],
+        "evidence": "db/index.ts uses `neon(process.env.DATABASE_URL!)` + `drizzle-orm/neon-http`. Every db call is an independent HTTP request (no connection reuse, no interactive transactions — page.tsx:110 explicitly notes 'the Neon HTTP driver can't do' transactions and works around it with deterministic ids + onConflictDoNothing). There is a single db instance shared by request handlers, the scoring-tick / find-email-tick / lifecycle (per-minute) crons, and bulk scoring jobs.",
+        "impact": "Per-statement HTTP latency is why the /profile waterfall and the resolveEventAttendeeEvalIds loop hurt — each await is a full round-trip with no pipelining. Long-running cron/bulk paths that issue many statements (scoring-tick draining a job, lifecycle sweep) pay this per statement and can't use transactions for atomicity. neon-http is correct for serverless request handlers but suboptimal for the iterative cron/bulk workloads.",
+        "recommendation": "Keep neon-http for request routes, but give the crons/bulk jobs a pooled or WebSocket (`drizzle-orm/neon-serverless` with Pool) connection over DATABASE_URL_UNPOOLED so multi-statement work can pipeline and use real transactions. At minimum, batch statements (covered in the other findings) to cut round-trips on the HTTP path.",
+        "verification": null
+      },
+      {
+        "title": "/profile/[handle] runs the username lookup twice; rate_limit table only pruned weekly",
+        "severity": "low",
+        "category": "performance",
+        "effort": "S",
+        "files": [
+          "src/app/(authed)/profile/[handle]/page.tsx:20-26",
+          "src/app/(authed)/profile/[handle]/page.tsx:42-46",
+          "src/app/api/cron/refresh-mm/route.ts:18",
+          "vercel.json:3"
+        ],
+        "evidence": "The [handle] route resolves `lower(clerkUsername) = lower(handle)` in generateMetadata (lines 20-26) AND again in the page body (lines 42-46) — the same query twice per request (Next does run these separately). Separately, rate_limit cleanup (`DELETE FROM rate_limit WHERE day < CURRENT_DATE - INTERVAL '2 days'`) is bolted onto the refresh-mm cron which runs `0 3 * * 0` — once a WEEK (vercel.json:3), so per-IP + global:* rows accumulate for up to 7 days before pruning.",
+        "impact": "The double username lookup is one extra full query per username-profile view (the users.clerkUsername lower-index exists, so each is cheap but redundant). rate_limit growth is bounded (pruned weekly to 2 days) so it's not a leak, but the table carries ~7 days of stale per-IP rows between sweeps rather than the intended 2.",
+        "recommendation": "The duplicate username query is inherent to Next's metadata/render split and is index-backed, so low priority — optionally cache via React `cache()`. Move the rate_limit DELETE to a daily cron (or the per-minute scoring-tick gated to run once/day) so it tracks the 2-day retention it's written for.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "performance:runtime-rendering-cost",
+    "summary": "The data pipeline is well-architected (parallel enrichers with per-source timeouts, parallelized mmHits/grounding, keyset-paginated leaderboard with externally-managed partial indexes, server-rendered first pages), but two classes of problems dominate: (1) hot public read paths (profile page, leaderboard, OG image) run uncached full-table aggregate scans on every request that scale linearly with the evaluations table, and (2) the admin ProfilesScoredTable renders and sorts/filters the entire loaded dataset client-side with no virtualization while infinite-scrolling toward totalCount. Scoring throughput is also capped at 5 serially-processed items per cron tick.",
+    "findings": [
+      {
+        "title": "Profile page runs 3 full-table percentile scans per view, uncached",
+        "severity": "high",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/app/(authed)/profile/page.tsx:17",
+          "src/app/(authed)/profile/page.tsx:449-452",
+          "src/lib/leaderboard.ts:623-649"
+        ],
+        "evidence": "profile/page.tsx: `const [founderP, investorP, combinedP, ...] = await Promise.all([computePercentile(row.founderScore,\"founder\"), computePercentile(row.investorScore,\"investor\"), computePercentile(row.score,\"combined\"), ...])`. Each computePercentile runs `SELECT COUNT(*) FILTER (WHERE <col> < $score), COUNT(*) FROM evaluations WHERE signal_quality != 'low' AND source != 'code'` — a full sequential scan of the evaluations table (the filtered-count predicate is not index-friendly). The page is `export const dynamic = \"force-dynamic\"` so nothing is cached.",
+        "impact": "Every profile view (the most-shared public URL, also hit by social crawlers and the leaderboard) does 3 full-table scans plus ~6 other sequential awaits. Cost and latency grow linearly with the evaluations table and with traffic; a viral profile or crawler burst multiplies full scans with no cache relief.",
+        "recommendation": "Compute the three percentile distributions once and cache them: either a single SQL pass that returns all three rank positions, or precompute score-bucket histograms in app_stats (refreshed on a cron / after scoring ticks) and derive the percentile in memory. Wrap the lookup in `use cache` with a cacheTag invalidated when scores change, or read from the cached app_stats row. Collapse the leading sequential `await db` calls on this page into the existing Promise.all.",
+        "verification": null
+      },
+      {
+        "title": "Admin ProfilesScoredTable renders/sorts/filters entire dataset client-side with no virtualization",
+        "severity": "high",
+        "category": "performance",
+        "effort": "L",
+        "files": [
+          "src/components/admin/ProfilesScoredTable.tsx:1",
+          "src/components/admin/ProfilesScoredTable.tsx:305-350",
+          "src/components/admin/ProfilesScoredTable.tsx:907",
+          "src/components/admin/ProfilesScoredTable.tsx:614-624"
+        ],
+        "evidence": "The component is `\"use client\"` (1081 LOC). `allRows = useMemo(() => [...rows, ...extraRows]...)`, then `sorted = useMemo(() => { const copy = allRows.filter(r => rowMatchesFilter(r, enabled)); copy.sort(...); }, [allRows, sortKey, dir, enabled])`, and the body renders `{sorted.map((p, i) => ...)}` (a heavy multi-column row each). An IntersectionObserver `loadMore()` keeps fetching `/api/admin/profiles/list` pages until `totalCount` is reached — every loaded row stays mounted in the DOM. Header shows `Loaded {sorted.length} of {totalCount}`.",
+        "impact": "With thousands of scored profiles, scrolling to the bottom mounts thousands of complex rows; every sort/filter toggle re-sorts and re-renders the whole array. Memory and main-thread time grow unbounded, making the admin Profiles page progressively janky/unusable as the table grows.",
+        "recommendation": "Virtualize the row list (e.g. @tanstack/react-virtual or react-window) so only visible rows mount, and/or push sort+filter to the server (the pagination API already exists) so the client holds a bounded window instead of the full dataset. At minimum, memoize per-row render and cap the in-memory set.",
+        "verification": null
+      },
+      {
+        "title": "Leaderboard load issues 5 uncached aggregate queries, several full-table scans",
+        "severity": "medium",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/app/(authed)/leaderboard/page.tsx:31-37",
+          "src/lib/leaderboard.ts:270-302",
+          "src/lib/leaderboard.ts:246-262"
+        ],
+        "evidence": "LeaderboardPage awaits `Promise.all([getLeaderboard, getCurrentViewerContext, getLeaderboardCounts, getBadgeCounts, getIndustryCounts])`. getBadgeCounts builds one `count(*) filter(...)` per badge predicate over baseWhere; getIndustryCounts does `unnest(canonical_industries)` GROUP BY over the whole table; getLeaderboardCounts does two filtered counts. None are cached, and the page has no `revalidate`/`use cache`. badgeCounts/industryCounts are explicitly GLOBAL (not filter-scoped) yet recomputed on every request including for anonymous first-page visitors.",
+        "impact": "The anonymous leaderboard (a primary public landing surface) triggers multiple full-table aggregate scans per visit. badge/industry counts are identical across all anonymous visitors but recomputed every time, wasting DB time and slowing first paint under traffic.",
+        "recommendation": "Cache getBadgeCounts and getIndustryCounts (they're global) with `use cache` + cacheLife (minutes) and a cacheTag invalidated on score writes; they don't need per-request freshness. Consider caching the anonymous first page of getLeaderboard for the default (no-facet) filter via PPR/cache-components since it's the same for all logged-out visitors.",
+        "verification": null
+      },
+      {
+        "title": "Bulk scoring throughput capped at 5 items processed serially per minute",
+        "severity": "medium",
+        "category": "scalability",
+        "effort": "M",
+        "files": [
+          "src/app/api/cron/scoring-tick/route.ts:26",
+          "src/app/api/cron/scoring-tick/route.ts:162-203",
+          "src/app/api/cron/scoring-tick/route.ts:21"
+        ],
+        "evidence": "`const ITEMS_PER_TICK = 5;` and the claimed items are processed in a serial `for (const c of claimable) { ... await reEvaluate/runEval ... }` loop — each item's full enrich+score pipeline (multiple network round-trips to Exa/Claude) runs one-at-a-time. maxDuration is 300s; the route comment notes a tick runs ~200s for 5 items (~40s/item). The cron fires every minute and relies on overlapping ticks (FOR UPDATE SKIP LOCKED) to gain concurrency.",
+        "impact": "Effective throughput is roughly (overlapping ticks) × 5 items / ~200s. A large bulk import (hundreds/thousands of profiles) drains slowly; per-tick wall-clock is dominated by serial per-item latency, not compute. Adding workers via more overlapping ticks is the only lever and is implicit.",
+        "recommendation": "Process the claimed batch concurrently with a bounded `Promise.all`/p-limit (e.g. 3-5 in-flight) inside one tick instead of serially, and/or raise ITEMS_PER_TICK now that per-source enricher timeouts bound each item. Keep per-item try/catch so one failure doesn't abort the batch (the find-email-tick route already flags this Promise.all-abandons-the-batch risk).",
+        "verification": null
+      },
+      {
+        "title": "Admin Profiles page refreshes the avg-cost stat synchronously on every load",
+        "severity": "low",
+        "category": "performance",
+        "effort": "S",
+        "files": [
+          "src/app/(authed)/admin/profiles/page.tsx:46-50",
+          "src/app/(authed)/admin/profiles/page.tsx:17"
+        ],
+        "evidence": "On the force-dynamic AdminProfilesPage: `try { avgCostCents = await refreshAvgCostStat(); } catch { avgCostCents = await getAvgCostCents()... }` — refreshAvgCostStat recomputes and writes the average-cost app_stat on every page render, blocking the response, in addition to the parallel countScoredProfiles + 50-row jobs query + 200-row initial page.",
+        "impact": "Each admin Profiles page view does a recompute-and-write of a global stat plus a count over the evaluations table, adding latency and write load to a page that is loaded repeatedly during admin work. The stat only needs periodic freshness.",
+        "recommendation": "Move refreshAvgCostStat to the scoring-tick or a cron and just read getAvgCostCents() on page load, or wrap the read in a short-lived cache. Avoid a synchronous write on a GET render path.",
+        "verification": null
+      },
+      {
+        "title": "Leaderboard search ORs JSONB ILIKE predicates that defeat the trigram index",
+        "severity": "low",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/lib/leaderboard.ts:573-585",
+          "src/db/schema.ts:191-193"
+        ],
+        "evidence": "searchLeaderboard builds per-token `or(ilike(fullName, needle), ilike(linkedinUrl, needle), sql\\`profile->'identity'->>'companyName' ILIKE ...\\`, sql\\`profile->'extractedMetrics'->>'partnerAtFirm' ILIKE ...\\`, sql\\`profile->>'primaryCompanyDomain' ILIKE ...\\`)`. Only fullName has a gin_trgm index (evaluations_full_name_trgm_idx); the three JSONB-extraction ILIKEs and linkedinUrl ILIKE have no trigram index, so an OR across them forces a sequential scan over evaluations for every search.",
+        "impact": "Each name/company search (a common interactive action) sequentially scans the full evaluations table to evaluate the un-indexed JSONB ILIKE branches, even though the name branch could use the trigram index — latency grows with table size.",
+        "recommendation": "If company search matters, add expression trigram GIN indexes on the extracted JSONB company fields, or denormalize companyName into an indexed column. Otherwise, restrict search to indexed columns. Confirm via EXPLAIN that the planner isn't already scanning.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "refactor:god-files-duplication",
+    "summary": "eval-pipeline.ts (1328 LOC) tangles five cleanly separable concerns — model/cost, deterministic post-scoring bonuses, JSONB/facet persistence, identity-dedup orchestration, and the public runEval/reEvaluate API — behind module-private functions that already have natural seams; it can be split into ~5 modules with low risk. The wider codebase has no repository layer (47 routes/libs hit the `evaluations` table directly and re-implement the same legacy-breakdown parse and domain normalization), and a cluster of identity/name/slug modules duplicate diacritic-stripping and www-domain normalization that should be unified.",
+    "findings": [
+      {
+        "title": "eval-pipeline.ts is a 1328-LOC god file with 5 cleanly separable concerns",
+        "severity": "high",
+        "category": "maintainability",
+        "effort": "L",
+        "files": [
+          "src/lib/eval-pipeline.ts:1-1328"
+        ],
+        "evidence": "One file holds: model routing + pricing (MODEL_GATEWAY_ID, MODEL_PRICING_USD_PER_1M, ScoringUsage, EvalPricing, buildCostFields, computeScoringCostUsd — lines 103-381); the raw LLM call + JSON repair (SCHEMA_HINT, extractJsonObject, scoreWithClaude — 386-593); deterministic post-scoring bonuses (lookupMmRanksForDomains, applyEnterpriseValueCurve, addCompanyMmBonus, addCompanyGithubBonus, hnCitationsForReason, applyHnCitations — 171-321); persistence/projection (sanitizeForJsonb, investorFacets, payloadToWriteFields, persistScoreItems, rowToResult, extractFoundIdentities — 59-169, 928-1181); cascade orchestration (scoreWithCascade, scoreWith3TierCascade — 785-864); and the public runEval/reEvaluate + identity-dedup INSERT race handling (1198-1328).",
+        "impact": "Every change to pricing, a bonus rule, the JSON schema, or persistence forces a reviewer to reason about all five concerns at once; the 480-line scoreInputs/scoreWithClaude path and the cost math have no isolated unit-test seam.",
+        "recommendation": "Split along the existing function clusters into: scoring-cost.ts (MODEL_GATEWAY_ID, MODEL_PRICING_USD_PER_1M, ScoringUsage/EvalPricing types, buildCostFields, computeScoringCostUsd); scoring-llm.ts (SCHEMA_HINT, extractJsonObject, scoreWithClaude); scoring-bonuses.ts (the MM/GitHub/curve/HN post-processors — all pure or single-table reads, already best-effort isolated); eval-persistence.ts (sanitizeForJsonb, investorFacets, payloadToWriteFields, persistScoreItems, rowToResult, extractFoundIdentities); and keep eval-pipeline.ts as the thin orchestrator (researchSubject, scoreInputs, cascades, runEval, reEvaluate). The functions already pass plain ScoringResult/EnrichmentResult args, so extraction is mechanical with no shared mutable state.",
+        "verification": null
+      },
+      {
+        "title": "No repository layer: 47 sites query the `evaluations` table directly and re-implement lookups",
+        "severity": "high",
+        "category": "refactor",
+        "effort": "XL",
+        "files": [
+          "src/lib/eval-pipeline.ts:121-131",
+          "src/lib/canonical-profile-url.ts:12",
+          "src/lib/profile-slug.ts",
+          "src/lib/auto-claim.ts",
+          "src/app/api/cron/scoring-tick/route.ts",
+          "src/app/api/admin/jobs/route.ts",
+          "src/app/(authed)/profile/page.tsx"
+        ],
+        "evidence": "`grep -rln '.from(evaluations)'` returns 47 files spanning API routes, server components, and lib helpers; the canonical `select().from(evaluations).where(eq(evaluations.id, …)).limit(1)` lookup-by-id is repeated verbatim in at least 3 places (e.g. lookupCachedEval at eval-pipeline.ts:124, reEvaluate at 1279, canonical-profile-url.ts). There is no evaluations-repo module — the 114 routes share scoring logic via eval-pipeline but not data access.",
+        "impact": "Schema changes (the 1526-LOC schema.ts) ripple to dozens of call sites; access-control and soft-delete/hide filters (admin profile hide/delete routes) must be re-applied correctly at every site, and a missed `hidden` filter is a silent data-exposure bug.",
+        "recommendation": "Introduce src/lib/repos/evaluations.ts exposing getById, getByLinkedinUrl (canonicalized), listVisible, and the upsert-with-onConflict used by runEval. Migrate the highest-traffic readers (profile pages, scoring-tick cron, claim/callback) first. This also gives a single home for the legacy-breakdown parsing below.",
+        "verification": null
+      },
+      {
+        "title": "Legacy breakdown JSONB parsing ({founder,investor} vs flat array) is re-implemented in 3+ places",
+        "severity": "medium",
+        "category": "refactor",
+        "effort": "S",
+        "files": [
+          "src/lib/eval-pipeline.ts:145-158",
+          "src/lib/credibility-vectors.ts:64-71",
+          "src/components/ScoringLogButton.tsx"
+        ],
+        "evidence": "eval-pipeline.ts rowToResult inlines: `if (Array.isArray(breakdown)) { founder = breakdown } else if (breakdown && typeof breakdown === 'object') { founder = breakdown.founder ?? []; investor = breakdown.investor ?? [] }`. credibility-vectors.ts already has a clean reusable version: `rowsFor(breakdown, dim)` / `founderRows(breakdown)` / `investorRows(breakdown)` (lines 64-71). ScoringLogButton.tsx parses the same legacy shape a third time.",
+        "impact": "Three copies of the same backward-compat branch must change together whenever the JSONB shape evolves; a divergence silently drops investor rows on one surface (the legacy flat-array case maps only to founder).",
+        "recommendation": "Promote credibility-vectors.ts's founderRows/investorRows (or a new pure breakdown.ts helper) and call it from rowToResult and ScoringLogButton. One owner for the legacy shape.",
+        "verification": null
+      },
+      {
+        "title": "www-domain normalization duplicated 9+ times across libs",
+        "severity": "medium",
+        "category": "maintainability",
+        "effort": "S",
+        "files": [
+          "src/lib/eval-pipeline.ts:200",
+          "src/lib/eval-pipeline.ts:233",
+          "src/lib/badges.ts:161",
+          "src/lib/leaderboard.ts:54",
+          "src/lib/profiles-scored.ts:11",
+          "src/lib/exa.ts:164",
+          "src/lib/enrichers/yc.ts:80",
+          "src/lib/identity-dedup.ts:22",
+          "src/lib/canonicalize.ts:10"
+        ],
+        "evidence": "`domain.toLowerCase().replace(/^www\\./, '')` (sometimes with `.trim()` or `.replace(/\\/+$/,'')`) appears at eval-pipeline.ts:200 and :233 (identical, both deriving `scoring.primaryCompanyDomain`), badges.ts:161/164, leaderboard.ts:54, profiles-scored.ts:11, exa.ts:164, yc.ts:80; identity-dedup.ts:22 normalizeWebsite is a near-superset. Each is hand-rolled with slightly different trailing-slash/protocol handling.",
+        "impact": "Subtle behavioral drift (some strip protocol+trailing slash, some don't) means the same company domain can hash differently across MM bonus, badges, and leaderboard grouping, causing missed matches; and the two identical lines in eval-pipeline (200/233) signal copy-paste within a single function pair.",
+        "recommendation": "Export a single normalizeDomain(input) (and reuse identity-dedup.ts's normalizeWebsite where appropriate) and replace the call sites. At minimum, hoist the repeated `primaryCompanyDomain` normalization in addCompanyMmBonus/addCompanyGithubBonus to one local since they share the identical derivation.",
+        "verification": null
+      },
+      {
+        "title": "Dead TEMP citation-diagnostic logging left in the hot scoring path",
+        "severity": "low",
+        "category": "maintainability",
+        "effort": "S",
+        "files": [
+          "src/lib/eval-pipeline.ts:521-557"
+        ],
+        "evidence": "Two `try { … console.log('[scoring][citation-diag] …') } catch { /* diagnostic only */ }` blocks inside scoreWithClaude's parse loop, each self-labeled `// TEMP diagnostic … Remove once citations land reliably.` They run on every scored eval, building per-row strings and JSON.stringify-ing sample citations purely for logging.",
+        "impact": "Adds ~35 lines of noise to the most security/cost-sensitive function, runs on every paid scoring call, and pollutes production logs; the 'remove once …' condition (citations landing) appears long met given citations are now persisted and sanitized downstream.",
+        "recommendation": "Delete both diagnostic blocks (lines ~522-542 and ~546-556). If still wanted, gate behind a `process.env.SCORING_DEBUG` check so it is off in prod.",
+        "verification": null
+      },
+      {
+        "title": "SCHEMA_HINT TypeScript shape manually mirrors SCORING_SCHEMA with no enforcement",
+        "severity": "low",
+        "category": "correctness",
+        "effort": "M",
+        "files": [
+          "src/lib/eval-pipeline.ts:386-432",
+          "src/lib/scoring-schema.ts:1-229"
+        ],
+        "evidence": "SCHEMA_HINT is a hand-written template-string copy of the Zod SCORING_SCHEMA fields sent to Claude, annotated `// Mirrors SCORING_SCHEMA — keep in sync when changing either side.` (line 384). There is no test or codegen tying them together; e.g. the hint omits the `citations` field that the parse loop later inspects and that sanitizeCitations persists.",
+        "impact": "When the Zod schema gains/renames a field, the prompt hint silently drifts, so the model is told the wrong output shape — degrading extraction quality with no compile error and no test failure.",
+        "recommendation": "Either derive the hint from the Zod schema (zod-to-ts / a small schema-walk) or add a unit test asserting every top-level SCORING_SCHEMA key appears in SCHEMA_HINT, so drift fails CI rather than silently degrading scoring.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "refactor:events-claim-org-subsystems",
+    "summary": "The new event/claim subsystems are generally well-factored with side-effect-free pure mappers, shared resolver helpers, and good use of db.batch for the one true multi-write invariant (applicant transition + audit log). However several routes have concrete correctness/race-condition gaps: the inbound claim webhook trusts a guessable subject number with zero sender verification, vote toggling is a non-atomic check-then-insert that will throw on the unique constraint under concurrency, and a few write paths accept client-supplied foreign keys (parentCommentId) without validating ownership.",
+    "findings": [
+      {
+        "title": "Inbound claim webhook matches replies by guessable request number with no sender verification — thread injection / mis-routing",
+        "severity": "high",
+        "category": "security",
+        "effort": "M",
+        "files": [
+          "src/app/api/inbound/resend/route.ts:74-79",
+          "src/lib/claim-thread.ts:87-110"
+        ],
+        "evidence": "recordInboundReply matches solely on requestNumber parsed from the subject: `.where(eq(claimThreads.requestNumber, opts.requestNumber))` and inserts the message with the caller-supplied fromEmail. It never checks that fromEmail belongs to the thread's evaluation/owner. requestNumber is a serial starting at 10000 (schema.ts:1404), so it is sequential and trivially enumerable. The Svix signature (route.ts:49) only proves the POST came from Resend Inbound — not who originally sent the email.",
+        "impact": "Anyone who can deliver mail to the Resend Inbound address (a public MX), or any third party CC'd/forwarded into the thread, can append an arbitrary inbound message to ANY claim thread by putting `(Request #NNNNN)` in the subject. The admin reads these in the Claim Review Console as if they came from the legitimate claim owner, enabling social-engineering of approval decisions and impersonation across threads.",
+        "recommendation": "In recordInboundReply, load the thread's evaluationId, resolve its owner emails (profile_emails + the toEmail the outbound was sent to), and require normalized fromEmail to match before persisting; otherwise store as direction='inbound_unverified' (or drop) and surface the mismatch in the console. Do not rely on the request number as a secret.",
+        "verification": {
+          "confirmed": true,
+          "severityAdjusted": "medium",
+          "reasoning": "Traced the full path against the real code and the finding's core claims hold. recordInboundReply (src/lib/claim-thread.ts:94-110) matches a thread solely on requestNumber: `.where(eq(claimThreads.requestNumber, opts.requestNumber))`, then inserts an inbound message with the caller-supplied fromEmail (line 103) and body. There is NO check that fromEmail/toEmail belongs to the thread's evaluation, no comparison against the verified profileEmails recipient, and no sender allowlist (confirmed by grep). requestNumber is a Postgres serial (schema.ts:1404) — sequential and enumerable; parseRequestNumber accepts any `(Request #NNNNN)` with 3+ digits (claim-thread.ts:56-59). The Svix signature (svix-verify.ts) is cryptographically sound but only attests that the POST came from Resend's inbound pipeline, not who originally authored the email — and Resend Inbound is a public MX, so anyone can send mail to the configured CLAIM_REPLY_TO address with a crafted subject and have it appended to ANY claim thread. So injection / cross-thread mis-routing is real and exploitable.\n\nMitigating controls the finder partly overstated, which is why I downgrade high→medium: (1) No XSS — the admin console (PendingItemRow.tsx:290) renders the reply body as a React text child (auto-escaped) with whitespace-pre-wrap, and the outbound HTML path escapes too (bodyToHtml). (2) The injected fromEmail is never displayed in the console — PendingItemRow only shows direction (`← reply`), subject, and body (lines 287-290). So the attacker cannot forge a visible \"from the legitimate owner\" sender label; the impersonation is implicit (a message styled as a reply on the targeted thread) rather than an explicit forged identity. (3) The feature is gated behind CLAIM_REPLY_TO being configured AND the inbound webhook wired up; if unset, replies go to the hello@ mailbox and never hit this code. (4) Impact is limited to polluting an admin-only review surface (social-engineering an approval decision), not direct data exposure or a mutation — admins still make the approval call manually. Net: a genuine missing-authorization / spoofable-input bug worth fixing (e.g., verify fromEmail against the thread's verified profileEmails recipient, or treat unknown senders as quarantined/flagged), but real-world severity is medium, not high.",
+          "exploit": "Preconditions: CLAIM_REPLY_TO is set to a Resend-Inbound subdomain address (e.g. reply@reply.festival.so) and the inbound webhook is live; RESEND_INBOUND_SIGNING_SECRET configured.\n\n1. Attacker sends an ordinary email FROM any address (e.g. attacker@evil.com), TO the public inbound address reply@reply.festival.so, with subject: \"RE: Your profile update (Request #10042)\" and a body crafted to influence an approval (e.g. \"Yes that's me, please approve — see attached proof\").\n2. Resend Inbound receives it on its public MX and POSTs it to /api/inbound/resend with a VALID svix signature (Resend signs all inbound deliveries).\n3. route.ts:74 parseRequestNumber pulls 10042 from the subject; route.ts:79 calls recordInboundReply({ requestNumber:10042, fromEmail:\"attacker@evil.com\", body:... }).\n4. claim-thread.ts:97 finds the thread whose serial requestNumber=10042 (an unrelated victim's claim — request numbers are sequential, so enumeration is trivial) and inserts the attacker's message as an \"inbound\" reply (lines 100-107). No verification that attacker@evil.com is the verified owner of that evaluation.\n5. The admin opens that claim in the Claim Review Console (PendingItemRow.tsx:276-292) and sees the attacker's text rendered as a green \"← reply\", indistinguishable from a genuine owner reply, potentially influencing the approval decision.\n\nSuggested fix: in recordInboundReply, look up the thread's evaluation's verified recipient (profileEmails where status=verified) and reject/flag the message when fromEmail does not match; optionally require toEmail to equal the configured inbound address."
+        }
+      },
+      {
+        "title": "Chat vote toggle is a non-atomic check-then-insert that violates the unique index under concurrency",
+        "severity": "medium",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/lib/event-chat.ts:255-288",
+          "src/db/schema.ts:1380"
+        ],
+        "evidence": "toggleVote does `select ... limit 1` then conditionally `insert(eventChatVotes).values(...)` with no onConflictDoNothing. The table has a unique index `event_chat_votes_unique` on (targetType,targetId,voterEvalId). neon-http has no db.transaction, so two concurrent vote requests (double-click / retry) both read no existing row and both attempt the insert; the second throws a unique-violation that propagates as an unhandled 500 from the vote route (route.ts:38 has no try/catch).",
+        "impact": "Rapid double-taps or client retries produce intermittent 500s and a confusing toggled/untoggled vote state. Not a double-count (the unique index prevents inflation), but a reliability/UX defect with no test coverage for the data layer.",
+        "recommendation": "Make the insert `.onConflictDoNothing()` and the delete idempotent, then recompute the count — or model the toggle as: try insert-on-conflict-do-nothing; if 0 rows affected, delete. Wrap the route handler so constraint errors return a benign response.",
+        "verification": null
+      },
+      {
+        "title": "createComment stores client-supplied parentCommentId without verifying it belongs to the thread",
+        "severity": "medium",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/app/api/events/[slug]/chat/[threadId]/reply/route.ts:38-47",
+          "src/lib/event-chat.ts:234-252"
+        ],
+        "evidence": "The reply route takes `parentCommentId` straight from the request body and passes it to createComment, which inserts it unchecked. The schema FK only enforces that the parent comment exists somewhere (schema.ts:1353), not that it belongs to `threadId`. getThreadForView's tree builder silently drops cross-thread parents (`nodes.has(c.parentCommentId)` is false), so the orphan re-roots — but the stored row is now structurally wrong.",
+        "impact": "A caller can attach a reply to a parent comment in a different (possibly higher-visibility) thread. The comment renders fine in its own thread but the data integrity is broken, and any future query that joins comments by parent across threads (e.g. notification/threading logic) would mis-attribute. Also lets an attendees-only-thread comment reference a member-only thread's comment id.",
+        "recommendation": "When parentCommentId is provided, verify the parent's threadId === threadId (and same event) before inserting; reject with 400 otherwise. Cheap single SELECT, reuses getThreadIdForComment.",
+        "verification": null
+      },
+      {
+        "title": "createConnectionRequest has a TOCTOU race against the pair-unique index; concurrent connects throw a raw 500",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/lib/attendee-connections.ts:126-163",
+          "src/db/schema.ts"
+        ],
+        "evidence": "createConnectionRequest does `select existing ... limit 1` then `insert(connectionRequests)` with no onConflict handling, relying on the `connection_requests_pair_unique` index. Two concurrent connect clicks (or the auto_approve path racing a duplicate) both miss the existing row and the second insert raises a unique violation. The connect route catches it (route.ts:79-81) and returns 400 'failed', but a duplicate connect is semantically a no-op, not an error.",
+        "impact": "Duplicate/rapid connect requests surface as a confusing 400 instead of returning the existing request. Low blast radius (the unique index prevents double-rows), but it is a latent race with no idempotency guard.",
+        "recommendation": "Use insert .onConflictDoNothing({ target: pair }) then re-select to return the canonical row, so a concurrent duplicate resolves to the existing request rather than erroring.",
+        "verification": null
+      },
+      {
+        "title": "bulkTransition fans out N independent batches — partial failure leaves a half-applied bulk action with no rollback",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/events.ts:364-381",
+          "src/lib/events.ts:284-322"
+        ],
+        "evidence": "bulkTransition loops over applicantIds calling transitionApplicant sequentially. Each call is its own db.batch (atomic per applicant) plus a best-effort email. If applicant #7 of 20 throws (e.g. 'not found', or a transient neon error after the await), the function rejects mid-loop: applicants 1-6 are already committed (and emailed), 7-20 are untouched, and the caller gets a 500 with no record of how far it got.",
+        "impact": "Admin bulk approve/deny can be partially applied with no clear feedback, and re-running re-sends decision emails for the already-transitioned ones up to the per-recipient cap. Audit log is consistent per-row but the bulk operation is not all-or-nothing.",
+        "recommendation": "Collect per-id success/failure and return a summary (succeeded/failed ids) instead of throwing on the first error; or pre-validate all ids exist before mutating. The route should report partial results to the admin UI.",
+        "verification": null
+      },
+      {
+        "title": "recordInboundReply ignores the parsed toEmail for routing/validation and stores html as fallback body",
+        "severity": "low",
+        "category": "correctness",
+        "effort": "S",
+        "files": [
+          "src/app/api/inbound/resend/route.ts:72",
+          "src/lib/claim-thread.ts:100-107"
+        ],
+        "evidence": "Body is derived as `d.text ?? nested.text ?? d.html ?? ''` — if a client sends HTML-only, the raw HTML is stored verbatim in claimMessages.body (declared 'Plain-text body' in schema.ts:1429) and later rendered in the admin console. toEmail is parsed but only stored, never used to confirm the reply landed on the expected claim address.",
+        "impact": "HTML-only replies pollute the plain-text body field and, depending on how the console renders, could inject markup. Combined with the no-sender-verification finding, the stored content is fully attacker-controllable. Lower severity on its own.",
+        "recommendation": "Strip HTML to text (or store html separately and render escaped). Use toEmail as a secondary check that the reply hit the configured CLAIM_REPLY_TO address.",
+        "verification": null
+      },
+      {
+        "title": "Author/score/vote maps are recomputed per request with no caching; listVisibleThreads filters visibility in app code after fetching all rows",
+        "severity": "low",
+        "category": "performance",
+        "effort": "M",
+        "files": [
+          "src/lib/event-chat.ts:113-148"
+        ],
+        "evidence": "listVisibleThreads selects ALL threads for an event (`.where(eq(eventChatThreads.eventId, eventId))`) then filters by canViewChat in JS (line 119-121), so member-only/attendees-only threads are still fetched for every viewer. It then issues 4 follow-up queries (authors, scores, voted, replyCounts). For a busy event this is O(threads) rows transferred regardless of viewer visibility plus 5 round-trips per page load.",
+        "impact": "Wasted bandwidth and round-trips; minor today (event chats are small) but scales poorly and leaks thread counts indirectly. Not a correctness bug since the JS filter is correct.",
+        "recommendation": "Push the visibility predicate into SQL (the viewer's isMember/isAttendee flags map to an IN list of allowed visibility values) and consider a single grouped query for scores+replies. Low priority until chat volume grows.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "reliability:errors-idempotency-crons",
+    "summary": "The core money-path crons (scoring-tick, find-email-tick) and the Stripe/credits layer are genuinely well-hardened — atomic FOR UPDATE SKIP LOCKED claims, exactly-once finalize via CAS, per-row isolation, and onConflictDoNothing idempotency keys — and a centralized reportServerError gives strong observability where it's wired in. The weak spots are the newer email surfaces: the inbound Resend webhook and chat-mention emails lack true idempotency and silently lose/duplicate work, several external calls (Twilio, Resend, AnyMailFinder, Stripe) have no per-call timeout, and the new changelog + inbound-webhook + svix paths have zero test coverage with 5 suites still excluded from the CI gate.",
+    "findings": [
+      {
+        "title": "Inbound Resend webhook is not idempotent — replayed/retried claim replies create duplicate thread messages",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/lib/claim-thread.ts:87",
+          "src/app/api/inbound/resend/route.ts:79",
+          "src/lib/svix-verify.ts:23"
+        ],
+        "evidence": "recordInboundReply unconditionally `await db.insert(claimMessages).values({ ... direction: 'inbound' ... })` with no dedup on a provider message id. The webhook always returns 200 (route.ts comment: 'Still 200 so Resend doesn't retry-storm'), and svix verification only checks an HMAC plus a 300s timestamp window (`const tol = opts.toleranceSeconds ?? 300`) — there is no nonce/replay store. So any Resend at-least-once retry, or a deliberate replay of a captured payload within 5 minutes, inserts the same reply again.",
+        "impact": "The admin Claim Review Console shows duplicated inbound replies; a party who captures one signed payload can spam a thread with identical messages for 5 minutes. Low blast radius (cosmetic + thread noise, no auth/credit impact) but it defeats the 'full back-and-forth' integrity the feature promises.",
+        "recommendation": "Persist the Resend/svix message id (svix-id header or payload message id) on claim_messages with a unique constraint and insert via onConflictDoNothing, returning early when the insert is a no-op. The webhook already has svix-id in scope at route.ts:51.",
+        "verification": null
+      },
+      {
+        "title": "Chat-mention emails: dedup marker committed before send + all errors swallowed → permanently lost notifications, no alerting",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/event-chat-email.ts:53",
+          "src/lib/event-chat-email.ts:84",
+          "src/lib/event-chat-email.ts:88",
+          "src/app/api/events/[slug]/chat/route.ts:48"
+        ],
+        "evidence": "In sendMentionEmails the dedup row is inserted FIRST (`db.insert(sentEmails)...onConflictDoNothing().returning()`, line 53-58; `if (inserted.length === 0) continue;`), and only afterward is sendRawEmail called inside a try whose catch is empty: `} catch { // swallow — the dedup row already recorded the attempt }` (line 84-86). The outer catch is also empty (line 88-90, 'best-effort; never throw'). It is invoked as pure fire-and-forget: `void sendMentionEmails({...})` in chat/route.ts:48 and reply/route.ts:50.",
+        "impact": "If Resend transiently fails (or Clerk lookup hiccups) the mention email is never sent AND never retried, because the sentEmails marker is already committed. Combined with the empty catches and no reportServerError call, these losses are completely invisible — the operator's own alerting pipeline never fires for them.",
+        "recommendation": "Insert the dedup marker only AFTER a successful send (mirror welcome-email-sweep.ts which marks after send), or wrap the send in a retry and don't insert the marker on failure. At minimum, call reportServerError in both catch blocks so silent loss is observable.",
+        "verification": null
+      },
+      {
+        "title": "changelog-notify cron: notifiedAt marked only after the full recipient loop, with no cron concurrency guard or alerting",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/changelog.ts:81",
+          "src/lib/changelog.ts:108",
+          "src/app/api/cron/changelog-notify/route.ts:6",
+          "vercel.json"
+        ],
+        "evidence": "notifyNewChangelogEntries loops all recipients for an entry and only then runs `db.update(changelogEntries).set({ notifiedAt: new Date() })` (changelog.ts:108), outside any per-recipient transaction. The route has `maxDuration = 120` and no lock; vercel.json schedules it `*/15 * * * *` with no concurrency control (only the GitHub changelog-sync.yml has `concurrency: cancel-in-progress: false`). The function imports no reportServerError, so a crash is silent.",
+        "impact": "If the function is killed mid-entry (maxDuration timeout with a large subscriber list, a Neon blip on the update, or two overlapping ticks both reading the same un-notified entry) every subscriber who already received the email gets it AGAIN on the next tick, because notifiedAt was never set. Today the audience is small so the window is narrow, but it grows linearly with subscriber count.",
+        "recommendation": "Make the claim atomic: per entry, `UPDATE changelog_entries SET notified_at = NOW() WHERE id = $id AND notified_at IS NULL RETURNING` and only send when the update claimed the row (exactly-once), or key delivery on a sentEmails(entryId,email) row. Add reportServerError around the loop.",
+        "verification": null
+      },
+      {
+        "title": "External calls (Twilio, Resend, AnyMailFinder, Stripe) have no per-call timeout — a hung upstream can wedge a cron tick to maxDuration",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/sms.ts:46",
+          "src/lib/anymailfinder.ts:23",
+          "src/app/api/stripe/webhook/route.ts:48"
+        ],
+        "evidence": "sendAdminSms does a bare `await fetch(url, { method: 'POST', ... })` with no AbortController/signal (sms.ts:46); anymailfinder.ts:23 likewise. Only the enricher registry carries a per-source timeout (enricher-timeout.test.ts confirms it). The find-email cron runs AnyMailFinder under runPool with no abort, relying solely on route maxDuration (300s).",
+        "impact": "A single upstream that accepts the connection but never responds holds a worker until Vercel's maxDuration kills the whole tick, abandoning the rest of the claimed batch (find-email-tick documents this exact 'whole tick threw' failure mode it fixed for DB writes, but not for the AMF HTTP call timing out). For alerting (sms/email) a hang can delay the request that triggered reportServerError.",
+        "recommendation": "Add an AbortController with a sane timeout (e.g. 10-15s) to every outbound fetch in sms.ts, anymailfinder.ts, email.ts, and any Resend/Exa/Blob/Stripe raw fetch, matching the per-enricher timeout pattern already proven in the enricher registry.",
+        "verification": null
+      },
+      {
+        "title": "Zero test coverage on new high-risk reliability paths: inbound webhook, svix verification, and the changelog notifier",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/app/api/inbound/resend/route.ts",
+          "src/lib/svix-verify.ts",
+          "src/lib/changelog.ts:81",
+          "tests/lib/claim-thread.test.ts"
+        ],
+        "evidence": "No test references inbound/resend, recordInboundReply-via-webhook, verifySvix, or notifyNewChangelogEntries (greps for those in tests/ return nothing except claim-thread.test.ts, which contains no idempotency/replay assertions). There is no tests/lib/svix-verify.test.ts at all. The signature verifier (the sole auth gate on a public POST endpoint) and the changelog emailer (which fans out to all subscribers) are both untested.",
+        "impact": "The two paths most prone to the duplicate-send / replay bugs above are exactly the ones with no regression net. A future change to verifySvix tolerance, base64 key handling, or the multi-signature loop could silently open the webhook or break it, with nothing in CI to catch it.",
+        "recommendation": "Add unit tests: verifySvix (valid sig, rotated multi-sig header, expired timestamp, bad base64, missing headers), the inbound route (good/bad signature, unmatched request number, idempotent replay once dedup is added), and notifyNewChangelogEntries (only un-notified entries fire; second call is a no-op).",
+        "verification": null
+      },
+      {
+        "title": "Five test suites remain excluded from the blocking CI gate, leaving the eval pipeline and top-N selection un-gated",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "L",
+        "files": [
+          "vitest.ci.config.ts:16",
+          ".github/workflows/ci.yml"
+        ],
+        "evidence": "NOT_YET_ISOLATED in vitest.ci.config.ts excludes tests/app/rescore-all.test.ts, tests/lib/eval-pipeline.test.ts, tests/lib/select-top-profiles.test.ts, tests/lib/profiles-scored.test.ts, and tests/lib/hn-tokenmaxxing-enricher.test.ts (the last hits the external tkmx.odio.dev). The CI test job runs `vitest run --config vitest.ci.config.ts`, so these never block a merge. eval-pipeline.ts is the 1328-LOC scoring orchestrator at the heart of the money path.",
+        "impact": "Regressions in the eval pipeline or top-N selection (both credit/money-affecting) can merge to main green. The external-API enricher test is also a flaky/unavailable dependency if ever re-included as-is.",
+        "recommendation": "Give the four DB-state suites per-test isolation (transaction rollback or row-namespacing, as the config comment prescribes) and re-include them; convert hn-tokenmaxxing-enricher to a mocked-fetch unit test so it no longer depends on a live external host.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "security:regression-of-prior-fixes",
+    "summary": "All 5 prior P0 fixes still HOLD in current code: name-only LinkedIn claims remain non-owning (isOwningConfidence high-only at every mutation gate), Stripe refund/dispute reversal and scoring-tick completion refund are both idempotent via atomic ledger-insert / CAS gates, event-apply retains rate-limit + email validation, and every enricher in the registry is wrapped by withEnricherTimeout. The new claim-email-thread, inbound-webhook, and org-badge surfaces are largely well-gated; the one real gap is an authorization inconsistency where org-badge create/delete is scoped only by a delegatable grant, not by the per-org assignment model the bulk-apply path enforces.",
+    "findings": [
+      {
+        "title": "P0-1 (name-only LinkedIn claim non-owning): HELD",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/identity-match.ts:66-79",
+          "src/app/api/score-items/[id]/route.ts:115",
+          "src/app/api/score-items/route.ts:59",
+          "src/app/api/badges/route.ts:47",
+          "src/lib/authz.ts:23",
+          "src/app/api/claim/verify/route.ts:57-112"
+        ],
+        "evidence": "signalConfidence maps 'linkedin-name-match' -> 'medium' (line 67); isOwningConfidence returns matchConfidence === \"high\" only (line 78). Every mutation gate funnels through it: score-items/[id] line 115 `isOwningConfidence(ownerRow.matchConfidence)`, score-items POST line 59, badges line 47, isEvalOwner (authz.ts:23). claim/verify only upgrades to high on a verified-email tier match or explicit attestation, and short-circuits if already high (line 57) so it can never DOWNGRADE.",
+        "impact": "Name-only claimers (anyone who sets their Clerk name to a founder's) stay non-owning and cannot mutate the profile. The takeover vector is closed and the guard has not been weakened by the new routes.",
+        "recommendation": "No change needed. Note a stale comment at score-items/[id]/route.ts:70-72 says owners are 'high|medium' while the code is high-only via isOwningConfidence — fix the comment to avoid a future copy-paste regression.",
+        "verification": null
+      },
+      {
+        "title": "P0-2/P0-3 (Stripe reversal + scoring-tick refund idempotency): HELD",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/lib/credits.ts:112-144",
+          "src/lib/credits.ts:149-185",
+          "src/app/api/cron/scoring-tick/route.ts:314-366"
+        ],
+        "evidence": "reverseTopUp and topUpCredits both gate on an `insert(creditLedger).onConflictDoNothing({target: stripePaymentIntentId})` returning rows; if `claimed.length === 0` they bail before touching the balance (credits.ts:129, :170). reverseTopUp keys the synthetic id `${pi}:refund` so it never collides with the topup row. finalizeCompletedJob makes the status transition the idempotency gate: `update(scoringJobs).set({status:'completed'}).where(and(eq(id),ne(status,'completed'))).returning(...)` — only one overlapping tick matches, and only that winner refunds (scoring-tick:330-364).",
+        "impact": "Duplicate/concurrent Stripe webhook deliveries and overlapping cron ticks cannot double-grant or double-refund credits.",
+        "recommendation": "No change needed; both money-races remain closed.",
+        "verification": null
+      },
+      {
+        "title": "P0-4/P0-5 (event-apply guards + per-enricher timeout): HELD",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "S",
+        "files": [
+          "src/app/api/events/[slug]/apply/route.ts:45-65",
+          "src/lib/enrichers/index.ts:108-114"
+        ],
+        "evidence": "event-apply validates `isValidApplicantEmail(body.email)` (line 45) before persisting, then enforces per-IP `checkAndIncrementRateLimit` (line 54) and a global `withinGlobalDailyLimit` circuit breaker (line 60). runRegistry wraps EVERY registry entry: `enrichers.map((e) => withEnricherTimeout(e.source, e.run(ctx), e.timeoutMs))` (index.ts:111), so adding an enricher to ENRICHERS[] auto-inherits the deadline.",
+        "impact": "The unauthenticated event-apply endpoint can't be used as an open email relay or to flood rows, and one hung external API can't stall a paid eval to the 300s route ceiling.",
+        "recommendation": "No change needed.",
+        "verification": null
+      },
+      {
+        "title": "Org-badge create/delete is not scoped to the admin's host/sponsor assignments (inconsistent authz)",
+        "severity": "medium",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/api/admin/org-badges/route.ts:36-67",
+          "src/lib/org-badges.ts:46-50",
+          "src/lib/org-badges.ts:99-101",
+          "src/lib/grants.ts:10"
+        ],
+        "evidence": "The bulk-APPLY path correctly scopes by assignment: bulk/route.ts calls `canApplyOrgBadge(badgeId)` which checks `authorizedOrgBadges()` against the admin's adminOrgAssignments. But the CRUD route gates POST (createOrgBadge for an arbitrary ownerType/ownerId) and DELETE (deleteOrgBadge for an arbitrary badge id) ONLY on `requireGrant('manage_events')` with no assignment check (org-badges/route.ts:37-49, :57-65). `manage_events` is a delegatable grant assignable to a non-super-admin role (grants.ts:10, category 'events'). deleteOrgBadge also cascades `db.delete(badgeOverrides).where(badgeId=org:<id>)` (org-badges.ts:48), removing the badge from every profile it was applied to.",
+        "impact": "A delegated admin holding manage_events but assigned to only their own host/sponsor can create badges on, and delete badges of, ANY other host/sponsor — and a delete silently strips that org's badge from all scored profiles. It is an admin-to-admin cross-tenant IDOR, not anonymous, so impact is bounded to the set of role-holding admins, but it breaks the assignment isolation the rest of the feature enforces.",
+        "recommendation": "In org-badges/route.ts POST, check the actor is assigned to (ownerType, ownerId) before createOrgBadge (super-admin bypass). In DELETE, load the badge and verify `canApplyOrgBadge(id)` (or an equivalent assignment check) before deleteOrgBadge. Mirror the exact authorization used by the bulk-apply path.",
+        "verification": null
+      },
+      {
+        "title": "Changelog notify marks notifiedAt only after the full per-recipient fan-out — a mid-entry timeout re-emails everyone",
+        "severity": "low",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "src/lib/changelog.ts:81-110",
+          "src/app/api/cron/changelog-notify/route.ts:6-18"
+        ],
+        "evidence": "notifyNewChangelogEntries loops entries, and for each entry sends to ALL recipients sequentially (`for (const to of recipients) await sendChangelogEntryEmail(...)`) and only AFTER that inner loop does `db.update(changelogEntries).set({notifiedAt}).where(id=r.id)`. The route caps at maxDuration=120s. There is no per-recipient send-ledger.",
+        "impact": "If the function is killed (timeout / cold-start eviction) partway through an entry's recipient list, that entry's notifiedAt is never set, so the next cron run re-sends the entry to the WHOLE list — duplicate changelog emails to every subscriber. Severity scales with subscriber count.",
+        "recommendation": "Either (a) mark notifiedAt before the recipient loop and accept rare under-delivery, or (b) record per-(entry,recipient) sends in a small ledger and skip already-sent pairs on retry. Option (b) is the idempotent fix consistent with the rest of the codebase's ledger pattern.",
+        "verification": null
+      },
+      {
+        "title": "Inbound claim-reply webhook does not bind the reply to the original recipient (content trust)",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/app/api/inbound/resend/route.ts:74-80",
+          "src/lib/claim-thread.ts:87-110",
+          "src/db/schema.ts:1404"
+        ],
+        "evidence": "recordInboundReply matches a thread purely by `requestNumber` parsed from the subject (claim-thread.ts:96-98) and stores fromEmail/body without verifying the sender equals the thread's original toEmail. request_number is a `serial` (schema.ts:1404), i.e. sequential/guessable. The only thing preventing forged inbound mail is the Svix signature (resend/route.ts:42-57, fail-closed, timing-safe in svix-verify.ts:42).",
+        "impact": "Low in practice: forging an inbound POST requires the RESEND_INBOUND_SIGNING_SECRET, so an external attacker cannot inject. But anyone who legitimately receives ANY claim email could reply with a different request number in the subject and have their message appended to another claim's admin-visible thread (cross-thread content spoofing in the Claim Review Console). The admin sees the real fromEmail, so it is detectable, not silent.",
+        "recommendation": "In recordInboundReply, also compare normalized fromEmail against the thread's most-recent outbound toEmail and flag/drop mismatches (or store a `senderVerified` boolean the console surfaces). Keep returning 200 to avoid Resend retry storms.",
+        "verification": null
+      }
+    ]
+  },
+  {
+    "dimension": "refactor:config-deps-build",
+    "summary": "Build hygiene is largely strong: single pnpm lockfile is enforced everywhere (CI, changelog action) with --frozen-lockfile, tsconfig is strict with no ts-ignore escape hatches, next.config does not suppress build/TS errors, all 6 cron routes have matching vercel.json schedules with sane maxDuration values, and the every-minute crons use FOR UPDATE SKIP LOCKED so overlap is safe. The real weaknesses are governance/gating: the \"BLOCKING\" test gate and the changelog sync are both conditional on repo vars (silently skip if unset), a 71-error lint backlog keeps lint non-blocking, scripts/ is excluded from typecheck so the changelog-sync Action ships untypechecked code, a debug DB-seed file was committed to the repo root, and ~10 real secret-bearing env vars are missing from .env.example.",
+    "findings": [
+      {
+        "title": "Debug DB-seed script committed to repo root",
+        "severity": "medium",
+        "category": "maintainability",
+        "effort": "S",
+        "files": [
+          "_tmpseed.cjs:1-18",
+          "DEFERRED-DUPLICATES.md"
+        ],
+        "evidence": "_tmpseed.cjs is git-tracked (git ls-files --error-unmatch _tmpseed.cjs succeeds; committed in 005ee8d \"Event Followups — all 6 phases (#195)\"). It loads .env.local and runs raw INSERTs against whatever DATABASE_URL is present: `const sql = neon(process.env.DATABASE_URL_UNPOOLED || process.env.DATABASE_URL); ... await sql\\`insert into evaluations (...) values ('https://linkedin.com/in/_tmpf', 'Tmp Founder', 90, ...)\\``. It seeds fake 'Tmp Founder'/'Tmp Investor' evals and attaches them to real approved attendees of event slug 'tfo1tkl3'.",
+        "impact": "A throwaway seed script that mutates evaluations/event_attendees shipped to main. If anyone runs `node _tmpseed.cjs` with prod creds in .env.local it injects bogus 90/70-scored profiles into a live event. It also signals .gitignore (`.env*` / `*.local` is covered, but ad-hoc .cjs at root is not) doesn't catch loose debug artifacts.",
+        "recommendation": "Delete _tmpseed.cjs from the repo. If a seed fixture is genuinely needed, move it under scripts/ (already gitignored for data, and excluded from the typecheck), guard it with a non-prod DB-host assertion like tests/global-setup.ts does, and never reference prod-capable DATABASE_URL by default.",
+        "verification": null
+      },
+      {
+        "title": "scripts/ excluded from typecheck → changelog-sync Action ships untypechecked code",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          "tsconfig.json:33",
+          "scripts/build-changelog.ts",
+          ".github/workflows/changelog-sync.yml:32",
+          ".github/workflows/ci.yml:31"
+        ],
+        "evidence": "tsconfig.json `\"exclude\": [\"node_modules\", \"scripts/**/*\"]` — so `pnpm exec tsc --noEmit` (the only BLOCKING gate in ci.yml) never type-checks anything under scripts/. Yet changelog-sync.yml runs `pnpm exec tsx scripts/build-changelog.ts 40` against the PROD changelog DB (`CHANGELOG_PROD_DB_URL`) and `AI_GATEWAY_API_KEY` on every push to main. build-changelog.ts also imports from src/db/schema.ts, so a schema rename can break the script with zero CI signal.",
+        "impact": "A type error or a schema-drift mismatch in build-changelog.ts (or any scripts/* used by the Action) is invisible to CI and only surfaces as a failed prod changelog-sync run after merge — exactly the drift the comments warn about (dev.to/Neo/v0.0.8 rubric lag).",
+        "recommendation": "Add a lightweight typecheck of scripts to CI, e.g. a second `tsc --noEmit -p tsconfig.scripts.json` that includes scripts/ (the main app tsconfig can keep excluding them for build speed). At minimum typecheck build-changelog.ts since it's invoked in an automated prod-touching Action.",
+        "verification": null
+      },
+      {
+        "title": ".env.example drift: ~10 real secret-bearing vars undocumented",
+        "severity": "medium",
+        "category": "maintainability",
+        "effort": "S",
+        "files": [
+          ".env.example:1-126",
+          "src/app/api/inbound/resend/route.ts:42",
+          "src/app/api/admin/sponsors/[id]/logo/route.ts",
+          "src/lib/chief.ts",
+          "src/lib/enrichlayer.ts",
+          "src/lib/enrichers/google-kg.ts"
+        ],
+        "evidence": "The example header tells you to regenerate the used-var set, but the file has drifted. Vars referenced in code but absent from .env.example include secrets: RESEND_INBOUND_SIGNING_SECRET (gates the inbound webhook — src/app/api/inbound/resend/route.ts:42), BLOB_READ_WRITE_TOKEN (Vercel Blob uploads — sponsors/hosts/event-photo routes), CHIEF_API_TOKEN/CHIEF_PROJECT_ID (src/lib/chief.ts), GOOGLE_API_KEY (google-kg/youtube enrichers), ENRICHLAYER_API_KEY (src/lib/enrichlayer.ts), LIBRARIESIO_API_KEY, CLAIM_REPLY_TO, plus rate-limit knobs ADMIN_API_PER_DAY_LIMIT, API_EVENTS/INDUSTRIES/SEARCH_PER_DAY_LIMIT, CLAIM_VERIFY_PER_DAY_LIMIT, ENRICHER_TIMEOUT_MS, CONCURRENCY.",
+        "impact": "A fresh deploy or contributor following .env.example silently ships without inbound-webhook verification configured (the route then rejects all claim replies — see its own comment) or without Blob uploads/event enrichers working. Most fail closed (good), but the gap defeats the file's stated purpose and hides a security-relevant secret (RESEND_INBOUND_SIGNING_SECRET).",
+        "recommendation": "Re-run the documented `grep -rhoE \"process\\.env\\.[A-Z_0-9]+\" src/ scripts/ | sort -u` and reconcile. At minimum add RESEND_INBOUND_SIGNING_SECRET and BLOB_READ_WRITE_TOKEN under REQUIRED/feature sections; group the new rate-limit and enricher-credential vars with the existing optional blocks. Consider a CI step that fails on drift to keep it honest.",
+        "verification": null
+      },
+      {
+        "title": "\"BLOCKING\" test gate is conditional on a repo var — silently skips if unset",
+        "severity": "medium",
+        "category": "reliability",
+        "effort": "M",
+        "files": [
+          ".github/workflows/ci.yml:58-61",
+          "vitest.ci.config.ts:14-20"
+        ],
+        "evidence": "ci.yml job `test` is labeled \"BLOCKING test gate\" but carries `if: ${{ vars.ENABLE_CI_TESTS == 'true' }}`. A skipped job reports success to required-status-checks, so if ENABLE_CI_TESTS is ever unset (or removed) the gate evaporates with no red X. The same pattern gates changelog-sync (`vars.ENABLE_CHANGELOG_SYNC == 'true'`). Additionally vitest.ci.config.ts permanently EXCLUDES 5 suites (rescore-all, eval-pipeline, select-top-profiles, profiles-scored, hn-tokenmaxxing) — including the 1328-LOC eval-pipeline orchestrator — so even when enabled, the pipeline's core test never runs in the gate.",
+        "impact": "The protection most relied on for the scoring/credits surface can be turned off by a single repo-variable change with no visible failure, and the highest-risk pipeline suite is excluded by design. Combined this means the 'blocking' gate gives weaker coverage than its label implies.",
+        "recommendation": "Make the test job unconditional and instead fail fast with a clear message if TEST_DATABASE_URL is missing, OR add a required \"gate-summary\" job that asserts the test job actually ran (not skipped). Prioritize per-test isolation for tests/lib/eval-pipeline.test.ts so it can rejoin the gate (it's the orchestrator that touches credits + spend).",
+        "verification": null
+      },
+      {
+        "title": "71 lint errors block lint from ever becoming a real gate",
+        "severity": "low",
+        "category": "maintainability",
+        "effort": "L",
+        "files": [
+          ".github/workflows/ci.yml:44-48",
+          "eslint.config.mjs"
+        ],
+        "evidence": "ci.yml lint job is `continue-on-error: true` (\"informational\"). Full `pnpm run lint` reports 110 problems (71 errors, 39 warnings). Error classes: 22 @next/next/no-html-link-for-pages (using <a> instead of next/link for internal nav — e.g. src/components/admin/NotAuthorized.tsx:28, EventHostPicker.tsx:38), 21 @typescript-eslint/no-explicit-any, 19 @typescript-eslint/no-unused-vars, 19 @next/next/no-img-element, 13 react-hooks/static-components, 10 @typescript-eslint/no-require-imports, 4 react-hooks/set-state-in-effect, 1 prefer-const. Note 32 eslint-disable comments already exist in src/ but zero @ts-ignore/@ts-expect-error.",
+        "impact": "Lint can never be promoted to a required gate while 71 errors stand, so genuinely meaningful rules (react-hooks/set-state-in-effect can cause render loops; no-html-link-for-pages breaks client-side nav/prefetch) keep slipping in. The any/require-imports/unused-vars classes are noise that masks the real ones.",
+        "recommendation": "Bucket the fix: (1) auto-fixable (prefer-const, some unused-vars) via --fix; (2) mechanical (no-html-link-for-pages → next/link, no-img-element → next/image) in one sweep; (3) the 4 react-hooks/set-state-in-effect are real bug-risk — review individually. Then drop continue-on-error so lint becomes blocking (it's already quick-win #5 in the audit doc).",
+        "verification": null
+      },
+      {
+        "title": "Cron secret compared with non-constant-time ===",
+        "severity": "low",
+        "category": "security",
+        "effort": "S",
+        "files": [
+          "src/lib/cron-auth.ts:13"
+        ],
+        "evidence": "isAuthorizedCron compares the bearer token with a plain string equality: `return auth === \\`Bearer ${secret}\\`;`. JS `===` on strings short-circuits on the first differing byte, leaking a (small) timing signal. The Stripe and Resend webhook paths correctly use library signature verification (constructEventAsync, verifySvix), so this is the one hand-rolled secret comparison.",
+        "impact": "Low: CRON_SECRET is high-entropy and the per-route global rate-limit/circuit-breakers blunt brute force, but a constant-time compare is the standard and cheap. The localhost bypass is already correctly restricted to non-production.",
+        "recommendation": "Use crypto.timingSafeEqual on equal-length buffers (guard length first) for the secret compare, mirroring the pattern already trusted in svix-verify.",
+        "verification": null
+      }
+    ]
+  }
+]

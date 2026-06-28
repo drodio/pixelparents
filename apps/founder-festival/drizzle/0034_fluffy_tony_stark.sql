@@ -1,0 +1,1 @@
+ALTER TABLE "evaluations" ADD COLUMN "founder_status" text;

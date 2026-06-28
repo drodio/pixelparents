@@ -1,0 +1,42 @@
+name: Changelog sync
+
+# After anything ships to main, curate the new commits into the production
+# changelog (build-changelog.ts is idempotent + skips already-curated commits
+# before any LLM call, so a push with no meaningful new work is a fast no-op).
+# Entries land UN-notified; the /api/cron/changelog-notify Vercel cron emails
+# subscribers from the app. Requires repo secrets CHANGELOG_PROD_DB_URL (the prod
+# Neon direct URL) and AI_GATEWAY_API_KEY; the job no-ops if they're absent.
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: changelog-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Curate new commits into the changelog
+    runs-on: ubuntu-latest
+    if: ${{ vars.ENABLE_CHANGELOG_SYNC == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # build-changelog reads full git history
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec tsx scripts/build-changelog.ts 40
+        env:
+          DATABASE_URL: ${{ secrets.CHANGELOG_PROD_DB_URL }}
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}
+      # Propose public /docs page updates from the same shipped commits. Writes
+      # PENDING doc_page_suggestions for a super-admin to review + publish on the
+      # page — never edits doc_pages directly. No-ops without the secrets.
+      - run: pnpm exec tsx scripts/suggest-docs.ts 40
+        env:
+          DATABASE_URL: ${{ secrets.CHANGELOG_PROD_DB_URL }}
+          AI_GATEWAY_API_KEY: ${{ secrets.AI_GATEWAY_API_KEY }}

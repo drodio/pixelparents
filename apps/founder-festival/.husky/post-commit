@@ -1,0 +1,26 @@
+#!/usr/bin/env sh
+# roborev post-commit hook — best-effort auto-review. `roborev post-commit` hands the
+# commit to the daemon and returns immediately (this matches roborev's own installed
+# hook, which also runs it in the foreground). Mirrored here (the husky source) so it
+# survives a beads hooks re-merge into .beads/hooks/ (the active core.hooksPath).
+_roborev_hook() {
+  ROBOREV="$HOME/.local/bin/roborev"
+  if [ ! -x "$ROBOREV" ]; then
+    ROBOREV=$(command -v roborev 2>/dev/null)
+    if [ -z "$ROBOREV" ] || [ ! -x "$ROBOREV" ]; then return 0; fi
+  fi
+  "$ROBOREV" post-commit 2>/dev/null
+}
+_roborev_hook
+
+# Auto-append the new commit to the /changelog (best-effort, non-blocking).
+# Curates just the new meaningful commit(s) via the AI Gateway into the changelog
+# table. Runs in the BACKGROUND so it never slows a commit, and writes to whatever
+# DB .env.local points at (dev locally). It NEVER emails — production subscriber
+# emails are sent by notifyNewChangelogEntries() as a post-deploy/cron step.
+# Set CHANGELOG_HOOK=off to skip (rebases, bulk history rewrites, offline work).
+[ "$CHANGELOG_HOOK" = "off" ] && exit 0
+[ -f .env.local ] || exit 0
+command -v pnpm >/dev/null 2>&1 || exit 0
+( DOTENV_CONFIG_PATH=.env.local pnpm exec tsx --require dotenv/config scripts/build-changelog.ts 5 >/tmp/ff-changelog-hook.log 2>&1 & )
+exit 0

@@ -1,0 +1,12 @@
+CREATE TABLE "event_recommended_connections" (
+	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+	"event_id" uuid NOT NULL,
+	"evaluation_id" uuid NOT NULL,
+	"method" text DEFAULT 'chief' NOT NULL,
+	"html" text NOT NULL,
+	"generated_at" timestamp with time zone DEFAULT now() NOT NULL
+);
+--> statement-breakpoint
+ALTER TABLE "event_recommended_connections" ADD CONSTRAINT "event_recommended_connections_event_id_events_id_fk" FOREIGN KEY ("event_id") REFERENCES "public"."events"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "event_recommended_connections" ADD CONSTRAINT "event_recommended_connections_evaluation_id_evaluations_id_fk" FOREIGN KEY ("evaluation_id") REFERENCES "public"."evaluations"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+CREATE UNIQUE INDEX "event_recommended_connections_event_eval_unique" ON "event_recommended_connections" USING btree ("event_id","evaluation_id");

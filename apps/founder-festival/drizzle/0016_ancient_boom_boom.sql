@@ -1,0 +1,1 @@
+ALTER TABLE "admin_roles" ADD COLUMN "cost_multiplier" integer DEFAULT 10 NOT NULL;

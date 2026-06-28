@@ -1,0 +1,1 @@
+ALTER TABLE "event_attendees" ADD COLUMN "linkedin_url" text;
