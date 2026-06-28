@@ -37,7 +37,7 @@ export async function getSignupForEdit(
 }
 
 // Public secret page: the parent + their children. Returns the row for any valid
-// token; the /p page itself applies the share_visibility gate (link/ohs/private).
+// token; the /p page itself applies the share_visibility gate (ohs/private).
 export type SharedProfile = { signup: SignupRow; kids: ChildRow[] };
 
 export async function getSharedProfileByToken(token: string): Promise<SharedProfile | null> {

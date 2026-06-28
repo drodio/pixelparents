@@ -4,7 +4,7 @@ import { notFound } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { getSharedProfileByToken, getSignupByEmail } from "@/lib/db/signups";
-import { shareFieldsOrDefault, isShareVisibility, canViewProfile } from "@/lib/share";
+import { shareFieldsOrDefault, coerceShareVisibility, canViewProfile } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
 import { renderCaption } from "@/lib/mentions";
 import { PhotoCarousel, type CaptionPart } from "./photo-carousel";
@@ -64,18 +64,16 @@ export default async function SharedProfilePage({
   const { signup, kids } = profile;
   const visible = new Set(shareFieldsOrDefault(signup.shareFields));
 
-  // Viewer + the visibility gate (link / ohs / private).
+  // Viewer + the visibility gate (ohs / private).
   const viewer = await currentUser();
   const viewerEmail = primaryEmail(viewer);
   const loggedIn = Boolean(viewer);
   const isOwner = Boolean(
     viewerEmail && viewerEmail.toLowerCase() === signup.email.toLowerCase(),
   );
-  const visibility = isShareVisibility(signup.shareVisibility)
-    ? signup.shareVisibility
-    : "private";
+  const visibility = coerceShareVisibility(signup.shareVisibility);
   // An "OHS family" = a signed-in viewer who is themselves a signup. Only needed
-  // for the "ohs" tier — skip the DB lookup for link/private profiles.
+  // for the "ohs" tier — skip the DB lookup for private profiles.
   const isOhsFamily =
     visibility === "ohs"
       ? isOwner || (loggedIn && Boolean(viewerEmail && (await getSignupByEmail(viewerEmail))))

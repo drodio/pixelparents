@@ -14,16 +14,24 @@ export const SHARE_FIELDS = [
 export type ShareFieldKey = (typeof SHARE_FIELDS)[number]["key"];
 
 // Visibility tiers for the /p share page.
-export type ShareVisibility = "link" | "ohs" | "private";
+export type ShareVisibility = "ohs" | "private";
 
 export const SHARE_VISIBILITY = [
-  { value: "link", label: "Anyone with the link" },
   { value: "ohs", label: "OHS Families" },
   { value: "private", label: "Just me" },
 ] as const satisfies ReadonlyArray<{ value: ShareVisibility; label: string }>;
 
 export function isShareVisibility(v: unknown): v is ShareVisibility {
-  return v === "link" || v === "ohs" || v === "private";
+  return v === "ohs" || v === "private";
+}
+
+// Coerce a stored share_visibility value to a current tier. Legacy "link"
+// (the removed "anyone with the link" tier) downgrades to "ohs" so those
+// profiles stay shared with OHS families but are no longer publicly viewable.
+export function coerceShareVisibility(raw: unknown): ShareVisibility {
+  if (raw === "ohs") return "ohs";
+  if (raw === "link") return "ohs"; // legacy downgrade
+  return "private";
 }
 
 // Can a viewer see a profile at the given visibility? Pure + unit-tested so the
@@ -32,7 +40,6 @@ export function canViewProfile(
   visibility: ShareVisibility,
   opts: { isOwner: boolean; isOhsFamily: boolean },
 ): boolean {
-  if (visibility === "link") return true;
   if (visibility === "ohs") return opts.isOwner || opts.isOhsFamily;
   return opts.isOwner; // "private"
 }

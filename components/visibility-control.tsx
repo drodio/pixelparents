@@ -4,11 +4,11 @@ import { useState, useTransition } from "react";
 import { SHARE_VISIBILITY, type ShareVisibility } from "@/lib/share";
 import { setShareVisibility, setShareVisibilityByToken } from "@/lib/share-actions";
 
-// A "Privacy: [Anyone with the link | OHS Families | Just me]" segmented slider.
+// A "Privacy: [OHS Families | Just me]" segmented slider.
 // - editable (owner): clicking a segment changes it live.
 // - read-only (signed-in non-owner): shows all segments with the active one lit.
-// - signed-out: only the "Anyone with the link" segment is shown (the only state
-//   a signed-out visitor can ever be looking at).
+// - signed-out: no segments are shown — with no publicly-viewable tier, a
+//   signed-out visitor can never be looking at a share page.
 export function VisibilityControl({
   id,
   mode,
@@ -26,9 +26,8 @@ export function VisibilityControl({
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  const options = loggedIn
-    ? SHARE_VISIBILITY
-    : SHARE_VISIBILITY.filter((o) => o.value === "link");
+  // No publicly-viewable tier remains, so a signed-out visitor sees no segments.
+  const options = loggedIn ? SHARE_VISIBILITY : [];
 
   function choose(next: ShareVisibility) {
     if (!editable || next === v || pending) return;

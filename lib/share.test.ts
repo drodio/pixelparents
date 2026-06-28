@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   DEFAULT_SHARE_FIELDS,
   canViewProfile,
+  coerceShareVisibility,
   generateShareToken,
   sanitizeShareFields,
   shareFieldsOrDefault,
@@ -10,8 +11,6 @@ import {
 describe("canViewProfile (the /p visibility gate)", () => {
   const cases = [
     // [visibility, isOwner, isOhsFamily, expected]
-    ["link", false, false, true], // anyone with the link
-    ["link", false, true, true],
     ["ohs", false, false, false], // signed-out / non-family blocked
     ["ohs", false, true, true], // signed-in OHS family
     ["ohs", true, false, true], // owner always
@@ -20,6 +19,23 @@ describe("canViewProfile (the /p visibility gate)", () => {
   ] as const;
   it.each(cases)("%s owner=%s ohs=%s -> %s", (v, isOwner, isOhsFamily, expected) => {
     expect(canViewProfile(v, { isOwner, isOhsFamily })).toBe(expected);
+  });
+});
+
+describe("coerceShareVisibility", () => {
+  it("keeps current tiers", () => {
+    expect(coerceShareVisibility("ohs")).toBe("ohs");
+    expect(coerceShareVisibility("private")).toBe("private");
+  });
+
+  it("downgrades legacy 'link' (removed public tier) to 'ohs'", () => {
+    expect(coerceShareVisibility("link")).toBe("ohs");
+  });
+
+  it("falls back to 'private' for unknown/null values", () => {
+    expect(coerceShareVisibility("bogus")).toBe("private");
+    expect(coerceShareVisibility(null)).toBe("private");
+    expect(coerceShareVisibility(undefined)).toBe("private");
   });
 });
 

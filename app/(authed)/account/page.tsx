@@ -4,7 +4,7 @@ import Link from "next/link";
 import { getRequestByClerkUser } from "@/lib/db/api-keys";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { hasDatabase } from "@/lib/db";
-import { shareFieldsOrDefault, isShareVisibility } from "@/lib/share";
+import { shareFieldsOrDefault, coerceShareVisibility } from "@/lib/share";
 import { shareUrlFor } from "@/lib/url";
 import { ShareSettings } from "@/app/signup/thanks/share-settings";
 import { KeyPanel } from "./key-panel";
@@ -109,9 +109,7 @@ export default async function AccountPage() {
           </div>
           <ShareSettings
             signupId={signup.id}
-            initialVisibility={
-              isShareVisibility(signup.shareVisibility) ? signup.shareVisibility : "private"
-            }
+            initialVisibility={coerceShareVisibility(signup.shareVisibility)}
             initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
             initialFields={shareFieldsOrDefault(signup.shareFields)}
           />

@@ -57,8 +57,8 @@ export function ShareSettings({
         <div>
           <h3 className="font-semibold text-white">Profile visibility</h3>
           <p className="mt-1 text-sm text-white/55">
-            Choose who can open your share link: anyone with the link, signed-in
-            OHS families, or just you.
+            Choose who can open your share link: signed-in OHS families, or just
+            you.
           </p>
         </div>
         <VisibilityControl id={signupId} mode="signup" value={initialVisibility} editable loggedIn />

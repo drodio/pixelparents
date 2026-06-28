@@ -117,7 +117,7 @@ export async function notifyApplicantWelcome(n: {
     ``,
     `That link is yours — you can come back to it anytime, and as a parent you keep full control over your data. Only you + Pixel Parent admins (like our builder group) will have access to your answers.`,
     ``,
-    `You will also be able to create a "secret link" to share your answers more widely. You can restrict access to the link to only be for "others that have signed up as users in our system" (aka OHS parents) or you can make it visible to "anyone with the link".`,
+    `You will also be able to create a "secret link" to share your answers. You can restrict who can open it to only OHS parents (others who've signed up in our system), or keep it private to just you.`,
     ...(exampleUrl
       ? [
           ``,

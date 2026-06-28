@@ -3,7 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getInterestPool } from "@/lib/interests";
 import { getSignupForEdit } from "@/lib/db/signups";
-import { shareFieldsOrDefault, isShareVisibility } from "@/lib/share";
+import { shareFieldsOrDefault, coerceShareVisibility } from "@/lib/share";
 import { shareUrlFor } from "@/lib/url";
 import { signedPhotoUrls } from "@/lib/blob";
 import FamilyForm from "./family-form";
@@ -83,9 +83,7 @@ export default async function ThanksPage({
     validId && signup ? (
       <ShareSettings
         signupId={validId}
-        initialVisibility={
-          isShareVisibility(signup.shareVisibility) ? signup.shareVisibility : "private"
-        }
+        initialVisibility={coerceShareVisibility(signup.shareVisibility)}
         initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
         initialFields={shareFieldsOrDefault(signup.shareFields)}
       />
