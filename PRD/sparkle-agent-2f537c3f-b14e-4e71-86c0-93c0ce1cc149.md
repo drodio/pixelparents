@@ -1,3 +1,26 @@
+## Progress Update as of June 28, 2026 — 2:30 PM Pacific
+
+### Summary of changes since last update
+Made the vendored `apps/founder-festival/` snapshot inert to the pixelparents
+build so merging to main won't wedge the production deploy pipeline. The root
+`next build` was typechecking the ~1,000 copied files (greedy tsconfig
+`include: **/*.ts(x)`, only `node_modules` excluded), which fail because their
+deps/`@/` paths don't resolve at the pixelparents root — that was the failing
+Vercel check on PR #45.
+
+### Detail of changes made:
+- `tsconfig.json`: added `"apps"` to `exclude` so the root TS program skips the
+  vendored copy.
+- `eslint.config.mjs`: added `"apps/**"` to `globalIgnores` (belt-and-suspenders;
+  `next build` lint shouldn't reach it anyway).
+- Net effect: founder-festival files stay in the repo for collaborators but are
+  invisible to the pixelparents build/lint. Verifying green via CI (no
+  node_modules in this worktree to typecheck locally).
+
+### Potential concerns to address:
+- If anyone later adds a REAL workspace app under `apps/`, this blanket exclude
+  would hide it from the build too — revisit the exclude scope at that point.
+
 ## Progress Update as of June 28, 2026 — 2:14 PM Pacific
 
 ### Summary of changes since last update
