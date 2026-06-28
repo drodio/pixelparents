@@ -29,6 +29,7 @@ export function SortHeader({
   dir,
   onSort,
   className,
+  extra,
 }: {
   label: string;
   k: string;
@@ -36,20 +37,25 @@ export function SortHeader({
   dir: Dir;
   onSort: (k: string) => void;
   className: string;
+  // Optional non-sorting control rendered next to the label (e.g. a copy button).
+  extra?: React.ReactNode;
 }) {
   const active = k === sortKey;
   return (
     <th className={className} aria-sort={active ? (dir === "asc" ? "ascending" : "descending") : "none"}>
-      <button
-        type="button"
-        onClick={() => onSort(k)}
-        className="inline-flex items-center gap-1 hover:text-white"
-      >
-        {label}
-        <span className={`text-[9px] ${active ? "text-white/70" : "text-white/30"}`}>
-          {active ? (dir === "asc" ? "▲" : "▼") : "↕"}
-        </span>
-      </button>
+      <span className="inline-flex items-center gap-1.5">
+        <button
+          type="button"
+          onClick={() => onSort(k)}
+          className="inline-flex items-center gap-1 hover:text-white"
+        >
+          {label}
+          <span className={`text-[9px] ${active ? "text-white/70" : "text-white/30"}`}>
+            {active ? (dir === "asc" ? "▲" : "▼") : "↕"}
+          </span>
+        </button>
+        {extra}
+      </span>
     </th>
   );
 }
