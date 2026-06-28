@@ -1,12 +1,23 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { Fragment, useMemo, useState } from "react";
-import { abbrState } from "@/lib/options";
+import {
+  abbrState,
+  OHS_AFFILIATIONS,
+  BUILDER_INTEREST,
+  TECHNICAL_DEPTH,
+  TIME_COMMITMENT,
+  SKILLSETS,
+  US_STATES,
+} from "@/lib/options";
+import { patchSignup, type SignupPatch } from "@/app/signup/actions";
 import { setAdmin, setPhotoCaption, deleteSignup } from "./actions";
 import { Pills } from "./pills";
 import { TableWrap, thCls, tdCls } from "./ui";
 import { NameCell } from "./name-cell";
+import { TextCell, SelectCell, MultiSelectCell, TagsCell } from "./inline-edit";
 import { compare, SortHeader, type Dir } from "./sortable";
 import { PhotoGallery, type GalleryPhoto } from "./photo-gallery";
 import { CopyIcon, CheckIcon } from "./icons";
@@ -75,7 +86,18 @@ function builderLabel(v: string | null): string {
   }
 }
 
+// Short label for a long affiliation, used in both the cell display and the
+// inline <select> options.
+const shortAffil = (s: string) => s.split(" (")[0];
+
 export function ParentsTable({ rows }: { rows: ParentRow[] }) {
+  const router = useRouter();
+  // Persist one field then refresh so the table reflects the saved value.
+  async function save(id: string, patch: SignupPatch) {
+    await patchSignup(id, patch);
+    router.refresh();
+  }
+
   const [sortKey, setSortKey] = useState("submitted");
   const [dir, setDir] = useState<Dir>("desc");
   const onSort = (k: string) => {
@@ -158,7 +180,7 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
           <Fragment key={r.id}>
           <tr
             id={`p-${r.id}`}
-            className="border-t border-white/10 odd:bg-white/[0.02] hover:bg-white/[0.05] target:bg-emerald-500/10"
+            className="group border-t border-white/10 odd:bg-white/[0.02] hover:bg-white/[0.05] target:bg-emerald-500/10"
           >
             <td className={`${tdCls} whitespace-nowrap`}>
               {r.envAdmin ? (
@@ -185,11 +207,13 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
             </td>
             <th scope="row" className={`${tdCls} whitespace-nowrap text-left`}>
               <NameCell
-                name={`${r.firstName} ${r.lastName}`}
+                firstName={r.firstName}
+                lastName={r.lastName}
                 editHref={`/admin/parents/${r.id}/edit`}
                 deleteAction={deleteSignup}
                 id={r.id}
                 confirmMessage={`Delete ${r.firstName} ${r.lastName} and any associated children? This can't be undone.`}
+                onSaveName={(firstName, lastName) => save(r.id, { firstName, lastName })}
               />
             </th>
             <td className={tdCls}>
@@ -211,35 +235,119 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
               )}
             </td>
             <td className={tdCls}>
-              <a className="text-amber-400 hover:underline" href={`mailto:${r.email}`}>
-                {r.email}
-              </a>
-              <div className="text-white/50">{r.phone}</div>
+              <div className="flex flex-col gap-0.5">
+                <TextCell
+                  value={r.email}
+                  label="Edit email"
+                  placeholder="email"
+                  display={
+                    <a className="text-amber-400 hover:underline" href={`mailto:${r.email}`}>
+                      {r.email}
+                    </a>
+                  }
+                  onSave={(email) => save(r.id, { email })}
+                />
+                <TextCell
+                  value={r.phone}
+                  label="Edit phone"
+                  placeholder="phone"
+                  display={<span className="text-white/50">{r.phone || "—"}</span>}
+                  onSave={(phone) => save(r.id, { phone })}
+                />
+              </div>
             </td>
             <td className={`${tdCls} whitespace-nowrap`}>
-              <a
-                className="text-amber-400 hover:underline"
-                href={`https://github.com/${r.githubUsername}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                @{r.githubUsername}
-              </a>
+              <TextCell
+                value={r.githubUsername}
+                label="Edit GitHub username"
+                prefix="github.com/"
+                placeholder="username"
+                display={
+                  <a
+                    className="text-amber-400 hover:underline"
+                    href={`https://github.com/${r.githubUsername}`}
+                    target="_blank"
+                    rel="noreferrer"
+                  >
+                    @{r.githubUsername}
+                  </a>
+                }
+                onSave={(githubUsername) => save(r.id, { githubUsername })}
+              />
             </td>
             <td className={tdCls}>
-              <Pills values={r.ohsAffiliation ? [shortAffiliation(r.ohsAffiliation)!] : null} />
-            </td>
-            <td className={`${tdCls} whitespace-nowrap text-white/80`}>{builderLabel(r.builderInterest)}</td>
-            <td className={`${tdCls} text-white/80`}>{r.technicalDepth ?? "—"}</td>
-            <td className={`${tdCls} whitespace-nowrap text-white/80`}>{r.timeCommitment ?? "—"}</td>
-            <td className={tdCls}>
-              <Pills values={r.skillsets} />
+              <SelectCell
+                value={r.ohsAffiliation ?? ""}
+                label="Edit affiliation"
+                options={OHS_AFFILIATIONS}
+                optionLabel={shortAffil}
+                display={<Pills values={r.ohsAffiliation ? [shortAffiliation(r.ohsAffiliation)!] : null} />}
+                onSave={(ohsAffiliation) => save(r.id, { ohsAffiliation })}
+              />
             </td>
             <td className={`${tdCls} whitespace-nowrap text-white/80`}>
-              {[r.city, abbrState(r.state)].filter(Boolean).join(", ") || "—"}
+              <SelectCell
+                value={r.builderInterest ?? ""}
+                label="Edit builder interest"
+                options={BUILDER_INTEREST}
+                optionLabel={builderLabel}
+                blankLabel="—"
+                display={builderLabel(r.builderInterest)}
+                onSave={(builderInterest) => save(r.id, { builderInterest })}
+              />
+            </td>
+            <td className={`${tdCls} text-white/80`}>
+              <SelectCell
+                value={r.technicalDepth ?? ""}
+                label="Edit tech depth"
+                options={TECHNICAL_DEPTH}
+                display={r.technicalDepth ?? "—"}
+                onSave={(technicalDepth) => save(r.id, { technicalDepth })}
+              />
+            </td>
+            <td className={`${tdCls} whitespace-nowrap text-white/80`}>
+              <SelectCell
+                value={r.timeCommitment ?? ""}
+                label="Edit time commitment"
+                options={TIME_COMMITMENT}
+                display={r.timeCommitment ?? "—"}
+                onSave={(timeCommitment) => save(r.id, { timeCommitment })}
+              />
             </td>
             <td className={tdCls}>
-              <Pills values={r.parentInterests} />
+              <MultiSelectCell
+                value={r.skillsets ?? []}
+                label="Edit skillsets"
+                options={SKILLSETS}
+                display={<Pills values={r.skillsets} />}
+                onSave={(skillsets) => save(r.id, { skillsets })}
+              />
+            </td>
+            <td className={`${tdCls} whitespace-nowrap text-white/80`}>
+              <div className="flex flex-col gap-0.5">
+                <TextCell
+                  value={r.city ?? ""}
+                  label="Edit city"
+                  placeholder="city"
+                  display={r.city ? r.city : <span className="text-white/30">—</span>}
+                  onSave={(city) => save(r.id, { city })}
+                />
+                <SelectCell
+                  value={r.state ?? ""}
+                  label="Edit state"
+                  options={US_STATES}
+                  display={abbrState(r.state) ?? <span className="text-white/30">—</span>}
+                  onSave={(state) => save(r.id, { state })}
+                />
+              </div>
+            </td>
+            <td className={tdCls}>
+              <TagsCell
+                value={r.parentInterests ?? []}
+                label="Edit parent interests"
+                display={<Pills values={r.parentInterests} />}
+                onSave={(parentInterests) => save(r.id, { parentInterests })}
+              />
             </td>
             <td className={`${tdCls} whitespace-nowrap`}>
               {r.photos.length ? (

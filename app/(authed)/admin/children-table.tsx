@@ -68,7 +68,7 @@ export function ChildrenTable({ rows }: { rows: ChildTableRow[] }) {
           >
             <th scope="row" className={`${tdCls} whitespace-nowrap text-left`}>
               <NameCell
-                name={k.firstName}
+                firstName={k.firstName}
                 editHref={`/signup/thanks?id=${k.signupId}&admin=1`}
                 deleteAction={deleteChild}
                 id={k.id}

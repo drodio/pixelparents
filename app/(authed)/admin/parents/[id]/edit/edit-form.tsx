@@ -8,6 +8,7 @@ import {
   SKILLSETS,
   TIME_COMMITMENT,
   US_STATES,
+  BUILDER_INTEREST,
 } from "@/lib/options";
 import type { SignupRow } from "@/lib/db/schema/signups";
 import { useAutoSave } from "@/lib/use-auto-save";
@@ -18,7 +19,16 @@ const labelCls = "block text-sm font-medium text-white/80";
 const inputCls =
   "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40";
 
+// value → label for the Builder interest question (mirrors the signup form and
+// the admin table's builderLabel()).
+const BUILDER_LABELS: Record<string, string> = {
+  builder: "Yes: Technical",
+  aspiring: "Yes: Curious",
+  no: "No",
+};
+
 export default function EditForm({ row }: { row: SignupRow }) {
+  const extra = (row.extra ?? {}) as Record<string, unknown>;
   const save = useCallback(
     async (patch: SignupPatch) => {
       const r = await patchSignup(row.id, patch);
@@ -41,7 +51,33 @@ export default function EditForm({ row }: { row: SignupRow }) {
     city: row.city ?? "",
     state: row.state ?? "",
     skillsets: row.skillsets ?? [],
+    builderInterest: typeof extra.builderInterest === "string" ? extra.builderInterest : "",
+    parentInterests: row.parentInterests ?? [],
   });
+
+  // Free-form tag input for parent interests (comma / Enter to add).
+  const [interestText, setInterestText] = useState("");
+  function addInterests() {
+    const parts = interestText.split(",").map((s) => s.trim()).filter(Boolean);
+    if (parts.length === 0) {
+      setInterestText("");
+      return;
+    }
+    setV((prev) => {
+      const next = [...prev.parentInterests];
+      for (const p of parts) if (!next.includes(p)) next.push(p);
+      queue({ parentInterests: next }, true);
+      return { ...prev, parentInterests: next };
+    });
+    setInterestText("");
+  }
+  function removeInterest(t: string) {
+    setV((prev) => {
+      const next = prev.parentInterests.filter((x) => x !== t);
+      queue({ parentInterests: next }, true);
+      return { ...prev, parentInterests: next };
+    });
+  }
 
   function set<K extends keyof typeof v>(key: K, value: (typeof v)[K], immediate = false) {
     setV((prev) => ({ ...prev, [key]: value }));
@@ -123,6 +159,24 @@ export default function EditForm({ row }: { row: SignupRow }) {
         </div>
       </fieldset>
 
+      <fieldset>
+        <legend className={labelCls}>Interested in building Pixel Parents?</legend>
+        <div className="mt-2 flex flex-col gap-2">
+          {BUILDER_INTEREST.map((opt) => (
+            <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
+              <input
+                type="radio"
+                name="builderInterest"
+                checked={v.builderInterest === opt}
+                onChange={() => set("builderInterest", opt, true)}
+                className="mt-1 h-4 w-4 accent-amber-500"
+              />
+              <span>{BUILDER_LABELS[opt]}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
       <div>
         <label className={labelCls}>LinkedIn</label>
         <div className="mt-1 flex items-center rounded-lg border border-white/15 bg-white/5 focus-within:border-white/40">
@@ -169,6 +223,38 @@ export default function EditForm({ row }: { row: SignupRow }) {
             ))}
           </select>
         </div>
+      </div>
+
+      <div>
+        <label className={labelCls}>Parent interests</label>
+        {v.parentInterests.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {v.parentInterests.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => removeInterest(t)}
+                title="Remove"
+                className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-xs text-white/80 transition-colors hover:border-red-400/40 hover:text-red-300"
+              >
+                {t} <span aria-hidden>×</span>
+              </button>
+            ))}
+          </div>
+        )}
+        <input
+          value={interestText}
+          placeholder="Type an interest, comma or Enter to add"
+          onChange={(e) => setInterestText(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              addInterests();
+            }
+          }}
+          onBlur={addInterests}
+          className={inputCls}
+        />
       </div>
 
       <p className="text-xs text-white/40">Changes save automatically.</p>
