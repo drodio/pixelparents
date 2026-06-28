@@ -30,6 +30,11 @@ the columns actually rendered.
 - Declined (YAGNI) the "push the filter into SQL / paginate / cache presigns"
   finding: it mirrors the existing `/admin` full-table-load pattern and the
   community is small; noted as a future concern below. tsc + eslint + vitest green.
+- Follow-up review (#14396) on the refactor: strengthened the interest-dedup test
+  to pin first-seen-wins across the parent/child boundary (17 tests now). Declined
+  (acceptable-by-design) the note that re-selecting the clamped "Per row" max can
+  lower the stored density across resizes — showing the rendered count and taking
+  a selection as the new preference is the intuitive behavior.
 
 ## Progress Update as of June 28, 2026 — 4:09 PM Pacific
 

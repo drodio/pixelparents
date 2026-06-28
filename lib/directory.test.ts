@@ -127,6 +127,18 @@ describe("buildDirectoryCard (per-field redaction)", () => {
     );
     expect(card.interests).toEqual(["Chess"]);
   });
+
+  it("keeps the first-seen label across the parent/child boundary (parent wins)", () => {
+    // Parent's lowercase "chess" is seen before the child's "Chess", so the
+    // parent label is kept — pins first-seen-wins, not last-seen.
+    const card = buildDirectoryCard(
+      signup({ parentInterests: ["chess"] }),
+      [child({ interests: ["Chess"] })],
+      noUrls,
+      4,
+    );
+    expect(card.interests).toEqual(["chess"]);
+  });
 });
 
 describe("directoryPhotoPaths + photo projection", () => {
