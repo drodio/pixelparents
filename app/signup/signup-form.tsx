@@ -363,7 +363,7 @@ export default function SignupForm({
 
         <div>
           <h3 className="text-base font-semibold text-white">
-            Your + your spouse&apos;s interests (select existing or add new ones)
+            Your interests (select existing or add new ones)
           </h3>
           <TagPicker
             value={v.parentInterests}

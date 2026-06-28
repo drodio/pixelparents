@@ -165,12 +165,14 @@ export default async function SharedProfilePage({
         />
       )}
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
-        <nav className="mb-2 text-sm text-white/50">
-          <Link href="/directory" className="text-amber-400 hover:underline">
-            OHS Directory
-          </Link>{" "}
-          &gt;
-        </nav>
+        {visibility === "ohs" && (
+          <nav className="mb-2 text-sm text-white/50">
+            <Link href="/directory" className="text-amber-400 hover:underline">
+              OHS Directory
+            </Link>{" "}
+            &gt;
+          </nav>
+        )}
         <div className="flex flex-wrap items-start justify-between gap-3">
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             {signup.firstName} {signup.lastName}
