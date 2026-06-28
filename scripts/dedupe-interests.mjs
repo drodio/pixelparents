@@ -5,7 +5,14 @@
 // canonical spelling (the most-used one) across both signups.parent_interests
 // and children.interests, preserving the interest on every profile that has it
 // and removing the duplicate. Idempotent and surgical — it only rewrites the two
-// interest array columns, and only on rows that actually change.
+// interest array columns, and only on rows that actually change. While here it
+// also trims each entry and drops blanks, so a row with only whitespace/empty
+// cruft (no case-variant) is cleaned up too.
+//
+// The canonicalization rules below (`key`, `pickCanonicalFromCounts`) are
+// intentionally duplicated from lib/interests.ts: this is a standalone .mjs
+// one-off and can't import the TS module. Keep the two in sync if the tie-break
+// rule changes.
 //
 // Dry run (default): prints what WOULD change.
 //   DATABASE_URL=... node scripts/dedupe-interests.mjs

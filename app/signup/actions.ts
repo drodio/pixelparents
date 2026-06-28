@@ -94,8 +94,10 @@ export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok:
       .map((x) => x.trim())
       .filter(Boolean)
       .slice(0, 50);
-    // Fold onto the canonical spelling already in use (case-insensitive) so we
-    // never store a duplicate that differs only by capitalization.
+    // Fold onto whatever spelling is already in the pool (case-insensitive) so we
+    // don't add a capitalization variant of an existing interest. Brand-new
+    // interests racing in two casings can still both land; the pool collapses
+    // them for display and the scrub script reconciles the rows.
     set.parentInterests = s.length ? await canonicalizeAgainstPool(s) : null;
   }
   if ("photos" in patch && Array.isArray(patch.photos)) {

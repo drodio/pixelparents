@@ -74,8 +74,11 @@ export async function patchChild(
       .map((x) => x.trim())
       .filter(Boolean)
       .slice(0, 50);
-    // Fold incoming interests onto the canonical spelling already in use so we
-    // never store a case-variant duplicate ("Mountain Biking" vs "mountain biking").
+    // Fold incoming interests onto whatever spelling is already in the pool so
+    // we don't add a case-variant of an existing interest ("mountain biking" ->
+    // "Mountain Biking"). Brand-new interests racing in two casings can still
+    // both land; getInterestPool collapses them for display and the scrub script
+    // reconciles the rows.
     set.interests = s.length ? await canonicalizeAgainstPool(s) : null;
   }
   if ("photos" in patch) set.photos = sanitizePhotos(patch.photos);
