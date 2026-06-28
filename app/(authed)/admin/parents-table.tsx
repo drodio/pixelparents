@@ -46,6 +46,7 @@ export type ParentRow = {
   phone: string;
   githubUsername: string;
   ohsAffiliation: string | null;
+  builderInterest: string | null;
   technicalDepth: string | null;
   timeCommitment: string | null;
   skillsets: string[] | null;
@@ -63,6 +64,15 @@ export type ParentRow = {
 
 function shortAffiliation(s: string | null): string | null {
   return s ? s.split(" (")[0] : null;
+}
+
+function builderLabel(v: string | null): string {
+  switch (v) {
+    case "builder": return "Yes: Technical";
+    case "aspiring": return "Yes: Curious";
+    case "no": return "No";
+    default: return "—";
+  }
 }
 
 export function ParentsTable({ rows }: { rows: ParentRow[] }) {
@@ -84,6 +94,7 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
       case "contact": return r.email.toLowerCase();
       case "github": return r.githubUsername.toLowerCase();
       case "affiliation": return shortAffiliation(r.ohsAffiliation);
+      case "builder": return builderLabel(r.builderInterest);
       case "tech": return r.technicalDepth;
       case "time": return r.timeCommitment;
       case "skillsets": return r.skillsets?.length ?? 0;
@@ -132,6 +143,7 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
           />
           <SortHeader label="GitHub" k="github" {...hp} />
           <SortHeader label="Affiliation" k="affiliation" {...hp} />
+          <SortHeader label="Builder?" k="builder" {...hp} />
           <SortHeader label="Tech depth" k="tech" {...hp} />
           <SortHeader label="Time" k="time" {...hp} />
           <SortHeader label="Skillsets" k="skillsets" {...hp} />
@@ -217,6 +229,7 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
             <td className={tdCls}>
               <Pills values={r.ohsAffiliation ? [shortAffiliation(r.ohsAffiliation)!] : null} />
             </td>
+            <td className={`${tdCls} whitespace-nowrap text-white/80`}>{builderLabel(r.builderInterest)}</td>
             <td className={`${tdCls} text-white/80`}>{r.technicalDepth ?? "—"}</td>
             <td className={`${tdCls} whitespace-nowrap text-white/80`}>{r.timeCommitment ?? "—"}</td>
             <td className={tdCls}>
@@ -246,7 +259,7 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
           </tr>
           {expanded.has(r.id) && r.photos.length > 0 && (
             <tr className="border-t border-white/10 bg-black/40">
-              <td colSpan={13} className="px-4 py-4">
+              <td colSpan={14} className="px-4 py-4">
                 <PhotoGallery
                   photos={r.photos}
                   candidates={[

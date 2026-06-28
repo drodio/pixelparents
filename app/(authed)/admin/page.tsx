@@ -76,6 +76,7 @@ export default async function ParentsPage() {
       })),
     );
     const photos = [...familyPhotos, ...childPhotos].filter((p) => p.url);
+    const extra = (r.extra ?? {}) as Record<string, unknown>;
     return {
       id: r.id,
       firstName: r.firstName,
@@ -84,6 +85,7 @@ export default async function ParentsPage() {
       phone: r.phone,
       githubUsername: r.githubUsername,
       ohsAffiliation: r.ohsAffiliation,
+      builderInterest: typeof extra.builderInterest === "string" ? extra.builderInterest : null,
       technicalDepth: r.technicalDepth,
       timeCommitment: r.timeCommitment,
       skillsets: r.skillsets,

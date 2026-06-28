@@ -11,6 +11,7 @@ import {
   SKILLSETS,
   TIME_COMMITMENT,
   US_STATES,
+  BUILDER_INTEREST,
 } from "@/lib/options";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
 import { notifyNewSignup, notifyApplicantWelcome } from "@/lib/email";
@@ -63,6 +64,7 @@ export type SignupPatch = Partial<{
   state: string;
   parentInterests: string[];
   photos: Photo[];
+  builderInterest: string;
 }>;
 
 // Patch only the provided columns on an existing (draft or saved) signup row.
@@ -98,6 +100,15 @@ export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok:
       .filter((p) => p && typeof p.url === "string" && typeof p.pathname === "string")
       .slice(0, 200);
   }
+  if ("builderInterest" in patch) {
+    const [cur] = await getDb()
+      .select({ extra: signups.extra })
+      .from(signups)
+      .where(eq(signups.id, id))
+      .limit(1);
+    const extra = (cur?.extra ?? {}) as Record<string, unknown>;
+    set.extra = { ...extra, builderInterest: oneOf(BUILDER_INTEREST, patch.builderInterest) };
+  }
   if (Object.keys(set).length === 0) return { ok: true };
   try {
     await getDb().update(signups).set(set).where(eq(signups.id, id));
@@ -127,16 +138,20 @@ export async function completeSignup(id: string): Promise<SignupState> {
     skillsets: row.skillsets ?? [],
     timeCommitment: row.timeCommitment ?? "",
   });
+  const errors: Record<string, string> = {};
   if (!parsed.success) {
-    const errors: Record<string, string> = {};
     for (const issue of parsed.error.issues) {
       const key = String(issue.path[0] ?? "form");
       if (!errors[key]) errors[key] = issue.message;
     }
-    return { ok: false, errors };
   }
 
   const extra = (row.extra ?? {}) as Record<string, unknown>;
+  if (!BUILDER_INTEREST.includes(extra.builderInterest as never)) {
+    errors.builderInterest = "Please choose an option";
+  }
+  if (Object.keys(errors).length > 0) return { ok: false, errors };
+
   if (!extra.notified) {
     await notifyNewSignup({
       id: row.id,

@@ -11,6 +11,10 @@ export const OHS_AFFILIATIONS = [
 // Alias used by the developer API (kept in sync — same underlying list).
 export const AFFILIATIONS = OHS_AFFILIATIONS;
 
+// Interest in helping build Pixel Parents software (signup question). Stored in
+// signups.extra.builderInterest.
+export const BUILDER_INTEREST = ["builder", "aspiring", "no"] as const;
+
 export const TECHNICAL_DEPTH = [
   "Yegge or Linus Level",
   "10x Developer",

@@ -38,6 +38,7 @@ const empty = {
   technicalDepth: "",
   timeCommitment: "",
   skillsets: [] as string[],
+  builderInterest: "" as "" | "builder" | "aspiring" | "no",
 };
 
 export default function SignupForm() {
@@ -76,6 +77,10 @@ export default function SignupForm() {
   function set<K extends keyof typeof empty>(key: K, value: (typeof empty)[K], immediate = false) {
     setV((prev) => ({ ...prev, [key]: value }));
     queue({ [key]: value } as SignupPatch, immediate);
+  }
+  function setBuilderInterest(choice: "builder" | "aspiring" | "no") {
+    setV((prev) => ({ ...prev, builderInterest: choice }));
+    queue({ builderInterest: choice }, true);
   }
   function toggleSkill(opt: string) {
     setV((prev) => {
@@ -210,6 +215,49 @@ export default function SignupForm() {
             ))}
           </div>
           <FieldError msg={errors.ohsAffiliation} />
+        </fieldset>
+
+        <fieldset>
+          <legend className={labelCls}>
+            Are you interested in helping us build Pixel Parents software?{" "}
+            <span className="text-red-400">*</span>
+          </legend>
+          <div className="mt-2 flex flex-col gap-2">
+            {[
+              { value: "builder" as const, label: "Yes! I am a builder (technical / software developer / engineer / etc) and I'd like to contribute" },
+              { value: "aspiring" as const, label: "Yes! But I'm not a builder, although I'd like to become one" },
+              { value: "no" as const, label: "No, that's far from my interests or area of expertise" },
+            ].map((opt) => (
+              <label key={opt.value} className="flex items-start gap-2 text-sm text-white/80">
+                <input
+                  type="radio"
+                  name="builderInterest"
+                  checked={v.builderInterest === opt.value}
+                  onChange={() => setBuilderInterest(opt.value)}
+                  className="mt-1 h-4 w-4 accent-amber-500"
+                />
+                <span>{opt.label}</span>
+              </label>
+            ))}
+          </div>
+          <FieldError msg={errors.builderInterest} />
+
+          {v.builderInterest === "builder" && (
+            <div className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-white/80">
+              <strong>Welcome, technical parent!</strong> We appreciate you. Read
+              our{" "}
+              <a href="https://pixelparents.org/builders" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300">builder guidelines page</a>{" "}
+              to learn more about how we build together.
+            </div>
+          )}
+          {v.builderInterest === "aspiring" && (
+            <div className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-white/80">
+              <em>If you are not yet a builder, but want to become one, this parents tech builder group is the perfect place to start.</em>{" "}
+              Please read{" "}
+              <a href="https://pixelparents.org/builders#frequently-asked-questions" target="_blank" rel="noopener noreferrer" className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300">the FAQs on our builder guidelines page</a>{" "}
+              to learn how to get started.
+            </div>
+          )}
         </fieldset>
 
         <fieldset>
