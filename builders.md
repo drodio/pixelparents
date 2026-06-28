@@ -2,7 +2,7 @@
 
 *This is a proposed set of guidelines to be ratified by the tech builders*
 
-- **Who we are:** We are a group of parents working to build software that improves the experiences and outcomes for our children attending Stanford Online High School. The work we do is on a volunteer basis with a "best efforts" orientation.
+- **Who we are:** We are a group of parents working to build software exclusively for current Stanford Online High School (OHS) families. Everything we build is for current OHS families only — not the general public — and exists to improve the experiences and outcomes for our children attending OHS. The work we do is on a volunteer basis with a "best efforts" orientation.
 
 - **How we work:** We are a distributed high-trust group. Any of us can choose projects to build, we all have access to the code base (it's [open source](https://github.com/drodio/pixelparents), so you do, too!) and we swarm in and out of working groups based on our individual interests. We aim to create coordinated high-impact outcomes, but since we are all learning from each other, we often end up building projects that end up not working the way we expected them to. This "learn by shipping" failure mode is highly encouraged so we can learn faster from each other.
 
