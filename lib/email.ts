@@ -31,6 +31,9 @@ async function sendEmail(msg: {
   subject: string;
   text: string;
   cc?: string[];
+  // Optional From override (defaults to RESEND_FROM). Used for the admin
+  // verification email, which goes from the hello@ address.
+  from?: string;
 }): Promise<boolean> {
   if (!resend) {
     console.warn("RESEND_API_KEY not set — skipping email:", msg.subject);
@@ -42,7 +45,7 @@ async function sendEmail(msg: {
   }
   try {
     await resend.emails.send({
-      from: FROM,
+      from: msg.from ?? FROM,
       to: msg.to,
       cc: msg.cc,
       subject: msg.subject,
@@ -52,6 +55,46 @@ async function sendEmail(msg: {
   } catch (err) {
     console.error("Resend send failed:", msg.subject, err);
     return false;
+  }
+}
+
+// From address for the admin "verify this profile" email. Env-overridable but
+// defaults to the project's own hello@ address (PUBLIC repo — no personal info).
+const VERIFY_FROM = process.env.RESEND_VERIFY_FROM ?? "Pixel Parents <hello@pixelparents.org>";
+
+// Notify every admin that a new parent needs their OHS-directory access verified.
+// One personalized email per admin; whoever acts first resolves it for everyone
+// (see recordApprovalDecision). Best-effort: never throws, never blocks signup.
+export async function notifyAdminsVerifyProfile(n: {
+  applicant: { id: string; firstName: string; lastName: string };
+  admins: { email: string; firstName: string }[];
+}): Promise<void> {
+  const base = getBaseUrl();
+  const name = `${n.applicant.firstName} ${n.applicant.lastName}`.trim();
+  const profileUrl = `${base}/admin/verify/${n.applicant.id}`;
+  const approveUrl = `${profileUrl}?action=approve`;
+  const denyUrl = `${profileUrl}?action=deny`;
+  for (const admin of n.admins) {
+    const hi = admin.firstName ? admin.firstName : "there";
+    const text = [
+      `${hi},`,
+      ``,
+      `You are getting this email because you are an admin on Pixel Parents.`,
+      ``,
+      `${name} has requested access to the OHS parent directory. Approve?`,
+      ``,
+      `- View their profile: ${profileUrl}`,
+      `- Approve them: ${approveUrl}`,
+      `- Deny them: ${denyUrl}`,
+      ``,
+      `The first admin who acts on this will take care of it for everyone.`,
+    ].join("\n");
+    await sendEmail({
+      to: admin.email,
+      from: VERIFY_FROM,
+      subject: `Verify ${name}'s profile on Pixel Parents`,
+      text,
+    });
   }
 }
 

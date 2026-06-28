@@ -64,6 +64,30 @@ export async function dbAdminEmails(): Promise<Set<string>> {
   return new Set(rows.map((r) => r.email.toLowerCase()));
 }
 
+// Every admin recipient (env superadmins + `admins` table rows), deduped, with a
+// best-effort first name resolved from their own signup. Used to fan out the
+// new-signup "verify this profile" email to all admins.
+export async function getAdminRecipients(): Promise<{ email: string; firstName: string }[]> {
+  const emails = new Set<string>(envAdminEmails());
+  if (hasDatabase()) {
+    await ensureAdminsTable();
+    const rows = await getDb().select({ email: admins.email }).from(admins);
+    for (const r of rows) emails.add(r.email.toLowerCase());
+  }
+  const out: { email: string; firstName: string }[] = [];
+  for (const email of emails) {
+    let firstName = "";
+    try {
+      const signup = await getSignupByEmail(email);
+      firstName = signup?.firstName?.trim() ?? "";
+    } catch (err) {
+      console.error("getAdminRecipients: name lookup failed for", email, err);
+    }
+    out.push({ email, firstName });
+  }
+  return out;
+}
+
 export async function addAdmin(email: string, by: string | null): Promise<void> {
   await ensureAdminsTable();
   await getSql()`

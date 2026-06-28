@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BotIdClient } from "botid/client";
 import {
@@ -71,8 +71,52 @@ export default function SignupForm({
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Local-draft persistence: keep the typed answers (and the draft row id) in
+  // localStorage so a page refresh — even after a failed server save — restores
+  // everything instead of starting blank. Scoped per join token so co-parent
+  // invites don't collide with a fresh signup. Cleared on successful completion.
+  const ID_KEY = joinToken ? `pp_signup_draft_id_${joinToken}` : "pp_signup_draft_id";
+  const V_KEY = joinToken ? `pp_signup_draft_v_${joinToken}` : "pp_signup_draft_v";
+
   // Draft row id, created lazily on the first save.
   const idRef = useRef<string | null>(null);
+  // Skip the persist effect's first run (the initial empty state on mount) so we
+  // never clobber a saved draft before the restore effect re-renders with it.
+  const skipFirstPersist = useRef(true);
+
+  // Restore any saved draft on mount. This is the canonical "hydrate from
+  // localStorage" pattern: a controlled form can't read localStorage in a lazy
+  // useState initializer without an SSR hydration mismatch, so we render the
+  // empty state first and patch it in a one-shot mount effect. The set-state rule
+  // is a false positive here (no render loop — empty dep array, runs once).
+  useEffect(() => {
+    try {
+      const savedV = window.localStorage.getItem(V_KEY);
+      if (savedV) {
+        const parsed = JSON.parse(savedV) as Partial<typeof empty>;
+        // eslint-disable-next-line react-hooks/set-state-in-effect
+        setV((prev) => ({ ...prev, ...parsed }));
+      }
+      const savedId = window.localStorage.getItem(ID_KEY);
+      if (savedId) idRef.current = savedId;
+    } catch {
+      /* corrupt/blocked storage — start fresh */
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist the form values whenever they change (skipping the initial mount).
+  useEffect(() => {
+    if (skipFirstPersist.current) {
+      skipFirstPersist.current = false;
+      return;
+    }
+    try {
+      window.localStorage.setItem(V_KEY, JSON.stringify(v));
+    } catch {
+      /* storage full/blocked — non-fatal */
+    }
+  }, [v, V_KEY]);
   const ensuring = useRef<Promise<string | null> | null>(null);
   const ensureId = useCallback(async (): Promise<string | null> => {
     if (idRef.current) return idRef.current;
@@ -81,11 +125,18 @@ export default function SignupForm({
       ensuring.current = create.then((r) => {
         const id = "id" in r ? r.id : null;
         idRef.current = id;
+        if (id && typeof window !== "undefined") {
+          try {
+            window.localStorage.setItem(ID_KEY, id);
+          } catch {
+            /* storage blocked — non-fatal */
+          }
+        }
         return id;
       });
     }
     return ensuring.current;
-  }, [joinToken]);
+  }, [joinToken, ID_KEY]);
 
   // --- Co-parent invite UI state ---
   const [inviteRaw, setInviteRaw] = useState("");
@@ -189,8 +240,47 @@ export default function SignupForm({
       setSubmitting(false);
       return;
     }
+    // Force a full save of the current values before completing. This covers the
+    // case where answers were restored from a local draft (after a failed save +
+    // refresh) and were never re-queued — without it, completeSignup could read a
+    // stale DB row and fail validation on data the user can plainly see.
+    try {
+      await save({
+        firstName: v.firstName,
+        lastName: v.lastName,
+        email: v.email,
+        phone: v.phone,
+        githubUsername: v.githubUsername,
+        linkedinHandle: v.linkedinHandle,
+        ohsAffiliation: v.ohsAffiliation,
+        technicalDepth: v.technicalDepth,
+        timeCommitment: v.timeCommitment,
+        skillsets: v.skillsets,
+        parentInterests: v.parentInterests,
+        city: v.city,
+        state: v.state,
+        builderInterest: v.builderInterest,
+        ...(v.linkedinHandle.trim() !== ""
+          ? { studentResourceOptIn: v.studentResource === "yes" }
+          : {}),
+      });
+    } catch {
+      setMessage("We couldn't save your info. Please check your connection and try again.");
+      setSubmitting(false);
+      return;
+    }
     const res = await completeSignup(id);
     if (res.ok) {
+      // Signup is persisted server-side now — drop the local draft so a later
+      // visit starts clean.
+      if (typeof window !== "undefined") {
+        try {
+          window.localStorage.removeItem(ID_KEY);
+          window.localStorage.removeItem(V_KEY);
+        } catch {
+          /* non-fatal */
+        }
+      }
       router.push(`/signup/thanks?id=${id}`);
     } else {
       setErrors(res.errors ?? {});

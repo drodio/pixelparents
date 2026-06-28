@@ -18,11 +18,11 @@ export default function WelcomePage() {
         className="h-auto w-28"
       />
       <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
-        You&apos;re all set — welcome aboard!
+        You&apos;re all set. What&apos;s next:
       </h1>
       <p className="max-w-prose text-white/60">
-        Thank you for joining Pixel Parents. We&apos;ll be in touch as we figure
-        out what to build together.
+        We are reviewing your profile and confirming your OHS status. You will
+        get an email from us.
       </p>
       <Link
         href="/"
