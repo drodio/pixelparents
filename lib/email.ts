@@ -136,6 +136,38 @@ export async function notifyApplicantWelcome(n: {
   });
 }
 
+// Invite a co-parent (spouse / other parent) to join an existing family. The
+// join link is tied to the family's invite token; opening it lets them create
+// their own parent row attached to the same family + shared children.
+// Returns whether the send succeeded (the caller tallies how many went out).
+export async function notifyCoParentInvite(n: {
+  to: string;
+  inviterName: string;
+  joinUrl: string;
+}): Promise<boolean> {
+  const who = n.inviterName || "Your co-parent";
+  const text = [
+    `Hi,`,
+    ``,
+    `${who} invited you to join their family on Pixel Parents — OHS parents`,
+    `building software to make our kids' educational experience better.`,
+    ``,
+    `Use your private link below to fill out your own information. You'll be able`,
+    `to view and edit your family and children information together:`,
+    ``,
+    `\u{1F449} ${n.joinUrl}`,
+    ``,
+    `That link is yours — you can come back to it anytime. Your name, email, and`,
+    `contact details stay your own; the children you and ${who} add are shared`,
+    `across your family.`,
+  ].join("\n");
+  return sendEmail({
+    to: n.to,
+    subject: `${who} invited you to Pixel Parents`,
+    text,
+  });
+}
+
 // --- Developer API: notify DROdio of a new access request (no key yet) ---
 export async function notifyAdminNewApiRequest(notice: {
   name: string;

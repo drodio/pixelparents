@@ -13,10 +13,13 @@ import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import {
   createDraftSignup,
+  createCoParentDraft,
   patchSignup,
   completeSignup,
+  sendCoParentInvites,
   type SignupPatch,
 } from "./actions";
+import { parseInviteEmails } from "@/lib/invite";
 
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
@@ -40,7 +43,10 @@ const empty = {
   skillsets: [] as string[],
 };
 
-export default function SignupForm() {
+// `joinToken`, when present, puts the form in co-parent "join mode": the draft
+// is attached to an EXISTING family (via createCoParentDraft) instead of minting
+// a new one, so the invitee's children come from the shared family.
+export default function SignupForm({ joinToken }: { joinToken?: string } = {}) {
   const router = useRouter();
   const [v, setV] = useState(empty);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -53,14 +59,55 @@ export default function SignupForm() {
   const ensureId = useCallback(async (): Promise<string | null> => {
     if (idRef.current) return idRef.current;
     if (!ensuring.current) {
-      ensuring.current = createDraftSignup().then((r) => {
+      const create = joinToken ? createCoParentDraft(joinToken) : createDraftSignup();
+      ensuring.current = create.then((r) => {
         const id = "id" in r ? r.id : null;
         idRef.current = id;
         return id;
       });
     }
     return ensuring.current;
-  }, []);
+  }, [joinToken]);
+
+  // --- Co-parent invite UI state ---
+  const [inviteRaw, setInviteRaw] = useState("");
+  const [confirmEmails, setConfirmEmails] = useState<string[] | null>(null);
+  const [inviteState, setInviteState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [inviteNote, setInviteNote] = useState<string | null>(null);
+
+  function onInviteClick() {
+    setInviteNote(null);
+    const emails = parseInviteEmails(inviteRaw);
+    if (emails.length === 0) {
+      setInviteNote("Enter one or more valid email addresses, separated by commas.");
+      return;
+    }
+    setConfirmEmails(emails);
+  }
+
+  async function onConfirmInvite() {
+    const emails = confirmEmails ?? [];
+    setConfirmEmails(null);
+    setInviteState("sending");
+    setInviteNote(null);
+    const id = idRef.current ?? (await ensureId());
+    if (!id) {
+      setInviteState("error");
+      setInviteNote("Something went wrong. Please try again.");
+      return;
+    }
+    const res = await sendCoParentInvites(id, emails);
+    if (res.ok && res.sent > 0) {
+      setInviteState("sent");
+      setInviteRaw("");
+      setInviteNote(
+        `Sent ${res.sent} invite${res.sent === 1 ? "" : "s"}. They'll get a link to fill out their info.`,
+      );
+    } else {
+      setInviteState("error");
+      setInviteNote("We couldn't send those invites. Please try again.");
+    }
+  }
 
   const save = useCallback(
     async (patch: SignupPatch) => {
@@ -284,6 +331,43 @@ export default function SignupForm() {
           </div>
         </fieldset>
 
+        {/* Invite a spouse / other parent(s) to fill out their own info. They
+            join the same family and share these children. */}
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+          <label className={labelCls} htmlFor="coParentInvites">
+            Invite your spouse / other parent(s) to fill their information out, too:
+          </label>
+          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
+            <input
+              id="coParentInvites"
+              value={inviteRaw}
+              onChange={(e) => {
+                setInviteRaw(e.target.value);
+                if (inviteState !== "idle") setInviteState("idle");
+              }}
+              placeholder="comma separated emails"
+              className={`${inputCls} mt-0 flex-1`}
+              autoComplete="off"
+            />
+            <button
+              type="button"
+              onClick={onInviteClick}
+              className="shrink-0 rounded-full border border-white/30 px-5 py-2 font-semibold text-white transition-colors hover:bg-white/10"
+            >
+              Invite
+            </button>
+          </div>
+          {inviteNote && (
+            <p
+              className={`mt-2 text-sm ${
+                inviteState === "sent" ? "text-emerald-300" : inviteState === "error" ? "text-red-300" : "text-white/60"
+              }`}
+            >
+              {inviteNote}
+            </p>
+          )}
+        </div>
+
         <div className="mt-2 flex items-center gap-3">
           <button
             type="button"
@@ -297,6 +381,42 @@ export default function SignupForm() {
         </div>
         <p className="text-xs text-white/40">Your answers save automatically as you go.</p>
       </div>
+
+      {/* Custom in-app confirmation dialog (not window.confirm). */}
+      {confirmEmails && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setConfirmEmails(null)}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl border border-white/15 bg-neutral-900 p-6 text-white shadow-2xl"
+          >
+            <p className="text-sm text-white/85">
+              About to send invites to {confirmEmails.join(", ")}. They will have the ability to make
+              edits to your family and children information.
+            </p>
+            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setConfirmEmails(null)}
+                className="rounded-full border border-white/30 px-5 py-2 font-semibold text-white transition-colors hover:bg-white/10"
+              >
+                No, cancel
+              </button>
+              <button
+                type="button"
+                onClick={onConfirmInvite}
+                className="rounded-full bg-white px-5 py-2 font-semibold text-black transition-opacity hover:opacity-90"
+              >
+                Yes, invite them
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

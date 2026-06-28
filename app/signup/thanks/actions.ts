@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
-import { children, type Photo } from "@/lib/db/schema/signups";
+import { signups, children, type Photo } from "@/lib/db/schema/signups";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -27,12 +27,20 @@ function sanitizePhotos(input: unknown): Photo[] {
 }
 
 // Add an empty child row to a signup; the form then auto-saves its fields.
+// The child is tagged with both the creating parent's signupId (provenance) and
+// the family's familyId (the sharing key — co-parents see it too).
 export async function addChild(signupId: string): Promise<{ id: string } | { error: string }> {
   if (!UUID_RE.test(signupId)) return { error: "bad id" };
   try {
+    const [parent] = await getDb()
+      .select({ familyId: signups.familyId })
+      .from(signups)
+      .where(eq(signups.id, signupId))
+      .limit(1);
+    if (!parent) return { error: "not found" };
     const [row] = await getDb()
       .insert(children)
-      .values({ signupId, firstName: "" })
+      .values({ signupId, familyId: parent.familyId, firstName: "" })
       .returning({ id: children.id });
     revalidatePath("/signup/thanks");
     return { id: row.id };
@@ -51,14 +59,30 @@ export type ChildPatch = Partial<{
   photos: Photo[];
 }>;
 
-// Patch one child, scoped by (childId, signupId). No bot re-check — the signup
-// already exists (created behind BotID in step 1).
+// Resolve the family a signup belongs to (null if the id is unknown). Children
+// are shared per-family, so edits are authorized by family membership — any
+// parent in the family can edit any of the family's children, even one another
+// co-parent originally added.
+async function familyIdForSignup(signupId: string): Promise<string | null> {
+  const [row] = await getDb()
+    .select({ familyId: signups.familyId })
+    .from(signups)
+    .where(eq(signups.id, signupId))
+    .limit(1);
+  return row?.familyId ?? null;
+}
+
+// Patch one child. Authorized by family membership: the child must belong to the
+// same family as `signupId` (so co-parents can edit shared children). No bot
+// re-check — the signup already exists (created behind BotID in step 1).
 export async function patchChild(
   childId: string,
   signupId: string,
   patch: ChildPatch,
 ): Promise<{ ok: boolean }> {
   if (!UUID_RE.test(childId) || !UUID_RE.test(signupId)) return { ok: false };
+  const familyId = await familyIdForSignup(signupId);
+  if (!familyId) return { ok: false };
   const set: Record<string, unknown> = {};
   if ("firstName" in patch) set.firstName = String(patch.firstName ?? "").trim().slice(0, 100);
   if ("grade" in patch) set.grade = String(patch.grade ?? "").trim().slice(0, 40) || null;
@@ -81,7 +105,7 @@ export async function patchChild(
     await getDb()
       .update(children)
       .set(set)
-      .where(and(eq(children.id, childId), eq(children.signupId, signupId)));
+      .where(and(eq(children.id, childId), eq(children.familyId, familyId)));
     return { ok: true };
   } catch (err) {
     console.error("patchChild failed:", err);
@@ -91,10 +115,12 @@ export async function patchChild(
 
 export async function removeChild(childId: string, signupId: string): Promise<{ ok: boolean }> {
   if (!UUID_RE.test(childId) || !UUID_RE.test(signupId)) return { ok: false };
+  const familyId = await familyIdForSignup(signupId);
+  if (!familyId) return { ok: false };
   try {
     await getDb()
       .delete(children)
-      .where(and(eq(children.id, childId), eq(children.signupId, signupId)));
+      .where(and(eq(children.id, childId), eq(children.familyId, familyId)));
     revalidatePath("/signup/thanks");
     return { ok: true };
   } catch (err) {

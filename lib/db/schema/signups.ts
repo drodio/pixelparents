@@ -11,10 +11,26 @@ export type Photo = {
   caption?: string;
 };
 
-// Parent signup + family-level profile (1:1 with a parent).
+// A family groups one or more parents (signups) who share the same children.
+// `inviteToken` is the hard-to-guess secret a parent shares to invite a
+// co-parent (spouse / other parent) to attach their own signup to this family.
+export const families = pgTable("families", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  inviteToken: text("invite_token").notNull().unique(),
+});
+
+// Parent signup + per-parent profile. Each parent is its own row (own name /
+// email / contact, editable only via their own thanks-page secret `?id=` link),
+// but every parent in a family shares the same `familyId` (and thus children).
 export const signups = pgTable("signups", {
   id: uuid("id").primaryKey().defaultRandom(),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+
+  // The family this parent belongs to. Always set (created with the draft).
+  familyId: uuid("family_id")
+    .notNull()
+    .references(() => families.id),
 
   // Required contact info (step 1).
   firstName: text("first_name").notNull(),
@@ -51,11 +67,17 @@ export const signups = pgTable("signups", {
 });
 
 // One row per child (step 2 — repeats via "Done + add another child").
+// Children are shared across a family: every parent in the family sees and edits
+// the same kids. `familyId` is the grouping/sharing key; `signupId` is retained
+// to record which parent originally added the child.
 export const children = pgTable("children", {
   id: uuid("id").primaryKey().defaultRandom(),
   signupId: uuid("signup_id")
     .notNull()
     .references(() => signups.id, { onDelete: "cascade" }),
+  familyId: uuid("family_id")
+    .notNull()
+    .references(() => families.id),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   firstName: text("first_name").notNull(),
   grade: text("grade"),
@@ -67,5 +89,6 @@ export const children = pgTable("children", {
   photos: jsonb("photos").$type<Photo[]>().default([]),
 });
 
+export type FamilyRow = typeof families.$inferSelect;
 export type SignupRow = typeof signups.$inferSelect;
 export type ChildRow = typeof children.$inferSelect;

@@ -27,10 +27,12 @@ export async function getSignupForEdit(
     .limit(1);
   if (!signup) return null;
 
+  // Children are shared across the family, so load by familyId (not signupId) —
+  // a co-parent sees + edits the same kids any family member added.
   const kids = await getDb()
     .select()
     .from(children)
-    .where(eq(children.signupId, signupId))
+    .where(eq(children.familyId, signup.familyId))
     .orderBy(children.createdAt);
 
   return { signup, kids };
@@ -48,10 +50,11 @@ export async function getSharedProfileByToken(token: string): Promise<SharedProf
     .limit(1);
   if (!signup) return null;
 
+  // Show the whole family's shared children on the secret page.
   const kids = await getDb()
     .select()
     .from(children)
-    .where(eq(children.signupId, signup.id))
+    .where(eq(children.familyId, signup.familyId))
     .orderBy(children.createdAt);
 
   return { signup, kids };

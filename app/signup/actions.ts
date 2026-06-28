@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { checkBotId } from "botid/server";
 import { getDb } from "@/lib/db";
-import { signups, type Photo } from "@/lib/db/schema/signups";
+import { signups, families, type Photo } from "@/lib/db/schema/signups";
 import {
   OHS_AFFILIATIONS,
   TECHNICAL_DEPTH,
@@ -13,7 +13,9 @@ import {
   US_STATES,
 } from "@/lib/options";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
-import { notifyNewSignup, notifyApplicantWelcome } from "@/lib/email";
+import { notifyNewSignup, notifyApplicantWelcome, notifyCoParentInvite } from "@/lib/email";
+import { createFamily, getFamilyByInviteToken, joinUrlFor } from "@/lib/family";
+import { parseInviteEmails } from "@/lib/invite";
 
 export type SignupState = {
   ok: boolean;
@@ -28,17 +30,57 @@ const UUID_RE =
 
 // Create the draft row on first interaction. BotID runs here once; subsequent
 // patches skip it. Required columns are NOT NULL, so we seed empty strings.
+// Every signup gets its own brand-new family (a co-parent joining via an invite
+// link uses createCoParentDraft instead, which reuses an existing family).
 export async function createDraftSignup(): Promise<{ id: string } | { error: string }> {
   const v = await checkBotId();
   if (v.isBot) return { error: "blocked" };
   try {
+    const family = await createFamily();
     const [row] = await getDb()
       .insert(signups)
-      .values({ firstName: "", lastName: "", email: "", phone: "", githubUsername: "" })
+      .values({
+        familyId: family.id,
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        githubUsername: "",
+      })
       .returning({ id: signups.id });
     return { id: row.id };
   } catch (err) {
     console.error("createDraftSignup failed:", err);
+    return { error: "failed" };
+  }
+}
+
+// Co-parent join flow: given a family invite token, create a NEW draft signup
+// attached to that EXISTING family (rather than minting a fresh family). The
+// invitee then fills out their own step-1 form and lands on their own thanks
+// page, where the family's shared children already appear.
+export async function createCoParentDraft(
+  inviteToken: string,
+): Promise<{ id: string } | { error: string }> {
+  const v = await checkBotId();
+  if (v.isBot) return { error: "blocked" };
+  try {
+    const family = await getFamilyByInviteToken(inviteToken);
+    if (!family) return { error: "invalid-token" };
+    const [row] = await getDb()
+      .insert(signups)
+      .values({
+        familyId: family.id,
+        firstName: "",
+        lastName: "",
+        email: "",
+        phone: "",
+        githubUsername: "",
+      })
+      .returning({ id: signups.id });
+    return { id: row.id };
+  } catch (err) {
+    console.error("createCoParentDraft failed:", err);
     return { error: "failed" };
   }
 }
@@ -199,9 +241,11 @@ export async function submitSignup(
 
   let id: string;
   try {
+    const family = await createFamily();
     const [row] = await getDb()
       .insert(signups)
       .values({
+        familyId: family.id,
         firstName: data.firstName,
         lastName: data.lastName,
         email: data.email,
@@ -241,4 +285,45 @@ export async function submitSignup(
   await notifyApplicantWelcome({ to: data.email, firstName: data.firstName, id });
 
   redirect(`/signup/thanks?id=${id}`);
+}
+
+// --- Co-parent invites --------------------------------------------------------
+
+// Invite one or more co-parents (spouse / other parent[s]) to this signup's
+// family. Each gets a secret join link tied to the family's invite token; on
+// open they create their OWN parent row attached to the same family (and thus
+// the same shared children). Best-effort emails: never throws to the caller.
+export async function sendCoParentInvites(
+  signupId: string,
+  emailsInput: string[] | string,
+): Promise<{ ok: boolean; sent: number; error?: string }> {
+  if (!UUID_RE.test(signupId)) return { ok: false, sent: 0, error: "bad-id" };
+
+  const raw = Array.isArray(emailsInput) ? emailsInput.join(", ") : emailsInput;
+  const emails = parseInviteEmails(raw);
+  if (emails.length === 0) return { ok: false, sent: 0, error: "no-emails" };
+
+  // Resolve the inviting parent + their family's invite token.
+  const [row] = await getDb()
+    .select({
+      firstName: signups.firstName,
+      lastName: signups.lastName,
+      familyId: signups.familyId,
+      inviteToken: families.inviteToken,
+    })
+    .from(signups)
+    .innerJoin(families, eq(signups.familyId, families.id))
+    .where(eq(signups.id, signupId))
+    .limit(1);
+  if (!row) return { ok: false, sent: 0, error: "not-found" };
+
+  const inviterName = `${row.firstName} ${row.lastName}`.trim();
+  const joinUrl = joinUrlFor(row.inviteToken);
+
+  let sent = 0;
+  for (const to of emails) {
+    const ok = await notifyCoParentInvite({ to, inviterName, joinUrl });
+    if (ok) sent += 1;
+  }
+  return { ok: true, sent };
 }
