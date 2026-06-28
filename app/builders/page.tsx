@@ -48,7 +48,7 @@ export default function BuildersPage() {
             in our{" "}
             <a
               href="https://github.com/drodio/pixelparents"
-              className="font-medium text-emerald-400 underline-offset-2 hover:underline"
+              className="text-inherit underline decoration-dotted decoration-amber-400 underline-offset-2 transition-colors hover:decoration-amber-300"
             >
               open source
             </a>{" "}
@@ -56,7 +56,7 @@ export default function BuildersPage() {
           </p>
           <Link
             href="/developers"
-            className="font-medium text-emerald-400 underline-offset-2 hover:underline"
+            className="text-inherit underline decoration-dotted decoration-amber-400 underline-offset-2 transition-colors hover:decoration-amber-300"
           >
             Explore the Pixel Parents API →
           </Link>

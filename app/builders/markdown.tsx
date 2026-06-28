@@ -29,12 +29,12 @@ export default function Markdown({ content }: { content: string }) {
           <ul className="flex flex-col gap-5">{children}</ul>
         ),
         li: ({ children }) => (
-          <li className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-base leading-relaxed text-white/70 [&>strong]:text-white [&_em]:!italic [&_em]:!text-white/70">
+          <li className="rounded-xl border border-white/10 bg-white/[0.03] p-5 text-base leading-relaxed text-white/70 [&_strong]:text-white/70 [&_strong:first-child]:text-amber-400 [&_em]:!italic [&_em]:!text-white/70 [&_ul]:mt-3 [&_ul]:!block [&_ul]:list-disc [&_ul]:space-y-2 [&_ul]:pl-5 [&_ul>li]:!list-item [&_ul>li]:!rounded-none [&_ul>li]:!border-0 [&_ul>li]:!bg-transparent [&_ul>li]:!p-0 [&_ul>li]:marker:text-white/40">
             {children}
           </li>
         ),
         strong: ({ children }) => (
-          <strong className="font-semibold text-white">{children}</strong>
+          <strong className="font-semibold text-white/70">{children}</strong>
         ),
         em: ({ children }) => (
           <em className="not-italic text-white/50">{children}</em>
@@ -42,7 +42,7 @@ export default function Markdown({ content }: { content: string }) {
         a: ({ href, children }) => (
           <a
             href={href}
-            className="font-medium text-emerald-400 underline-offset-2 hover:underline"
+            className="text-inherit underline decoration-dotted decoration-amber-400 underline-offset-2 transition-colors hover:decoration-amber-300"
           >
             {children}
           </a>
