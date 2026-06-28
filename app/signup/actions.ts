@@ -15,6 +15,7 @@ import {
 } from "@/lib/options";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
 import { notifyNewSignup, notifyApplicantWelcome } from "@/lib/email";
+import { canonicalizeAgainstPool } from "@/lib/interests";
 
 export type SignupState = {
   ok: boolean;
@@ -93,7 +94,9 @@ export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok:
       .map((x) => x.trim())
       .filter(Boolean)
       .slice(0, 50);
-    set.parentInterests = s.length ? s : null;
+    // Fold onto the canonical spelling already in use (case-insensitive) so we
+    // never store a duplicate that differs only by capitalization.
+    set.parentInterests = s.length ? await canonicalizeAgainstPool(s) : null;
   }
   if ("photos" in patch && Array.isArray(patch.photos)) {
     set.photos = patch.photos

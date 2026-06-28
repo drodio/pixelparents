@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { children, type Photo } from "@/lib/db/schema/signups";
+import { canonicalizeAgainstPool } from "@/lib/interests";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -73,7 +74,9 @@ export async function patchChild(
       .map((x) => x.trim())
       .filter(Boolean)
       .slice(0, 50);
-    set.interests = s.length ? s : null;
+    // Fold incoming interests onto the canonical spelling already in use so we
+    // never store a case-variant duplicate ("Mountain Biking" vs "mountain biking").
+    set.interests = s.length ? await canonicalizeAgainstPool(s) : null;
   }
   if ("photos" in patch) set.photos = sanitizePhotos(patch.photos);
   if (Object.keys(set).length === 0) return { ok: true };

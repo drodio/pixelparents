@@ -32,7 +32,12 @@ function TagPicker({
   const add = (raw: string) => {
     const t = raw.trim();
     if (!t) return;
-    if (!value.some((v) => v.toLowerCase() === t.toLowerCase())) onChange([...value, t]);
+    // If an interest already exists (case-insensitively) — either in this list or
+    // in the shared suggestion pool — reuse that exact spelling instead of adding
+    // a case-variant duplicate ("mountain biking" -> existing "Mountain Biking").
+    const existing = suggestions.find((s) => s.toLowerCase() === t.toLowerCase());
+    const next = existing ?? t;
+    if (!value.some((v) => v.toLowerCase() === next.toLowerCase())) onChange([...value, next]);
     setDraft("");
   };
   const remove = (t: string) => onChange(value.filter((v) => v !== t));
