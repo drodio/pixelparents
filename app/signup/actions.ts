@@ -14,6 +14,7 @@ import {
   BUILDER_INTEREST,
 } from "@/lib/options";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
+import { generateShareToken } from "@/lib/share";
 import { notifyNewSignup, notifyApplicantWelcome, notifyCoParentInvite } from "@/lib/email";
 import { createFamily, getFamilyByInviteToken, joinUrlFor } from "@/lib/family";
 import { parseInviteEmails, INVITE_LIFETIME_CAP } from "@/lib/invite";
@@ -221,9 +222,16 @@ export async function completeSignup(id: string): Promise<SignupState> {
     });
     // Welcome the applicant + point them at step 2 (best-effort, never blocks).
     await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: row.id });
+    // Default a newly-completed profile to OHS-directory visible (they can switch
+    // to "Just me" on the thanks page). Mirrors setShareVisibility("ohs").
     await getDb()
       .update(signups)
-      .set({ extra: { ...extra, notified: true } })
+      .set({
+        extra: { ...extra, notified: true },
+        shareEnabled: true,
+        shareVisibility: "ohs",
+        shareToken: row.shareToken ?? generateShareToken(),
+      })
       .where(eq(signups.id, id));
   }
   return { ok: true };
