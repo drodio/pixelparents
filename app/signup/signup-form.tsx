@@ -100,11 +100,15 @@ export default function SignupForm({ joinToken }: { joinToken?: string } = {}) {
     if (res.ok && res.sent > 0) {
       setInviteState("sent");
       setInviteRaw("");
-      const capped = res.sent < res.requested;
-      setInviteNote(
-        `Sent ${res.sent} invite${res.sent === 1 ? "" : "s"}. They'll get a link to fill out their info.` +
-          (capped ? ` (${res.requested - res.sent} not sent — invite limit reached.)` : ""),
-      );
+      const reserved = res.reserved ?? res.sent;
+      // Two distinct shortfalls: quota trimmed by the lifetime cap (reserved <
+      // requested) vs. individual sends that failed (sent < reserved).
+      const cappedShort = reserved < res.requested;
+      const failedShort = res.sent < reserved;
+      let note = `Sent ${res.sent} invite${res.sent === 1 ? "" : "s"}. They'll get a link to fill out their info.`;
+      if (failedShort) note += ` (${reserved - res.sent} couldn't be sent — please try again.)`;
+      if (cappedShort) note += ` (${res.requested - reserved} not sent — invite limit reached.)`;
+      setInviteNote(note);
     } else if (res.error === "limit") {
       setInviteState("error");
       setInviteNote("You've reached the invite limit for this signup.");

@@ -15,7 +15,7 @@ import {
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
 import { notifyNewSignup, notifyApplicantWelcome, notifyCoParentInvite } from "@/lib/email";
 import { createFamily, getFamilyByInviteToken, joinUrlFor } from "@/lib/family";
-import { parseInviteEmails } from "@/lib/invite";
+import { parseInviteEmails, INVITE_LIFETIME_CAP } from "@/lib/invite";
 
 export type SignupState = {
   ok: boolean;
@@ -289,13 +289,6 @@ export async function submitSignup(
 
 // --- Co-parent invites --------------------------------------------------------
 
-// A signup may send at most this many co-parent invite emails over its lifetime.
-// `sendCoParentInvites` is an unauthenticated outbound-email primitive (gated
-// only by knowing the secret signup id, like every other edit action here), so
-// this lifetime cap bounds it as an email-relay / spam vector. A real family
-// needs only a couple of invites; 20 leaves generous headroom.
-const INVITE_LIFETIME_CAP = 20;
-
 // Atomically reserve up to `want` invites against a signup's lifetime cap and
 // return how many were granted (0 if already at the cap). The reserve is a
 // single UPDATE with a `FOR UPDATE` row lock, so concurrent calls serialize on
@@ -331,7 +324,7 @@ async function reserveInviteQuota(signupId: string, want: number): Promise<numbe
 export async function sendCoParentInvites(
   signupId: string,
   emailsInput: string[] | string,
-): Promise<{ ok: boolean; sent: number; requested: number; error?: string }> {
+): Promise<{ ok: boolean; sent: number; requested: number; reserved?: number; error?: string }> {
   if (!UUID_RE.test(signupId)) return { ok: false, sent: 0, requested: 0, error: "bad-id" };
 
   const raw = Array.isArray(emailsInput) ? emailsInput.join(", ") : emailsInput;
@@ -354,7 +347,8 @@ export async function sendCoParentInvites(
   // Atomically reserve quota up front (counting attempts), then send only what
   // we were granted — race-safe against the spam/relay vector the cap bounds.
   const reserved = await reserveInviteQuota(signupId, emails.length);
-  if (reserved <= 0) return { ok: false, sent: 0, requested: emails.length, error: "limit" };
+  if (reserved <= 0)
+    return { ok: false, sent: 0, requested: emails.length, reserved: 0, error: "limit" };
   const toSend = emails.slice(0, reserved);
 
   const inviterName = `${row.firstName} ${row.lastName}`.trim();
@@ -371,5 +365,13 @@ export async function sendCoParentInvites(
     }
   }
 
-  return { ok: true, sent, requested: emails.length };
+  // Quota is reserved by attempt and not refunded — so flag the case where a
+  // signup burned cap with zero deliveries (e.g. provider outage) for support.
+  if (sent === 0) {
+    console.error(
+      `sendCoParentInvites: reserved ${reserved} invite(s) for signup ${signupId} but 0 sent`,
+    );
+  }
+
+  return { ok: true, sent, requested: emails.length, reserved };
 }
