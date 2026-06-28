@@ -1,30 +1,98 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { PencilIcon, TrashIcon } from "./icons";
+import { EditActions, fieldInputCls } from "./inline-edit";
 
 // A row's name, doubling as its row actions. Hovering the cell turns the name
-// gold and reveals an edit pencil + a trash can. Clicking the name or pencil
-// opens the edit page; hovering the trash turns the name (and trash) red, and
-// clicking it deletes the row (after a confirm). Replaces the old Actions column.
+// gold and reveals a pencil + a trash can. The name itself links to the full
+// edit page; hovering the trash turns the name (and trash) red, and clicking it
+// deletes the row (after a confirm).
+//
+// When `onSaveName` is supplied (parents table) the pencil edits first/last name
+// inline; otherwise (children table) the pencil simply links to the edit page.
 export function NameCell({
-  name,
+  firstName,
+  lastName = "",
   editHref,
   deleteAction,
   id,
   confirmMessage,
+  onSaveName,
 }: {
-  name: string;
+  firstName: string;
+  lastName?: string;
   editHref: string;
   deleteAction: (formData: FormData) => void | Promise<void>;
   id: string;
   confirmMessage: string;
+  onSaveName?: (firstName: string, lastName: string) => Promise<void> | void;
 }) {
   const [hover, setHover] = useState(false);
   const [hoverTrash, setHoverTrash] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [first, setFirst] = useState(firstName);
+  const [last, setLast] = useState(lastName);
+  const [saving, setSaving] = useState(false);
+  const firstRef = useRef<HTMLInputElement>(null);
 
+  const name = `${firstName} ${lastName}`.trim();
   const nameColor = hoverTrash ? "text-red-400" : hover ? "text-amber-400" : "text-white";
+
+  useEffect(() => {
+    if (editing) firstRef.current?.focus();
+  }, [editing]);
+
+  function open() {
+    setFirst(firstName);
+    setLast(lastName);
+    setEditing(true);
+  }
+  function cancel() {
+    if (!saving) setEditing(false);
+  }
+  async function save() {
+    if (!onSaveName) return;
+    setSaving(true);
+    try {
+      await onSaveName(first, last);
+      setEditing(false);
+    } catch {
+      // Leave the editor open so the admin can retry.
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  if (editing) {
+    return (
+      <span
+        className="inline-flex items-center gap-1"
+        onKeyDown={(e) => {
+          if (e.key === "Escape") cancel();
+          else if (e.key === "Enter") void save();
+        }}
+      >
+        <input
+          ref={firstRef}
+          value={first}
+          placeholder="First"
+          onChange={(e) => setFirst(e.target.value)}
+          className={`${fieldInputCls} w-24`}
+          aria-label="First name"
+        />
+        <input
+          value={last}
+          placeholder="Last"
+          onChange={(e) => setLast(e.target.value)}
+          className={`${fieldInputCls} w-24`}
+          aria-label="Last name"
+        />
+        <EditActions onSave={() => void save()} onCancel={cancel} saving={saving} />
+      </span>
+    );
+  }
 
   return (
     <span
@@ -43,14 +111,26 @@ export function NameCell({
           hover ? "opacity-100" : "pointer-events-none opacity-0"
         }`}
       >
-        <Link
-          href={editHref}
-          title="Edit"
-          aria-label={`Edit ${name}`}
-          className="rounded-md p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
-        >
-          <PencilIcon />
-        </Link>
+        {onSaveName ? (
+          <button
+            type="button"
+            onClick={open}
+            title="Edit name inline"
+            aria-label={`Edit ${name} name`}
+            className="rounded-md p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <PencilIcon />
+          </button>
+        ) : (
+          <Link
+            href={editHref}
+            title="Edit"
+            aria-label={`Edit ${name}`}
+            className="rounded-md p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+          >
+            <PencilIcon />
+          </Link>
+        )}
         <form
           action={deleteAction}
           onSubmit={(e) => {
