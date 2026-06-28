@@ -9,6 +9,34 @@ import { TableWrap, thCls, tdCls } from "./ui";
 import { NameCell } from "./name-cell";
 import { compare, SortHeader, type Dir } from "./sortable";
 import { PhotoGallery, type GalleryPhoto } from "./photo-gallery";
+import { CopyIcon, CheckIcon } from "./icons";
+
+// Copy every parent email (deduped, comma-delimited) to the clipboard. Lives next
+// to the "Contact" header so admins can grab the whole list in one click.
+function CopyEmailsButton({ emails }: { emails: string[] }) {
+  const [copied, setCopied] = useState(false);
+  async function copy() {
+    if (emails.length === 0) return;
+    try {
+      await navigator.clipboard.writeText(emails.join(", "));
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    } catch {
+      /* clipboard blocked — admin can still copy a cell manually */
+    }
+  }
+  return (
+    <button
+      type="button"
+      onClick={copy}
+      aria-label={`Copy all ${emails.length} email addresses`}
+      title={copied ? "Copied!" : `Copy all ${emails.length} email addresses`}
+      className={`transition-colors ${copied ? "text-emerald-400" : "text-white/40 hover:text-amber-400"}`}
+    >
+      {copied ? <CheckIcon /> : <CopyIcon />}
+    </button>
+  );
+}
 
 export type ParentRow = {
   id: string;
@@ -83,6 +111,12 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
 
   const hp = { sortKey, dir, onSort, className: thCls };
 
+  // Deduped list of every parent email, for the Contact-header copy button.
+  const allEmails = useMemo(
+    () => Array.from(new Set(rows.map((r) => r.email).filter(Boolean))),
+    [rows],
+  );
+
   return (
     <TableWrap>
       <thead>
@@ -90,7 +124,12 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
           <SortHeader label="Status" k="status" {...hp} />
           <SortHeader label="Name" k="name" {...hp} />
           <SortHeader label="Children" k="children" {...hp} />
-          <SortHeader label="Contact" k="contact" {...hp} />
+          <SortHeader
+            label="Contact"
+            k="contact"
+            {...hp}
+            extra={<CopyEmailsButton emails={allEmails} />}
+          />
           <SortHeader label="GitHub" k="github" {...hp} />
           <SortHeader label="Affiliation" k="affiliation" {...hp} />
           <SortHeader label="Tech depth" k="tech" {...hp} />
