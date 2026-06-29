@@ -12,16 +12,21 @@ export const metadata = {
 // Hand-trimmed illustrative payloads so the response shape is obvious at a glance.
 const EXAMPLE_STATS = `{
   "total_signups": 42,
+  "total_families": 42,
+  "total_children": 57,
   "updated_at": "2026-06-15T18:30:00.000Z",
   "database": "ready"
 }`;
 
 const EXAMPLE_BREAKDOWNS = `{
-  "signups_by_state":       { "CA": 18, "WA": 6, "NY": 4 },
-  "signups_by_affiliation": { "Existing parent (currently enrolled)": 22, "New parent …": 12 },
-  "signups_by_tech_depth":  { "10x Developer": 9, "Vibe coder": 7 },
-  "signups_by_skillset":    { "Frontend": 14, "Backend": 11, "AI LLM Wrangler": 8 },
-  "signups_by_grade":       { "9th": 11, "10th": 9, "11th": 8 },
+  "signups_by_state":           { "California": 18, "Washington": 6, "New York": 4 },
+  "signups_by_affiliation":     { "Existing parent (currently enrolled)": 22, "New parent …": 12 },
+  "signups_by_tech_depth":      { "10x Developer": 9, "Vibe coder": 7 },
+  "signups_by_time_commitment": { "1-2hr/wk": 14, "2-5hr/wk": 11 },
+  "signups_by_skillset":        { "Frontend": 14, "Backend": 11, "AI LLM Wrangler": 8 },
+  "signups_by_builder_interest":{ "builder": 19, "aspiring": 14, "no": 9 },
+  "signups_by_grade":           { "9th": 11, "10th": 9, "11th": 8 },
+  "skillsets_by_tech_depth":    { "10x Developer": { "Backend": 6, "AI LLM Wrangler": 5 } },
   "top_interests": [ { "interest": "robotics", "count": 12 },
                      { "interest": "music", "count": 9 } ],
   "updated_at": "2026-06-15T18:30:00.000Z",
@@ -29,10 +34,15 @@ const EXAMPLE_BREAKDOWNS = `{
 }`;
 
 const ENDPOINTS: Array<[string, string, string]> = [
-  ["GET", "/api/v1/stats", "High-level totals (signups, updated_at)"],
+  ["GET", "/api/v1", "Discovery index — no key needed"],
+  ["GET", "/api/v1/health", "Liveness + version — no key needed"],
+  ["GET", "/api/v1/openapi.json", "OpenAPI 3.1 spec — no key needed"],
   ["GET", "/api/v1/me", "Confirms your key is valid"],
+  ["GET", "/api/v1/stats", "High-level totals — filterable"],
+  ["GET", "/api/v1/breakdowns", "Counts by state / affiliation / tech depth / time / skillset / grade — filterable"],
+  ["GET", "/api/v1/trends", "Signups over time (?interval=week|month)"],
   ["GET", "/api/v1/options", "Option taxonomies + interests pool (non-PII)"],
-  ["GET", "/api/v1/breakdowns", "Aggregate counts by state / affiliation / skillset / grade …"],
+  ["POST", "/api/mcp", "MCP server — query the data from an AI agent"],
 ];
 
 const STEPS: Array<[string, string]> = [
@@ -40,6 +50,15 @@ const STEPS: Array<[string, string]> = [
   ["2. We review it", "We approve requests from OHS families by hand — you'll get an email."],
   ["3. Build", "Once approved, reveal your API key and start calling the endpoints."],
 ];
+
+const CLAUDE_MCP_CONFIG = `{
+  "mcpServers": {
+    "pixel-parents": {
+      "url": "https://pixelparents.org/api/mcp",
+      "headers": { "Authorization": "Bearer YOUR_KEY" }
+    }
+  }
+}`;
 
 export default function DevelopersPage() {
   return (
@@ -130,6 +149,67 @@ export default function DevelopersPage() {
             <pre className="overflow-x-auto rounded-lg border border-white/10 bg-white/[0.03] p-4 font-mono text-xs leading-relaxed text-white/80">
 {EXAMPLE_BREAKDOWNS}
             </pre>
+          </div>
+        </section>
+
+        {/* Filtering, trends & tooling */}
+        <section className="flex flex-col gap-4">
+          <h2 className="text-2xl font-bold">Filtering, trends &amp; tooling</h2>
+          <ul className="flex list-disc flex-col gap-2 pl-5 text-sm text-white/60">
+            <li>
+              <span className="font-semibold text-white/80">Filter any aggregate</span> with query params, e.g.{" "}
+              <code className="font-mono text-xs text-white/80">/api/v1/breakdowns?state=CA&amp;tech_depth=10x%20Developer</code>
+              . To protect a small community, filtered counts below 5 are suppressed.
+            </li>
+            <li>
+              <span className="font-semibold text-white/80">Track growth</span> with{" "}
+              <code className="font-mono text-xs text-white/80">/api/v1/trends?interval=week</code> — signups over
+              time plus a running cumulative.
+            </li>
+            <li>
+              <span className="font-semibold text-white/80">Generate a typed client</span> from the{" "}
+              <a href="/api/v1/openapi.json" className="text-emerald-300 hover:underline">
+                OpenAPI 3.1 spec
+              </a>
+              .
+            </li>
+            <li>
+              <span className="font-semibold text-white/80">Query from an AI agent</span> — point any MCP client at{" "}
+              <code className="font-mono text-xs text-white/80">/api/mcp</code> (tools:{" "}
+              <code className="font-mono text-xs text-white/70">community_stats</code>,{" "}
+              <code className="font-mono text-xs text-white/70">community_breakdowns</code>,{" "}
+              <code className="font-mono text-xs text-white/70">community_trends</code>,{" "}
+              <code className="font-mono text-xs text-white/70">community_options</code>).
+            </li>
+          </ul>
+        </section>
+
+        {/* Connect to Claude / AI agents */}
+        <section className="flex flex-col gap-4">
+          <h2 className="text-2xl font-bold">Connect to Claude</h2>
+          <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.04] p-5">
+            <p className="text-sm text-white/70">
+              The API also speaks <span className="font-semibold text-white/90">MCP</span> (Model
+              Context Protocol), so you can ask Claude (or any AI agent) about the community in plain
+              language. Point your MCP client at:
+            </p>
+            <pre className="mt-3 overflow-x-auto rounded-lg border border-white/10 bg-black/60 p-3 font-mono text-xs text-emerald-200">
+https://pixelparents.org/api/mcp
+            </pre>
+            <p className="mt-4 text-sm text-white/60">
+              For Claude Desktop, add this to your{" "}
+              <code className="font-mono text-xs text-white/80">claude_desktop_config.json</code>:
+            </p>
+            <pre className="mt-2 overflow-x-auto rounded-lg border border-white/10 bg-black/60 p-3 font-mono text-xs leading-relaxed text-white/80">
+{CLAUDE_MCP_CONFIG}
+            </pre>
+            <p className="mt-3 text-xs text-white/45">
+              Discovery (listing tools) is open; calling a tool needs your approved key. Tools:{" "}
+              <code className="font-mono text-white/70">community_stats</code>,{" "}
+              <code className="font-mono text-white/70">community_breakdowns</code>,{" "}
+              <code className="font-mono text-white/70">community_trends</code>,{" "}
+              <code className="font-mono text-white/70">community_options</code>.
+            </p>
           </div>
         </section>
 

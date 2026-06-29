@@ -1,5 +1,5 @@
-import { NextResponse } from "next/server";
 import { authorize } from "@/lib/api/authorize";
+import { apiJson, corsPreflight } from "@/lib/api/http";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -9,5 +9,9 @@ export const runtime = "nodejs";
 export async function GET(req: Request) {
   const auth = await authorize(req);
   if (!auth.ok) return auth.res;
-  return NextResponse.json({ status: "approved" });
+  return apiJson(req, { status: "approved" });
+}
+
+export function OPTIONS() {
+  return corsPreflight();
 }

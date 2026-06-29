@@ -95,6 +95,7 @@ export const OPTIONS = {
   skillsets: SKILLSETS,
   time_commitment: TIME_COMMITMENT,
   grades: GRADES,
+  builder_interest: BUILDER_INTEREST,
 } as const;
 
 export type OhsAffiliation = (typeof OHS_AFFILIATIONS)[number];
