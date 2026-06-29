@@ -263,7 +263,9 @@ export function MultiSelectCell({
     );
   }
   // Each toggle persists immediately; the editor stays open so the admin can
-  // tick several boxes before clicking Done.
+  // tick several boxes before clicking Done. Boxes disable while a save is in
+  // flight so two quick clicks can't race on a stale `ed.draft` (lost update)
+  // or land their patchSignup calls out of order.
   const toggle = (o: string) => {
     const next = ed.draft.includes(o)
       ? ed.draft.filter((x) => x !== o)
@@ -284,6 +286,7 @@ export function MultiSelectCell({
             <input
               type="checkbox"
               checked={ed.draft.includes(o)}
+              disabled={ed.saving}
               onChange={() => toggle(o)}
               className="h-3.5 w-3.5 accent-amber-500"
             />
@@ -343,6 +346,17 @@ export function TagsCell({
     ed.setDraft(next);
     void ed.save(next, { keepOpen: true });
   };
+  // Done flushes any typed-but-unsubmitted tag before closing, so a half-typed
+  // tag isn't silently lost (the old ✓ button folded it in via merge()).
+  const done = () => {
+    if (text.trim()) {
+      const next = merge(ed.draft, text);
+      setText("");
+      void ed.save(next);
+    } else {
+      ed.close();
+    }
+  };
   return (
     <div
       className="flex w-56 flex-col gap-1"
@@ -357,8 +371,9 @@ export function TagsCell({
               key={t}
               type="button"
               onClick={() => remove(t)}
+              disabled={ed.saving}
               title="Remove"
-              className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-xs text-white/80 transition-colors hover:border-red-400/40 hover:text-red-300"
+              className="inline-flex items-center gap-1 rounded-md border border-white/15 bg-white/5 px-2 py-0.5 text-xs text-white/80 transition-colors hover:border-red-400/40 hover:text-red-300 disabled:opacity-40"
             >
               {t} <span aria-hidden>×</span>
             </button>
@@ -380,7 +395,7 @@ export function TagsCell({
         }}
         className={`${fieldInputCls} w-full`}
       />
-      <DoneButton onDone={ed.close} saving={ed.saving} />
+      <DoneButton onDone={done} saving={ed.saving} />
     </div>
   );
 }
