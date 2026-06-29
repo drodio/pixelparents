@@ -7,7 +7,9 @@ const resend = apiKey ? new Resend(apiKey) : null;
 // All config is env-driven — this repo is PUBLIC, so no personal contact info
 // (sender name, notify address, phone, signature) is hardcoded here.
 // Set RESEND_FROM, NOTIFY_TO, and EMAIL_SIGNATURE (multi-line) in env.
-const FROM = process.env.RESEND_FROM ?? "Pixel Parents <noreply@pixelparents.org>";
+// Use `||` (not `??`) so an empty/whitespace RESEND_FROM falls back to a valid
+// sender — a blank "from" makes Resend reject every send.
+const FROM = process.env.RESEND_FROM?.trim() || "Pixel Parents <noreply@pixelparents.org>";
 const TO = process.env.NOTIFY_TO ?? "";
 const SIGNATURE = process.env.EMAIL_SIGNATURE ?? "";
 
