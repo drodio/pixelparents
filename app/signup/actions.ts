@@ -24,6 +24,7 @@ import {
 import { getAdminRecipients } from "@/lib/admin";
 import { createFamily, getFamilyByInviteToken, joinUrlFor } from "@/lib/family";
 import { parseInviteEmails, INVITE_LIFETIME_CAP } from "@/lib/invite";
+import { canonicalizeAgainstPool } from "@/lib/interests";
 
 export type SignupState = {
   ok: boolean;
@@ -144,7 +145,11 @@ export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok:
       .map((x) => x.trim())
       .filter(Boolean)
       .slice(0, 50);
-    set.parentInterests = s.length ? s : null;
+    // Fold onto whatever spelling is already in the pool (case-insensitive) so we
+    // don't add a capitalization variant of an existing interest. Brand-new
+    // interests racing in two casings can still both land; the pool collapses
+    // them for display and the scrub script reconciles the rows.
+    set.parentInterests = s.length ? await canonicalizeAgainstPool(s) : null;
   }
   if ("photos" in patch && Array.isArray(patch.photos)) {
     set.photos = patch.photos
