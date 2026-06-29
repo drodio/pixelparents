@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { and, eq } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { signups, children, type Photo } from "@/lib/db/schema/signups";
+import { canonicalizeAgainstPool } from "@/lib/interests";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -97,7 +98,12 @@ export async function patchChild(
       .map((x) => x.trim())
       .filter(Boolean)
       .slice(0, 50);
-    set.interests = s.length ? s : null;
+    // Fold incoming interests onto whatever spelling is already in the pool so
+    // we don't add a case-variant of an existing interest ("mountain biking" ->
+    // "Mountain Biking"). Brand-new interests racing in two casings can still
+    // both land; getInterestPool collapses them for display and the scrub script
+    // reconciles the rows.
+    set.interests = s.length ? await canonicalizeAgainstPool(s) : null;
   }
   if ("photos" in patch) set.photos = sanitizePhotos(patch.photos);
   if (Object.keys(set).length === 0) return { ok: true };
