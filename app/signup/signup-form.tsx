@@ -23,6 +23,10 @@ import {
 import { parseInviteEmails } from "@/lib/invite";
 import { TagPicker, PhotoUploader } from "./thanks/family-form";
 
+// Bump when the `empty` shape changes incompatibly — stored drafts from an older
+// shape are discarded on restore rather than spread in with stale keys.
+const DRAFT_VERSION = 1;
+
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
   return <p className="mt-1 text-sm text-red-400">{msg}</p>;
@@ -93,9 +97,14 @@ export default function SignupForm({
     try {
       const savedV = window.localStorage.getItem(V_KEY);
       if (savedV) {
-        const parsed = JSON.parse(savedV) as Partial<typeof empty>;
-        // eslint-disable-next-line react-hooks/set-state-in-effect
-        setV((prev) => ({ ...prev, ...parsed }));
+        const blob = JSON.parse(savedV) as { ver?: number; v?: Partial<typeof empty> };
+        if (blob?.ver === DRAFT_VERSION && blob.v) {
+          const parsed = blob.v;
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setV((prev) => ({ ...prev, ...parsed }));
+        } else {
+          window.localStorage.removeItem(V_KEY);
+        }
       }
       const savedId = window.localStorage.getItem(ID_KEY);
       if (savedId) idRef.current = savedId;
@@ -112,7 +121,7 @@ export default function SignupForm({
       return;
     }
     try {
-      window.localStorage.setItem(V_KEY, JSON.stringify(v));
+      window.localStorage.setItem(V_KEY, JSON.stringify({ ver: DRAFT_VERSION, v }));
     } catch {
       /* storage full/blocked — non-fatal */
     }

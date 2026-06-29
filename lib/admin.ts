@@ -74,18 +74,26 @@ export async function getAdminRecipients(): Promise<{ email: string; firstName: 
     const rows = await getDb().select({ email: admins.email }).from(admins);
     for (const r of rows) emails.add(r.email.toLowerCase());
   }
-  const out: { email: string; firstName: string }[] = [];
-  for (const email of emails) {
-    let firstName = "";
+  const list = Array.from(emails);
+  if (list.length === 0) return [];
+
+  // Resolve first names in ONE query (most-recent signup per email) — this runs
+  // on the signup-completion hot path, so avoid an N+1 per admin.
+  const byEmail = new Map<string, string>();
+  if (hasDatabase()) {
     try {
-      const signup = await getSignupByEmail(email);
-      firstName = signup?.firstName?.trim() ?? "";
+      const rows = (await getSql()`
+        SELECT DISTINCT ON (lower(email)) lower(email) AS email, first_name AS "firstName"
+        FROM signups
+        WHERE lower(email) = ANY(${list})
+        ORDER BY lower(email), created_at DESC
+      `) as Array<{ email: string; firstName: string | null }>;
+      for (const r of rows) byEmail.set(r.email, r.firstName?.trim() ?? "");
     } catch (err) {
-      console.error("getAdminRecipients: name lookup failed for", email, err);
+      console.error("getAdminRecipients: name lookup failed:", err);
     }
-    out.push({ email, firstName });
   }
-  return out;
+  return list.map((email) => ({ email, firstName: byEmail.get(email) ?? "" }));
 }
 
 export async function addAdmin(email: string, by: string | null): Promise<void> {

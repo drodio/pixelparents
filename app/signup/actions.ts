@@ -228,6 +228,20 @@ export async function completeSignup(id: string): Promise<SignupState> {
     });
     // Welcome the applicant + point them at step 2 (best-effort, never blocks).
     await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: row.id });
+    // Default a newly-completed profile to OHS-directory visible (they can switch
+    // to "Just me" on the thanks page). Mirrors setShareVisibility("ohs").
+    // Seed approvalStatus=pending here, BEFORE emailing admins — otherwise an
+    // admin who acts on an early email (the fan-out below awaits per recipient)
+    // could have their decision clobbered by this wholesale `extra` write.
+    await getDb()
+      .update(signups)
+      .set({
+        extra: { ...extra, notified: true, approvalStatus: extra.approvalStatus ?? "pending" },
+        shareEnabled: true,
+        shareVisibility: "ohs",
+        shareToken: row.shareToken ?? generateShareToken(),
+      })
+      .where(eq(signups.id, id));
     // Email every admin to verify this profile's OHS-directory access. The first
     // admin to act resolves it for everyone (see lib/approval). Best-effort.
     try {
@@ -239,18 +253,6 @@ export async function completeSignup(id: string): Promise<SignupState> {
     } catch (err) {
       console.error("notifyAdminsVerifyProfile failed:", err);
     }
-    // Default a newly-completed profile to OHS-directory visible (they can switch
-    // to "Just me" on the thanks page). Mirrors setShareVisibility("ohs").
-    // Seed approvalStatus=pending so the admin verify flow has a starting state.
-    await getDb()
-      .update(signups)
-      .set({
-        extra: { ...extra, notified: true, approvalStatus: extra.approvalStatus ?? "pending" },
-        shareEnabled: true,
-        shareVisibility: "ohs",
-        shareToken: row.shareToken ?? generateShareToken(),
-      })
-      .where(eq(signups.id, id));
   }
   return { ok: true };
 }

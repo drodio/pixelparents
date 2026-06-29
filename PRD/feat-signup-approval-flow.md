@@ -1,3 +1,37 @@
+## Progress Update as of June 28, 2026 — 5:06 PM Pacific
+
+### Summary of changes since last update
+Drained roborev reviews (#14419, #14420) on the first commit. Fixed two valid
+findings: a concurrency race and an N+1; hardened the GET-action links.
+
+### Detail of changes made:
+- **Race fix** (`app/signup/actions.ts`): the wholesale `extra` write that seeds
+  `approvalStatus:"pending"` now runs BEFORE the per-admin email fan-out (it used
+  to run after). Previously an admin acting on an early email could have their
+  decision overwritten back to pending by the trailing stale-`extra` write.
+- **N+1 fix** (`lib/admin.ts`): `getAdminRecipients` resolves all admin first
+  names in a single `DISTINCT ON (lower(email))` query instead of one
+  `getSignupByEmail` per admin on the signup hot path.
+- **GET-action hardening** (`app/(authed)/admin/verify/[id]/page.tsx`): added
+  `prefetch={false}` to the on-page Approve/Deny links so Next can't prefetch them
+  into view and auto-fire the decision.
+- **localStorage schema guard** (`app/signup/signup-form.tsx`): stored draft is now
+  `{ ver, v }`; a version mismatch (module-level `DRAFT_VERSION`) discards the old
+  blob on restore instead of spreading stale keys.
+
+### Decisions (declined findings)
+- **Approve/deny stay GET (not POST)**: the product requirement is one-click
+  approve/deny *links in email*. Unauthenticated email-scanner GETs are already
+  blocked by the `/admin(.*)` Clerk `auth.protect()` middleware (they 302 to
+  sign-in before the page renders), and in-app prefetch is now disabled — so the
+  scanner/prefetch auto-fire vectors are closed. First-wins idempotency bounds any
+  residual double-fire. A POST confirm would break the one-click email UX.
+- **`studentResourceOptIn` on force-save**: only sent when a LinkedIn handle is
+  present — matches the existing incremental `setLinkedin` semantics (the opt-in UI
+  only exists alongside a handle), so no change.
+
+---
+
 ## Progress Update as of June 28, 2026 — 4:57 PM Pacific
 
 ### Summary of changes since last update

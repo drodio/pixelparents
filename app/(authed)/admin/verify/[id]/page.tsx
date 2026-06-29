@@ -154,14 +154,18 @@ export default async function VerifyProfilePage({
           match the one-click approve/deny links sent to admins by email. */}
       {status === "pending" ? (
         <div className="flex items-center gap-3">
+          {/* prefetch disabled: these GET links trigger the decision on render,
+              so Next must not prefetch them into the viewport and auto-fire. */}
           <Link
             href={`/admin/verify/${id}?action=approve`}
+            prefetch={false}
             className="rounded-full bg-emerald-500/20 px-5 py-2 text-sm font-semibold text-emerald-200 transition-colors hover:bg-emerald-500/30"
           >
             Approve
           </Link>
           <Link
             href={`/admin/verify/${id}?action=deny`}
+            prefetch={false}
             className="rounded-full bg-red-500/20 px-5 py-2 text-sm font-semibold text-red-200 transition-colors hover:bg-red-500/30"
           >
             Deny
