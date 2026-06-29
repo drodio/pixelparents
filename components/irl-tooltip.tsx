@@ -7,11 +7,13 @@ export function IrlTooltip() {
     <span className="group relative inline-block">
       <code
         tabIndex={0}
+        aria-describedby="irl-tooltip"
         className="cursor-help rounded font-mono text-amber-400 underline decoration-dotted decoration-amber-400/60 underline-offset-4 outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50"
       >
         &quot;IRL&quot;
       </code>
       <span
+        id="irl-tooltip"
         role="tooltip"
         className="pointer-events-none absolute bottom-full left-1/2 z-30 mb-2 w-64 max-w-[80vw] -translate-x-1/2 rounded-lg border border-amber-400/30 bg-zinc-900 px-3 py-2 text-sm font-normal not-italic text-white/80 opacity-0 shadow-xl transition-opacity duration-150 group-hover:opacity-100 group-focus-within:opacity-100"
       >
