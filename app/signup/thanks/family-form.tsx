@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Plus } from "lucide-react";
 import { GRADES } from "@/lib/options";
 import { optimizeImage } from "@/lib/image";
 import type { Photo } from "@/lib/db/schema/signups";
@@ -64,6 +65,11 @@ export function TagPicker({
   );
   // As you type, only keep suggestions that contain the typed text.
   const available = ql ? notSelected.filter((s) => s.toLowerCase().includes(ql)) : notSelected;
+  // When the typed text isn't already an existing label (or selected), offer it
+  // as a gold "create new" chip at the bottom of the list. Enter still adds it too.
+  const matchesExisting = suggestions.some((s) => s.toLowerCase() === ql);
+  const alreadySelected = value.some((v) => v.toLowerCase() === ql);
+  const showCreateNew = q !== "" && !matchesExisting && !alreadySelected;
 
   return (
     <div className="mt-1">
@@ -98,7 +104,7 @@ export function TagPicker({
         placeholder={placeholder}
         className={inputCls}
       />
-      {available.length > 0 && (
+      {(available.length > 0 || showCreateNew) && (
         <div className="mt-2 flex flex-wrap gap-2">
           {available.map((s) => {
             const Icon = iconForInterest(s);
@@ -122,6 +128,19 @@ export function TagPicker({
               </button>
             );
           })}
+          {showCreateNew && (
+            <button
+              type="button"
+              // Same onBlur guard as the suggestion chips above.
+              onMouseDown={(e) => e.preventDefault()}
+              onClick={() => add(q)}
+              title={`Add "${q}" as a new interest`}
+              className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-amber-400/10 px-3 py-1 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-400/20"
+            >
+              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+              {q}
+            </button>
+          )}
         </div>
       )}
     </div>

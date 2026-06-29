@@ -1,5 +1,31 @@
 # feat: Gold Login button + IRL tooltip
 
+## Progress Update as of June 28, 2026 — 7:37 PM Pacific
+
+### Summary of changes since last update
+Added a third change to this branch: the interest-label picker (`TagPicker` in
+`app/signup/thanks/family-form.tsx`, shared by the signup parent-interests and
+child-interests pickers) now surfaces a gold "create new" chip. When you type a
+label that doesn't match any existing one (e.g. "Hella"), it appears in gold at
+the bottom of the suggestion list with a `+` icon — clickable to apply, and
+Enter still adds it too (Enter-to-add already worked; the visible gold chip is
+new).
+
+### Detail of changes made:
+- `app/signup/thanks/family-form.tsx`: imported `Plus` from `lucide-react`;
+  computed `showCreateNew = q !== "" && !matchesExisting && !alreadySelected`
+  (typed text isn't already an existing/selected label); rendered the gold chip
+  (`border-amber-400 bg-amber-400/10 text-amber-300`) as the last item in the
+  suggestion container, reusing the existing `add()` handler and the onBlur
+  guard pattern. Container now renders when `available.length > 0 || showCreateNew`.
+- The gold chip can appear alongside partial matches (standard "creatable
+  combobox" behavior) — e.g. typing "art" shows matching suggestions AND a gold
+  "art" new chip. If the user wants it ONLY when zero suggestions match, that's
+  a one-line tweak to gate on `available.length === 0`.
+- Verified: `npm run typecheck` clean; `eslint app/signup/thanks/family-form.tsx`
+  clean. Interactive click/hover not browser-verified (Chrome extension not
+  connected this session) — logic confirmed by inspection.
+
 ## Progress Update as of June 28, 2026 — 7:26 PM Pacific
 
 ### Summary of changes since last update
@@ -14,7 +40,9 @@ the signup page (`/signup`) with an accessible hover/focus tooltip on the word
   quoted word `"IRL"` as a keyboard-focusable, dotted-underline `<code>` with a
   CSS-only tooltip (group-hover / group-focus-within) carrying the former
   "Psst parents…" explanatory copy. CSS-only on purpose so it works inside the
-  server-rendered public pages without shipping client JS.
+  server-rendered public pages without shipping client JS. The trigger is wired
+  to the tooltip via `aria-describedby="irl-tooltip"` so screen readers announce
+  the explanation on focus (added per roborev review).
 - `app/page.tsx`: added the gold `Log in` `<Link href="/sign-in">` button
   (`bg-amber-400 text-black`, absolute top-right, `z-20`); swapped the inline
   `<code>IRL</code>` for `<IrlTooltip />`; deleted the two "Psst parents…" `<p>`
