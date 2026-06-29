@@ -1,0 +1,34 @@
+name: CI
+
+# Typecheck, lint, test, and build on every PR and push to main, so broken code
+# can't merge. Pairs with the existing pii-gate workflow.
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Lint
+        run: npm run lint
+      - name: Test
+        run: npm test
+      - name: Build
+        run: npm run build
+        env:
+          # The build must not need live secrets (DB access is lazy; Clerk is
+          # scoped to the (authed) group). Format-valid placeholders satisfy the
+          # Clerk SDK at build time.
+          NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          CLERK_SECRET_KEY: sk_test_placeholderplaceholderplaceholder00
