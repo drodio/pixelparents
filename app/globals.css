@@ -24,3 +24,91 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* ---------------------------------------------------------------------------
+   Status-screen animations (loading / 404 / error / global-error).
+   Prefixed `pp-` so they never collide with Tailwind utilities. All are
+   disabled under prefers-reduced-motion (see the bottom of this block).
+   --------------------------------------------------------------------------- */
+
+@keyframes pp-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-14px); }
+}
+
+@keyframes pp-float {
+  0%, 100% { transform: translateY(0) rotate(0deg); opacity: 0.5; }
+  50% { transform: translateY(-22px) rotate(8deg); opacity: 1; }
+}
+
+@keyframes pp-wave {
+  0%, 100% { transform: scale(0.55); opacity: 0.2; }
+  50% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pp-dot {
+  0%, 80%, 100% { transform: translateY(0); opacity: 0.35; }
+  40% { transform: translateY(-7px); opacity: 1; }
+}
+
+@keyframes pp-shimmer {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+
+@keyframes pp-glitch {
+  0%, 100% { transform: translate(0, 0); }
+  20% { transform: translate(-3px, 2px) skewX(-6deg); }
+  40% { transform: translate(3px, -2px) skewX(6deg); }
+  60% { transform: translate(-2px, 1px); }
+  80% { transform: translate(2px, -1px) skewX(-3deg); }
+}
+
+@keyframes pp-shake {
+  0%, 100% { transform: rotate(0deg) translateX(0); }
+  15% { transform: rotate(-5deg) translateX(-3px); }
+  30% { transform: rotate(4deg) translateX(3px); }
+  45% { transform: rotate(-3deg) translateX(-2px); }
+  60% { transform: rotate(3deg) translateX(2px); }
+  75% { transform: rotate(-1deg); }
+}
+
+@keyframes pp-pulse-glow {
+  0%, 100% { opacity: 0.45; transform: scale(0.94); }
+  50% { opacity: 1; transform: scale(1.06); }
+}
+
+@keyframes pp-scan {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+@keyframes pp-pop {
+  0% { transform: scale(0.7); opacity: 0; }
+  60% { transform: scale(1.05); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pp-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+.pp-bob { animation: pp-bob 2.8s ease-in-out infinite; }
+.pp-float { animation: pp-float 7s ease-in-out infinite; }
+.pp-wave-cell { animation: pp-wave 1.3s ease-in-out infinite; }
+.pp-dot { animation: pp-dot 1.4s ease-in-out infinite; }
+.pp-shimmer { animation: pp-shimmer 1.6s linear infinite; }
+.pp-glitch { animation: pp-glitch 2.4s steps(6, end) infinite; }
+.pp-shake { animation: pp-shake 3.2s ease-in-out infinite; }
+.pp-glow { animation: pp-pulse-glow 2.6s ease-in-out infinite; }
+.pp-scan { animation: pp-scan 3.4s linear infinite; }
+.pp-pop { animation: pp-pop 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.pp-blink { animation: pp-blink 1.05s steps(1, end) infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .pp-bob, .pp-float, .pp-wave-cell, .pp-dot, .pp-shimmer, .pp-glitch,
+  .pp-shake, .pp-glow, .pp-scan, .pp-pop, .pp-blink {
+    animation: none !important;
+  }
+}
