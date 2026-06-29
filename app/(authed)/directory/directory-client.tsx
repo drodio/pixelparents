@@ -221,7 +221,7 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [density, setDensity] = useState(2);
+  const [density, setDensity] = useState(3);
 
   // Age-range filter. Inactive until a thumb moves off the extremes.
   const [ageLower, setAgeLower] = useState(AGE_MIN);

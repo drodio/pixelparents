@@ -4,6 +4,7 @@ import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { desc } from "drizzle-orm";
 import { primaryEmail } from "@/lib/clerk";
+import { isAdminEmail } from "@/lib/admin";
 import { getDb, hasDatabase } from "@/lib/db";
 import { signups, children, type ChildRow } from "@/lib/db/schema/signups";
 import { getSignupByEmail } from "@/lib/db/signups";
@@ -29,7 +30,13 @@ export const metadata: Metadata = {
 // How many photo thumbnails to entice a click with, per card.
 const MAX_THUMBS = 4;
 
-function Shell({ children }: { children: React.ReactNode }) {
+function Shell({
+  children,
+  isAdmin = false,
+}: {
+  children: React.ReactNode;
+  isAdmin?: boolean;
+}) {
   return (
     <main className="min-h-dvh bg-black text-white">
       <div className="mx-auto w-full max-w-7xl px-6 py-10">
@@ -40,9 +47,17 @@ function Shell({ children }: { children: React.ReactNode }) {
               OHS Family Directory
             </h1>
             <p className="mt-1 text-sm text-white/55">
-              Families in the Pixel Parents community who share with OHS families.
+              Families in the Pixel Parents community
             </p>
           </div>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="ml-auto shrink-0 rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black shadow-sm transition-colors hover:bg-amber-300"
+            >
+              Admin
+            </Link>
+          )}
         </header>
         {children}
       </div>
@@ -56,6 +71,8 @@ export default async function DirectoryPage() {
   if (!viewer) redirect("/sign-in");
 
   const viewerEmail = primaryEmail(viewer);
+  // Admins get a quick link back into the admin area from the directory header.
+  const isAdmin = await isAdminEmail(viewerEmail);
 
   // 2) OHS-family gate — IDENTICAL to /p/[token]: a signed-in viewer counts as an
   //    OHS family only if they themselves have a signup. A logged-in non-signup
@@ -63,7 +80,7 @@ export default async function DirectoryPage() {
   const isOhsFamily = Boolean(viewerEmail && (await getSignupByEmail(viewerEmail)));
   if (!isOhsFamily) {
     return (
-      <Shell>
+      <Shell isAdmin={isAdmin}>
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
           <h2 className="text-lg font-semibold">This directory is for OHS families</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
@@ -83,7 +100,7 @@ export default async function DirectoryPage() {
 
   if (!hasDatabase()) {
     return (
-      <Shell>
+      <Shell isAdmin={isAdmin}>
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-white/60">
           The directory isn&apos;t available yet.
         </div>
