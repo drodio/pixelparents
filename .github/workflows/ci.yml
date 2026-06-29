@@ -15,7 +15,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: "22"
+          # Node 24 ships npm 11, matching the npm that generates package-lock.json
+          # locally. npm 10 (Node 22) and npm 11 compute the dependency tree
+          # differently, so `npm ci` on an npm-11 lock under npm 10 fails with
+          # "package.json and package-lock.json not in sync". Pinned in .nvmrc too.
+          node-version: "24"
           cache: npm
       - run: npm ci
       - name: Typecheck
