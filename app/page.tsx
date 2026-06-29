@@ -1,6 +1,7 @@
 import Link from "next/link";
 import InterestTiles from "./signup/interest-tiles";
 import { PixelMascot } from "@/components/pixel-mascot";
+import { IrlTooltip } from "@/components/irl-tooltip";
 import {
   getSignupCount,
   getChildrenCount,
@@ -38,6 +39,13 @@ export default async function Home() {
     <main className="relative flex flex-1 flex-col overflow-hidden bg-black px-6 py-12 text-center">
       <InterestTiles interests={interests} variant="fade" />
 
+      <Link
+        href="/sign-in"
+        className="absolute right-4 top-4 z-20 rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-black shadow-sm transition-colors hover:bg-amber-300 sm:right-6 sm:top-6"
+      >
+        Log in
+      </Link>
+
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6">
         <PixelMascot widthClass="w-48 max-w-[80vw] sm:w-64" />
         <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl">
@@ -58,18 +66,8 @@ export default async function Home() {
           <br />
           around{" "}
           <span className="text-amber-400">{interestsCount.toLocaleString()}</span>{" "}
-          shared interests,{" "}
-          <code className="font-mono text-amber-400">IRL</code>
+          shared interests, <IrlTooltip />
         </h2>
-        <p className="max-w-prose text-base italic text-white/70">
-          Psst parents: <code className="font-mono text-amber-400">IRL</code> is
-          slang our kids use for{" "}
-          <code className="font-mono text-amber-400">In Real Life</code>.
-        </p>
-        <p className="-mt-4 max-w-prose text-base italic text-white/70">
-          We never needed to say &quot;IRL&quot; since our whole childhood was
-          &quot;in real life!&quot;
-        </p>
       </div>
 
       <footer className="relative z-10 mt-8 text-center text-sm text-white/50">

@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import SignupForm from "./signup-form";
 import { PixelMascot } from "@/components/pixel-mascot";
+import { IrlTooltip } from "@/components/irl-tooltip";
 import InterestTiles from "./interest-tiles";
 import {
   getSignupCount,
@@ -62,18 +63,8 @@ export default async function SignupPage() {
             <span className="text-amber-400">
               {interestsCount.toLocaleString()}
             </span>{" "}
-            shared interests,{" "}
-            <code className="font-mono text-amber-400">IRL</code>
+            shared interests, <IrlTooltip />
           </h2>
-          <p className="mt-3 max-w-prose text-center text-base italic text-white/70">
-            Psst parents: <code className="font-mono text-amber-400">IRL</code> is
-            slang our kids use for{" "}
-            <code className="font-mono text-amber-400">In Real Life</code>.
-          </p>
-          <p className="mt-1 max-w-prose text-center text-base italic text-white/70">
-            We never needed to say &quot;IRL&quot; since our whole childhood was
-            &quot;in real life!&quot;
-          </p>
         </div>
 
         <div className="mt-10">
