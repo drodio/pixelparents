@@ -5,12 +5,12 @@ describe("handleMcp (JSON-RPC)", () => {
   it("initialize returns protocol + serverInfo", async () => {
     const r = await handleMcp({ id: 1, method: "initialize" }, { authed: false });
     expect(r?.result).toHaveProperty("protocolVersion");
-    expect((r?.result as any).serverInfo.name).toBe("Pixel Parents");
+    expect((r?.result as { serverInfo: { name: string } }).serverInfo.name).toBe("Pixel Parents");
   });
 
   it("tools/list returns every tool", async () => {
     const r = await handleMcp({ id: 2, method: "tools/list" }, { authed: false });
-    expect((r?.result as any).tools).toHaveLength(MCP_TOOLS.length);
+    expect((r?.result as { tools: unknown[] }).tools).toHaveLength(MCP_TOOLS.length);
   });
 
   it("tools/call is gated without a key", async () => {
@@ -34,7 +34,7 @@ describe("handleMcp (JSON-RPC)", () => {
       { id: 5, method: "tools/call", params: { name: "community_stats", arguments: {} } },
       { authed: true },
     );
-    expect((r?.result as any).content[0].type).toBe("text");
+    expect((r?.result as { content: Array<{ type: string }> }).content[0].type).toBe("text");
   });
 
   it("notifications get no response", async () => {
