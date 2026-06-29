@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { SHARE_VISIBILITY, type ShareVisibility } from "@/lib/share";
 import { setShareVisibility, setShareVisibilityByToken } from "@/lib/share-actions";
 
@@ -24,25 +24,35 @@ export function VisibilityControl({
 }) {
   const [v, setV] = useState<ShareVisibility>(value);
   const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
+  const [, start] = useTransition();
+  // The tier the user most recently asked for. A Server Action auto-refreshes the
+  // page it's invoked from, and useTransition's `pending` stays true for that whole
+  // refresh — which on the thanks page is slow (DB read + per-child blob presigning).
+  // Gating the buttons on `pending` therefore froze the toggle for seconds after a
+  // change, so switching back appeared to do nothing. We update optimistically and
+  // never disable on an in-flight write; this ref lets a newer click supersede an
+  // older one so out-of-order responses can't clobber the latest choice.
+  const latest = useRef<ShareVisibility>(value);
 
   // No publicly-viewable tier remains, so a signed-out visitor sees no segments.
   const options = loggedIn ? SHARE_VISIBILITY : [];
 
   function choose(next: ShareVisibility) {
-    if (!editable || next === v || pending) return;
+    if (!editable || next === v) return;
     const prev = v;
-    setV(next); // optimistic
+    latest.current = next;
+    setV(next); // optimistic — reflects the click immediately, no waiting on the write
+    setError(null);
     start(async () => {
       const r =
         mode === "token"
           ? await setShareVisibilityByToken(id, next)
           : await setShareVisibility(id, next);
+      if (latest.current !== next) return; // a newer click already took over
       if (r.error) {
         setError(r.error);
-        setV(prev); // revert
+        setV(prev); // revert the failed change
       } else {
-        setError(null);
         setV(r.visibility);
       }
     });
@@ -61,7 +71,7 @@ export function VisibilityControl({
               <button
                 key={o.value}
                 type="button"
-                disabled={!editable || pending}
+                disabled={!editable}
                 onClick={() => choose(o.value)}
                 aria-pressed={active}
                 title={editable ? `Set to "${o.label}"` : o.label}
