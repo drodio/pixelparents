@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { PencilIcon, TrashIcon } from "./icons";
-import { EditActions, fieldInputCls } from "./inline-edit";
+import { fieldInputCls } from "./inline-edit";
 
 // A row's name, doubling as its row actions. Hovering the cell turns the name
 // gold and reveals a pencil + a trash can. The name itself links to the full
@@ -36,6 +36,9 @@ export function NameCell({
   const [last, setLast] = useState(lastName);
   const [saving, setSaving] = useState(false);
   const firstRef = useRef<HTMLInputElement>(null);
+  // Esc routes through the editor's onBlur and must suppress the auto-save; an
+  // Enter commit sets it too so the unmount blur doesn't double-save.
+  const skipBlur = useRef(false);
 
   const name = `${firstName} ${lastName}`.trim();
   const nameColor = hoverTrash ? "text-red-400" : hover ? "text-amber-400" : "text-white";
@@ -66,18 +69,35 @@ export function NameCell({
   }
 
   if (editing) {
+    const changed = first !== firstName || last !== lastName;
     return (
       <span
         className="inline-flex items-center gap-1"
         onKeyDown={(e) => {
-          if (e.key === "Escape") cancel();
-          else if (e.key === "Enter") void save();
+          if (e.key === "Escape") {
+            skipBlur.current = true;
+            cancel();
+          } else if (e.key === "Enter") {
+            skipBlur.current = true;
+            void save();
+          }
+        }}
+        // Auto-save when focus leaves both name inputs; no ✓ to click.
+        onBlur={(e) => {
+          if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+          if (skipBlur.current) {
+            skipBlur.current = false;
+            return;
+          }
+          if (changed) void save();
+          else cancel();
         }}
       >
         <input
           ref={firstRef}
           value={first}
           placeholder="First"
+          disabled={saving}
           onChange={(e) => setFirst(e.target.value)}
           className={`${fieldInputCls} w-24`}
           aria-label="First name"
@@ -85,11 +105,11 @@ export function NameCell({
         <input
           value={last}
           placeholder="Last"
+          disabled={saving}
           onChange={(e) => setLast(e.target.value)}
           className={`${fieldInputCls} w-24`}
           aria-label="Last name"
         />
-        <EditActions onSave={() => void save()} onCancel={cancel} saving={saving} />
       </span>
     );
   }

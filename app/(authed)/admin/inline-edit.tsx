@@ -3,71 +3,34 @@
 // Reusable inline-edit cells for the admin parents table. Each cell shows its
 // value plus a pencil that fades in when the row (a Tailwind `group`) is hovered
 // or the pencil is focused. Clicking the pencil swaps the cell for a small
-// editor appropriate to the field; ✓ / Enter saves, ✕ / Esc cancels. Saving is
-// delegated to the caller's `onSave`, which persists via patchSignup() and
-// refreshes the table.
+// editor appropriate to the field.
 //
-// Note: blur-to-save is intentionally NOT wired up — it races with clicking the
-// ✓ / ✕ buttons and could persist a value the admin meant to discard. Enter, the
-// ✓ button, and (for tags) comma all commit; Esc / ✕ cancel.
+// Auto-save: there is NO required ✓ button. A change is persisted as soon as it
+// is committed, then the table refreshes:
+//   • single <select>     — saves on change, then closes
+//   • free text           — saves on blur or Enter (Esc cancels, no save)
+//   • multi-select / tags — save on every toggle / add / remove; the editor
+//                           stays open and a "Done" button (or Esc) closes it
+// Saving is delegated to the caller's `onSave`, which persists via patchSignup()
+// and refreshes the table. If a save throws, the editor stays open for retry.
 
 import { useEffect, useRef, useState } from "react";
-import { PencilIcon, CheckIcon } from "./icons";
+import { PencilIcon } from "./icons";
 
 export const fieldInputCls =
   "rounded border border-white/20 bg-white/10 px-1.5 py-1 text-sm text-white outline-none focus:border-amber-400/60 focus:ring-1 focus:ring-amber-400/40";
 
-function XIcon() {
+// Closes a still-open multi-value editor (its changes are already saved).
+export function DoneButton({ onDone, saving }: { onDone: () => void; saving: boolean }) {
   return (
-    <svg
-      width="14"
-      height="14"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
+    <button
+      type="button"
+      onClick={onDone}
+      disabled={saving}
+      className="self-start rounded border border-white/20 bg-white/5 px-2 py-0.5 text-xs text-white/70 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
     >
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
-}
-
-// Shared ✓ / ✕ button pair for every inline editor.
-export function EditActions({
-  onSave,
-  onCancel,
-  saving,
-}: {
-  onSave: () => void;
-  onCancel: () => void;
-  saving: boolean;
-}) {
-  return (
-    <span className="inline-flex items-center gap-0.5">
-      <button
-        type="button"
-        onClick={onSave}
-        disabled={saving}
-        aria-label="Save"
-        title="Save"
-        className="rounded p-1 text-emerald-400 transition-colors hover:bg-emerald-500/15 disabled:opacity-40"
-      >
-        <CheckIcon />
-      </button>
-      <button
-        type="button"
-        onClick={onCancel}
-        disabled={saving}
-        aria-label="Cancel"
-        title="Cancel"
-        className="rounded p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-40"
-      >
-        <XIcon />
-      </button>
-    </span>
+      {saving ? "Saving…" : "Done"}
+    </button>
   );
 }
 
@@ -86,8 +49,10 @@ export function EditTrigger({ onClick, label }: { onClick: () => void; label: st
   );
 }
 
-// Shared editing state. `save(override)` lets callers commit a freshly-computed
-// value (e.g. tag editors folding in pending input text) instead of the draft.
+// Shared editing state. `save(override, { keepOpen })` lets callers commit a
+// freshly-computed value (e.g. a select's new value, or a tag editor's folded-in
+// pending input) instead of the draft, and optionally keep the editor open for
+// further edits (multi-select / tags).
 function useEditing<T>(
   initial: T,
   onSave: (v: T) => Promise<void> | void,
@@ -105,15 +70,16 @@ function useEditing<T>(
   const cancel = () => {
     if (!saving) setEditing(false);
   };
+  const close = () => setEditing(false);
   // `override` (when passed) must be a DEFINED value — callers use it to commit a
-  // freshly-computed result instead of `draft` (e.g. the tag editor folding in
-  // pending input). `undefined` always falls through to `draft`.
-  const save = async (override?: T) => {
+  // freshly-computed result instead of `draft`. `undefined` falls through to
+  // `draft`. Pass `{ keepOpen: true }` to persist without closing the editor.
+  const save = async (override?: T, opts?: { keepOpen?: boolean }) => {
     const value = override !== undefined ? override : draft;
     setSaving(true);
     try {
       await onSave(value);
-      setEditing(false);
+      if (!opts?.keepOpen) setEditing(false);
     } catch {
       // Leave the editor open so the admin can retry.
     } finally {
@@ -121,7 +87,7 @@ function useEditing<T>(
     }
   };
 
-  return { editing, draft, setDraft, saving, open, cancel, save };
+  return { editing, draft, setDraft, saving, open, cancel, close, save };
 }
 
 // Display wrapper used by every cell when NOT editing.
@@ -165,6 +131,8 @@ export function TextCell({
 }) {
   const ed = useEditing(value, onSave);
   const ref = useRef<HTMLInputElement>(null);
+  // Esc routes through onBlur and must suppress the auto-save there.
+  const cancelled = useRef(false);
   useEffect(() => {
     if (ed.editing) ref.current?.focus();
   }, [ed.editing]);
@@ -177,12 +145,7 @@ export function TextCell({
     );
   }
   return (
-    <span
-      className="inline-flex items-center gap-1"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") ed.cancel();
-      }}
-    >
+    <span className="inline-flex items-center gap-1">
       {prefix && <span className="select-none text-xs text-white/40">{prefix}</span>}
       <input
         ref={ref}
@@ -190,13 +153,29 @@ export function TextCell({
         inputMode={inputMode}
         value={ed.draft}
         placeholder={placeholder}
+        disabled={ed.saving}
         onChange={(e) => ed.setDraft(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") void ed.save();
+          // Enter commits, Esc cancels — both leave the field, which the blur
+          // handler below turns into save / cancel respectively.
+          if (e.key === "Enter") ref.current?.blur();
+          else if (e.key === "Escape") {
+            cancelled.current = true;
+            ref.current?.blur();
+          }
+        }}
+        onBlur={() => {
+          if (cancelled.current) {
+            cancelled.current = false;
+            ed.cancel();
+            return;
+          }
+          // Only persist when the value actually changed.
+          if (ed.draft !== value) void ed.save();
+          else ed.cancel();
         }}
         className={`${fieldInputCls} w-36`}
       />
-      <EditActions onSave={() => void ed.save()} onCancel={ed.cancel} saving={ed.saving} />
     </span>
   );
 }
@@ -234,19 +213,18 @@ export function SelectCell({
     );
   }
   return (
-    <span
-      className="inline-flex items-center gap-1"
-      onKeyDown={(e) => {
-        if (e.key === "Escape") ed.cancel();
-      }}
-    >
+    <span className="inline-flex items-center gap-1">
       <select
         ref={ref}
         value={ed.draft}
-        onChange={(e) => ed.setDraft(e.target.value)}
+        disabled={ed.saving}
+        // Auto-save the moment a different option is picked, then close.
+        onChange={(e) => void ed.save(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") void ed.save();
+          if (e.key === "Escape") ed.cancel();
         }}
+        // Clicking away without changing anything just closes the editor.
+        onBlur={ed.cancel}
         className={`${fieldInputCls} max-w-[12rem]`}
       >
         <option value="">{blankLabel}</option>
@@ -256,7 +234,6 @@ export function SelectCell({
           </option>
         ))}
       </select>
-      <EditActions onSave={() => void ed.save()} onCancel={ed.cancel} saving={ed.saving} />
     </span>
   );
 }
@@ -285,13 +262,20 @@ export function MultiSelectCell({
       </Display>
     );
   }
-  const toggle = (o: string) =>
-    ed.setDraft(ed.draft.includes(o) ? ed.draft.filter((x) => x !== o) : [...ed.draft, o]);
+  // Each toggle persists immediately; the editor stays open so the admin can
+  // tick several boxes before clicking Done.
+  const toggle = (o: string) => {
+    const next = ed.draft.includes(o)
+      ? ed.draft.filter((x) => x !== o)
+      : [...ed.draft, o];
+    ed.setDraft(next);
+    void ed.save(next, { keepOpen: true });
+  };
   return (
     <div
       className="flex flex-col gap-1"
       onKeyDown={(e) => {
-        if (e.key === "Escape") ed.cancel();
+        if (e.key === "Escape") ed.close();
       }}
     >
       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
@@ -307,7 +291,7 @@ export function MultiSelectCell({
           </label>
         ))}
       </div>
-      <EditActions onSave={() => void ed.save()} onCancel={ed.cancel} saving={ed.saving} />
+      <DoneButton onDone={ed.close} saving={ed.saving} />
     </div>
   );
 }
@@ -347,20 +331,23 @@ export function TagsCell({
     }
     return next;
   };
+  // Both add and remove persist immediately and keep the editor open.
   const addPending = () => {
-    ed.setDraft((d) => merge(d, text));
+    const next = merge(ed.draft, text);
     setText("");
+    ed.setDraft(next);
+    void ed.save(next, { keepOpen: true });
   };
-  const remove = (t: string) => ed.setDraft(ed.draft.filter((x) => x !== t));
-  const commit = () => {
-    setText("");
-    void ed.save(merge(ed.draft, text));
+  const remove = (t: string) => {
+    const next = ed.draft.filter((x) => x !== t);
+    ed.setDraft(next);
+    void ed.save(next, { keepOpen: true });
   };
   return (
     <div
       className="flex w-56 flex-col gap-1"
       onKeyDown={(e) => {
-        if (e.key === "Escape") ed.cancel();
+        if (e.key === "Escape") ed.close();
       }}
     >
       {ed.draft.length > 0 && (
@@ -393,7 +380,7 @@ export function TagsCell({
         }}
         className={`${fieldInputCls} w-full`}
       />
-      <EditActions onSave={commit} onCancel={ed.cancel} saving={ed.saving} />
+      <DoneButton onDone={ed.close} saving={ed.saving} />
     </div>
   );
 }
