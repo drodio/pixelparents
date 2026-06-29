@@ -685,7 +685,7 @@ export default function SignupForm({
             <button
               type="button"
               onClick={onInviteClick}
-              className="shrink-0 rounded-full border border-white/30 px-5 py-2 font-semibold text-white transition-colors hover:bg-white/10"
+              className="shrink-0 rounded-lg border border-white/30 px-5 py-2 font-semibold text-white transition-colors hover:bg-white/10"
             >
               Invite
             </button>
@@ -701,16 +701,29 @@ export default function SignupForm({
           )}
         </div>
 
-        <div className="mt-2 flex items-center gap-3">
+        <div className="mt-2 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onContinue}
-            disabled={submitting}
-            className="rounded-full bg-white px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:opacity-50"
+            disabled={submitting || status === "error"}
+            title={status === "error" ? "Your info hasn't been saved yet — retry the save first." : undefined}
+            className="rounded-lg bg-white px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {submitting ? "…" : "Add Your Child(ren) →"}
           </button>
-          <SaveStatus status={status} />
+          {/* On save failure, retry is the ONLY way forward — the button above is
+              disabled until the save succeeds. */}
+          {status === "error" ? (
+            <button
+              type="button"
+              onClick={() => void flush()}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
+            >
+              ⚠ Couldn&apos;t save — click to retry
+            </button>
+          ) : (
+            <SaveStatus status={status} />
+          )}
         </div>
       </div>
 
