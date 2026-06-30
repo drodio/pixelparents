@@ -1,11 +1,13 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { isFamilyVerified } from "@/lib/directory";
 import { isStudentAccount } from "@/lib/family-display";
+import { createNotification } from "@/lib/db/notifications";
 import type { SignupRow } from "@/lib/db/schema/signups";
 import {
   createEvent,
@@ -244,11 +246,48 @@ export async function rsvpAction(input: { eventId: string; status: RsvpStatus | 
     await setRsvp(input.eventId, caller.user.id, input.status);
     revalidatePath("/events");
     revalidatePath(`/events/${input.eventId}`);
+
+    // Notify the event ORGANIZER (author) when a member RSVPs — only on a real
+    // RSVP (going/interested), never on a toggle-OFF, and never self-notify when
+    // the organizer RSVPs to their own event. Best-effort (after() — never block/
+    // fail the RSVP). Coarsened actor name only; link to the in-app event page.
+    if (
+      input.status !== null &&
+      existing.authorSignupId &&
+      existing.authorSignupId !== caller.user.id
+    ) {
+      const organizerId = existing.authorSignupId;
+      const eventTitle = existing.title;
+      const actor = rsvpActorLabel(caller.user);
+      const verb = input.status === "going" ? "is going to" : "is interested in";
+      after(async () => {
+        try {
+          await createNotification({
+            recipientSignupId: organizerId,
+            type: "event_rsvp",
+            title: "New RSVP to your event",
+            body: `${actor} ${verb} "${eventTitle}".`,
+            link: `/events/${input.eventId}`,
+          });
+        } catch (err) {
+          console.error("event_rsvp notification failed:", err);
+        }
+      });
+    }
     return { ok: true };
   } catch (err) {
     console.error("rsvpAction failed:", err);
     return { ok: false, error: "Couldn't record your RSVP. Please try again." };
   }
+}
+
+// Privacy-safe display label for an RSVP actor in a notification — students show
+// first name only (mirrors authorLabelFor / the directory's minor coarsening).
+// Never an email/phone/child full name.
+function rsvpActorLabel(s: SignupRow): string {
+  if (isStudentAccount(s)) return s.firstName || "A student";
+  const full = [s.firstName, s.lastName].filter(Boolean).join(" ");
+  return full || s.firstName || "A member";
 }
 
 // Live autocomplete for the "add admin" input: returns EXISTING signed-up accounts

@@ -9,6 +9,8 @@ import { getSignupByEmail } from "@/lib/db/signups";
 import { isFamilyVerified } from "@/lib/directory";
 import { getDb } from "@/lib/db";
 import { signups, type SignupRow } from "@/lib/db/schema/signups";
+import { isStudentAccount } from "@/lib/family-display";
+import { createNotification } from "@/lib/db/notifications";
 import { getBaseUrl } from "@/lib/url";
 import { deriveConnectionParty, buildIntroEmail } from "@/lib/intro";
 import { sendConnectionIntro } from "@/lib/email";
@@ -250,11 +252,41 @@ export async function respondToAskAction(input: {
       proposes: proposes.value,
     });
     revalidatePath(`/community/${input.askId}`);
+
+    // Notify the post AUTHOR that someone responded. Best-effort (after() — never
+    // block/fail the response on the notification). The actor name is the same
+    // coarsened label the board already shows (students = first name only); no
+    // email/phone/child PII, and the link is the in-app post page.
+    after(async () => {
+      try {
+        await createNotification({
+          recipientSignupId: ask.authorSignupId,
+          type: "community_response",
+          title:
+            ask.kind === "offer"
+              ? "Someone wants to take you up on your offer"
+              : "Someone offered to help with your ask",
+          body: `${notifyLabel(caller.user)} responded to "${ask.title}".`,
+          link: `/community/${ask.id}`,
+        });
+      } catch (err) {
+        console.error("community_response notification failed:", err);
+      }
+    });
     return { ok: true };
   } catch (err) {
     console.error("respondToAskAction failed:", err);
     return { ok: false, error: "Couldn't send your response. Please try again." };
   }
+}
+
+// Privacy-safe display label for a notification actor — mirrors the directory's
+// minor-privacy coarsening (students show first name only; parents show full
+// name). Never an email/phone/child full name.
+function notifyLabel(s: SignupRow): string {
+  if (isStudentAccount(s)) return s.firstName || "A student";
+  const full = [s.firstName, s.lastName].filter(Boolean).join(" ");
+  return full || s.firstName || "A member";
 }
 
 // Accept or decline a response. ONLY the author (the response's parent post's
@@ -291,6 +323,42 @@ export async function decideResponseAction(input: {
           await sendConnectionIntroForResponse(updated.id);
         } catch (err) {
           console.error("connection intro email failed:", err);
+        }
+        // Notify BOTH parties they're connected. The author (caller) is connected
+        // with the responder, and vice-versa. Best-effort; coarsened names only,
+        // link to the in-app post. We re-load the post + responder from the DB so
+        // we use authoritative rows (the connection is consent to be introduced).
+        try {
+          const ask = await getAskById(updated.askId);
+          if (ask) {
+            const [responderRow] = await getDb()
+              .select()
+              .from(signups)
+              .where(eq(signups.id, updated.responderSignupId))
+              .limit(1);
+            if (responderRow) {
+              await Promise.all([
+                // → the post author (the caller who accepted)
+                createNotification({
+                  recipientSignupId: ask.authorSignupId,
+                  type: "community_connected",
+                  title: `You're connected with ${notifyLabel(responderRow)}`,
+                  body: `Your connection on "${ask.title}" is confirmed. Check your email for an intro.`,
+                  link: `/community/${ask.id}`,
+                }),
+                // → the responder whose offer/request was accepted
+                createNotification({
+                  recipientSignupId: updated.responderSignupId,
+                  type: "community_connected",
+                  title: `You're connected with ${notifyLabel(caller.user)}`,
+                  body: `Your response to "${ask.title}" was accepted. Check your email for an intro.`,
+                  link: `/community/${ask.id}`,
+                }),
+              ]);
+            }
+          }
+        } catch (err) {
+          console.error("community_connected notification failed:", err);
         }
       });
     }

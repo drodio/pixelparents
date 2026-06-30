@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import type { ApprovalStatus } from "@/lib/approval";
 import { VerifiedBadge } from "@/components/verified-badge";
+import { NotificationBell } from "@/components/notification-bell";
 import {
   IconGrid,
   IconHome,
@@ -103,6 +104,10 @@ export function DashboardShell({
         </Link>
 
         <nav className="flex flex-1 flex-col gap-1 px-2 py-3 md:px-3">
+          {/* Notification bell — only for authed users. Self-fetches its own
+              unread count, so no count prop has to be threaded through callers.
+              Pinned at the top of the nav so the unread badge is always visible. */}
+          {authed && <NotificationBell />}
           {items.map(({ href, label, Icon }) => {
             // Signed-out: tabs are visible but locked — grayed, non-interactive,
             // with a lock icon. They do nothing (no navigation, no data). This is
