@@ -74,3 +74,33 @@ export function validateSlugKind(input: unknown): { ok: true; value: SlugKind } 
   if (input === "founder" || input === "investor") return { ok: true, value: input };
   return { ok: false, error: "role_invalid" };
 }
+
+export type WebsiteUrlValidationError = "website_too_long" | "website_invalid";
+
+// Validate the claimed user's self-entered personal website. Accepts an http(s)
+// URL (a bare host like "acme.com" is normalized to https://). Empty / blank
+// clears the field. Length-capped; the normalized value is what we store.
+export function validateWebsiteUrl(
+  input: unknown,
+): { ok: true; value: string | null } | { ok: false; error: WebsiteUrlValidationError } {
+  if (input === null || input === undefined) return { ok: true, value: null };
+  if (typeof input !== "string") return { ok: false, error: "website_invalid" };
+  const trimmed = input.trim();
+  if (trimmed.length === 0) return { ok: true, value: null };
+  if (trimmed.length > 2048) return { ok: false, error: "website_too_long" };
+  // No control characters / whitespace inside a URL.
+  if (/[\x00-\x1f\x7f\s]/.test(trimmed)) return { ok: false, error: "website_invalid" };
+  let candidate = trimmed;
+  if (!/^https?:\/\//i.test(candidate)) {
+    if (!candidate.includes(".")) return { ok: false, error: "website_invalid" };
+    candidate = `https://${candidate}`;
+  }
+  try {
+    const u = new URL(candidate);
+    if (u.protocol !== "http:" && u.protocol !== "https:") return { ok: false, error: "website_invalid" };
+    if (!u.hostname.includes(".")) return { ok: false, error: "website_invalid" };
+    return { ok: true, value: u.toString() };
+  } catch {
+    return { ok: false, error: "website_invalid" };
+  }
+}

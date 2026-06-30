@@ -38,11 +38,14 @@ function bdCitationFor(source: EnrichmentResult["source"]): string {
   if (source === "twitter") return "https://x.com";
   return "https://www.crunchbase.com";
 }
+import { enrichWithWebsite } from "./website";
 import { extractFullName, extractKnownUrls } from "./extract";
 import { addExaUsage, emptyExaUsage, type ExaUsage } from "../exa-cost";
-import type { EnricherContext, EnrichmentResult } from "./types";
+import type { EnricherContext, EnrichmentResult, EnrichmentStatusEntry } from "./types";
+import { deriveStatus, toStatusEntry } from "./types";
 
 export type { EnrichmentResult } from "./types";
+export type { EnrichmentStatusEntry } from "./types";
 
 // Per-enricher deadline. Enrichers run in parallel via Promise.allSettled, which
 // waits for the SLOWEST member — so without a cap, one hung external API stalls
@@ -52,21 +55,33 @@ export type { EnrichmentResult } from "./types";
 // per-source budgets are the Phase-1 follow-up (see the audit report).
 const ENRICHER_TIMEOUT_MS = Number(process.env.ENRICHER_TIMEOUT_MS) || 15_000;
 
-// Cap a single enricher: resolve to an empty result on deadline or rejection so
-// the orchestrator (which keeps only results with facts) simply skips it and the
-// eval proceeds with whatever finished in time. The underlying fetch may keep
-// running in the background, but the eval no longer BLOCKS on it.
+// Cap a single enricher: on deadline or rejection resolve to a result the
+// orchestrator still KEEPS (so the source stays visible in the roster) but that
+// carries an "error" status and no facts — so it's surfaced as "errored / timed
+// out" rather than silently disappearing. The underlying fetch may keep running
+// in the background, but the eval no longer BLOCKS on it.
 export function withEnricherTimeout(
   source: EnrichmentResult["source"],
   p: Promise<EnrichmentResult>,
   ms: number = ENRICHER_TIMEOUT_MS,
 ): Promise<EnrichmentResult> {
-  const empty: EnrichmentResult = { source, facts: [], citations: [] };
   return new Promise((resolve) => {
-    const timer = setTimeout(() => resolve(empty), ms);
+    const timer = setTimeout(
+      () => resolve({ source, status: "error", note: "timed out", facts: [], citations: [] }),
+      ms,
+    );
     p.then(
       (r) => { clearTimeout(timer); resolve(r); },
-      () => { clearTimeout(timer); resolve(empty); },
+      (err) => {
+        clearTimeout(timer);
+        resolve({
+          source,
+          status: "error",
+          note: err instanceof Error ? err.message : "error",
+          facts: [],
+          citations: [],
+        });
+      },
     );
   });
 }
@@ -81,6 +96,10 @@ export type RunEnrichmentsArgs = {
   // The legal/canonical name already on the eval row (prior LLM extraction). Threaded
   // to identity-critical enrichers (patents) so a vanity LinkedIn handle can't break them.
   knownFullName?: string | null;
+  // The subject's self-entered personal website (from the claimed user's profile),
+  // threaded to the website enricher. Null/absent when unknown — the website
+  // enricher then falls back to a site discovered on the LinkedIn/identity surface.
+  websiteUrl?: string | null;
 };
 
 // The pre-resolved account URLs every enricher may need, computed ONCE per eval
@@ -128,6 +147,9 @@ export const ENRICHERS: Enricher[] = [
   // USPTO patents (synchronous, ~1s): granted/filed patents naming the subject,
   // assignee-company corroborated. Technical/domain depth.
   { source: "patents", run: (c) => enrichWithPatents(c) },
+  // Personal website (keyless): scrape the subject's self-entered website (or one
+  // discovered on LinkedIn) for title/meta/headings/socials.
+  { source: "website", run: (c) => enrichWithWebsite(c) },
   // BrightData LinkedIn collection is async (trigger→poll→download), so give it a
   // longer deadline than the 15s default. Still bounded so a slow scrape fails safe.
   { source: "brightdata", run: (c) => enrichWithBrightData(c), timeoutMs: 22_000 },
@@ -139,46 +161,69 @@ export const ENRICHERS: Enricher[] = [
 ];
 
 // Run a set of enrichers against a context, in parallel, each bounded by
-// withEnricherTimeout (per-entry timeoutMs or the default). Aggregates: keep
-// results that produced facts; sum Exa cost across ALL of them (a billed search
-// counts even when it yielded no facts). Exported + enricher-list-injectable so
-// the orchestration is testable without touching the network.
+// withEnricherTimeout (per-entry timeoutMs or the default). Aggregates: KEEP
+// EVERY result (ok / no_api_key / no_data / error) so the full source roster can
+// be surfaced in the UI — but `okEnrichments` (results that produced facts) is
+// what feeds downstream scoring consumers. `statuses` is the compact, persistable
+// per-source summary. Sum Exa cost across ALL of them (a billed search counts even
+// when it yielded no facts). Exported + enricher-list-injectable so the
+// orchestration is testable without touching the network.
 export async function runRegistry(
   enrichers: Enricher[],
   ctx: EnrichCtx,
-): Promise<{ enrichments: EnrichmentResult[]; exaUsage: ExaUsage }> {
+): Promise<{
+  enrichments: EnrichmentResult[];
+  okEnrichments: EnrichmentResult[];
+  statuses: EnrichmentStatusEntry[];
+  exaUsage: ExaUsage;
+}> {
   const settled = await Promise.allSettled(
     enrichers.map((e) => withEnricherTimeout(e.source, e.run(ctx), e.timeoutMs)),
   );
   const enrichments: EnrichmentResult[] = [];
+  const statuses: EnrichmentStatusEntry[] = [];
   let exaUsage = emptyExaUsage();
   for (const s of settled) {
+    // withEnricherTimeout always RESOLVES (never rejects), so a rejected settle
+    // here is unexpected — record it as an error entry rather than dropping the
+    // source entirely.
     if (s.status !== "fulfilled") continue;
-    if (s.value.exaUsage) exaUsage = addExaUsage(exaUsage, s.value.exaUsage);
-    if (s.value.facts.length > 0) enrichments.push(s.value);
+    const r = s.value;
+    if (r.exaUsage) exaUsage = addExaUsage(exaUsage, r.exaUsage);
+    enrichments.push(r);
+    statuses.push(toStatusEntry(r));
   }
-  return { enrichments, exaUsage };
+  const okEnrichments = enrichments.filter((e) => deriveStatus(e) === "ok");
+  return { enrichments, okEnrichments, statuses, exaUsage };
 }
 
-// Runs every Tier 1 enricher in the registry. Returns the results that produced
-// facts plus the extracted fullName the enrichers used and total Exa cost.
+// Runs every Tier 1 enricher in the registry. Returns the FULL result roster
+// (every source, with status) plus `okEnrichments` (fact-producing results that
+// feed scoring), the compact `statuses` list (persisted on the profile), the
+// extracted fullName the enrichers used, and total Exa cost.
 export async function runEnrichments(args: RunEnrichmentsArgs): Promise<{
   fullName: string | null;
   enrichments: EnrichmentResult[];
+  okEnrichments: EnrichmentResult[];
+  statuses: EnrichmentStatusEntry[];
   exaUsage: ExaUsage;
 }> {
   const baseCtx = { ...args, fullName: null };
   const fullName = extractFullName(baseCtx);
   const knownUrls = extractKnownUrls(baseCtx);
   const ctx: EnrichCtx = { ...baseCtx, fullName, knownUrls };
-  const { enrichments, exaUsage } = await runRegistry(ENRICHERS, ctx);
-  return { fullName, enrichments, exaUsage };
+  const { enrichments, okEnrichments, statuses, exaUsage } = await runRegistry(ENRICHERS, ctx);
+  return { fullName, enrichments, okEnrichments, statuses, exaUsage };
 }
 
+// Render ONLY fact-producing ("ok") results into the prompt — empty/skipped
+// sources contribute no signal and shouldn't clutter the prompt. (Defensive:
+// also skips any non-ok result that slipped through.)
 export function renderEnrichmentsForPrompt(enrichments: EnrichmentResult[]): string {
-  if (enrichments.length === 0) return "";
+  const withFacts = enrichments.filter((e) => deriveStatus(e) === "ok" && e.facts.length > 0);
+  if (withFacts.length === 0) return "";
   const lines: string[] = ["", "TIER 1 ENRICHMENT SOURCES (verified third-party data):"];
-  for (const e of enrichments) {
+  for (const e of withFacts) {
     lines.push("");
     lines.push(`[${e.source}]`);
     for (const f of e.facts) lines.push(`  ${f}`);

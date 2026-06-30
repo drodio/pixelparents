@@ -71,7 +71,9 @@ function buildFacts(p: BrightDataLinkedinProfile): string[] {
 
 export async function enrichWithBrightData(ctx: EnrichCtx): Promise<EnrichmentResult> {
   const empty: EnrichmentResult = { source: "brightdata", facts: [], citations: [] };
-  if (!process.env.BRIGHTDATA_API_KEY) return empty;
+  if (!process.env.BRIGHTDATA_API_KEY) {
+    return { source: "brightdata", status: "no_api_key", note: "API key not set", facts: [], citations: [] };
+  }
   if (!ctx.linkedinUrl) return empty;
 
   try {

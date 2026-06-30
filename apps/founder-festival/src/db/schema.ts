@@ -293,6 +293,13 @@ export const users = pgTable(
     city: text("city"),
     region: text("region"),
     country: text("country"),
+    // Personal website the claimed user enters on /account (e.g.
+    // "https://acme.com"). Surfaced as a clickable link on their profile
+    // alongside LinkedIn/GitHub, and threaded into the website-scraper enricher
+    // on re-score so the site's title/description/headings/socials become
+    // grounded facts. Validated at the app layer (http/https, length-capped) —
+    // no DB CHECK so the rules can evolve without a migration. Null = none set.
+    websiteUrl: text("website_url"),
     // Notification preferences set on /account/setup. All four default true
     // so the "locked-on while disabled" UI on the setup page matches the
     // stored value when the contact method later gets verified — otherwise

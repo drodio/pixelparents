@@ -74,8 +74,14 @@ export function resolvePatentName(ctx: EnricherContext): string | null {
 
 export async function enrichWithPatents(ctx: EnricherContext): Promise<EnrichmentResult> {
   const empty: EnrichmentResult = { source: "patents", facts: [], citations: [] };
+  // Missing the required credential is a VISIBLE, intentional skip (so the
+  // source still shows in the roster as "API key not set"). The key check comes
+  // first; a missing subject name (with the key present) is just no_data.
+  if (!process.env.USPTO_API_KEY) {
+    return { source: "patents", status: "no_api_key", note: "API key not set", facts: [], citations: [] };
+  }
   const subjectName = resolvePatentName(ctx);
-  if (!process.env.USPTO_API_KEY || !subjectName) return empty;
+  if (!subjectName) return empty;
 
   // The subject's WHOLE-career research text — assignees are matched against this,
   // so patents from PAST employers still corroborate.

@@ -57,6 +57,12 @@ export function librariesIoFacts(login: string, repos: LibRepo[]): string[] {
 }
 
 export async function enrichWithLibrariesIo(ctx: EnricherContext, knownGithubUrls: string[]): Promise<EnrichmentResult> {
+  // Libraries.io's data REQUIRES the API key — without it the enricher can do
+  // nothing, so skip FAST with a visible "API key not set" status (rather than
+  // spending the keyless GitHub resolve only to no-op).
+  if (!process.env.LIBRARIESIO_API_KEY) {
+    return { source: "librariesio", status: "no_api_key", note: "API key not set", facts: [], citations: [] };
+  }
   const user = await resolveConfidentGithubUser(ctx, knownGithubUrls);
   if (!user?.login) return { source: "librariesio", facts: [], citations: [] };
   const repos = (await lib(`/github/${encodeURIComponent(user.login)}/repositories?per_page=10&sort=rank`)) as

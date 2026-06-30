@@ -18,7 +18,7 @@ import {
   type ScoringResult,
   type MMHit,
 } from "./scoring";
-import { runEnrichments, renderEnrichmentsForPrompt, type EnrichmentResult } from "./enrichers";
+import { runEnrichments, renderEnrichmentsForPrompt, type EnrichmentResult, type EnrichmentStatusEntry } from "./enrichers";
 import { maybeTriggerBdAsync } from "./bd-async";
 import { founderRows, investorRows } from "./breakdown-rows";
 import {
@@ -50,7 +50,7 @@ import { extractFullName } from "./enrichers/extract";
 import { buildIdentity } from "./identity";
 import { addExaUsage, type ExaUsage } from "./exa-cost";
 import { db } from "@/db";
-import { evaluations, recommendationResponses, scoreItems } from "@/db/schema";
+import { evaluations, recommendationResponses, scoreItems, users } from "@/db/schema";
 import { canonicalizeLinkedinUrl } from "./canonicalize";
 import { assignSlugIfMissing } from "./profile-slug";
 import { classifyStatuses } from "./founder-status-classify";
@@ -408,6 +408,8 @@ export type ScoredPayload =
       scoringUsage: ScoringUsage;
       mmHits: MMHit[];
       enrichments: EnrichmentResult[];
+      // Compact per-source status roster — persisted to profile.enrichmentStatuses.
+      enrichmentStatuses: EnrichmentStatusEntry[];
       grounding: unknown;
       exaUsage: ExaUsage;
       // Cascade signal: true when this (cheap-model) result has a high-value but
@@ -427,7 +429,13 @@ export type ResearchInputs = {
   searchHighlights: SearchHighlight[];
   linkedinPageText: string;
   mmHits: MMHit[];
+  // The FULL enricher roster (every source, each carrying its run status). Only
+  // "ok" results feed the prompt (renderEnrichmentsForPrompt filters); the full
+  // list is kept so the profile can surface which sources ran vs. need a key.
   enrichments: EnrichmentResult[];
+  // Compact per-source status summary, persisted to profile.enrichmentStatuses
+  // and rendered in the profile "Data sources" roster.
+  enrichmentStatuses: EnrichmentStatusEntry[];
   enrichmentBlock: string;
   grounding: unknown;
   exaUsage: ExaUsage;
@@ -443,6 +451,7 @@ export async function researchSubject(
   manualHint?: string | null,
   bdAsync?: BdAsyncMap,
   knownFullName?: string | null,
+  websiteUrl?: string | null,
 ): Promise<ResearchInputs> {
   const { searchHighlights, linkedinPageText: fetchedText, grounding, exaUsage: researchUsage } =
     await researchLinkedinProfile(linkedinUrl);
@@ -460,6 +469,7 @@ export async function researchSubject(
       linkedinPageText: linkedinPageText ?? "",
       mmHits: [],
       enrichments: [],
+      enrichmentStatuses: [],
       enrichmentBlock: "",
       grounding,
       exaUsage: researchUsage,
@@ -487,15 +497,19 @@ export async function researchSubject(
       searchHighlights,
       bdAsync,
       knownFullName,
+      websiteUrl,
     }),
     groundSubjectFacts(subjectName),
   ]);
   const enrichments = enrichmentRun.enrichments;
+  const enrichmentStatuses = enrichmentRun.statuses;
   // Roll the grounding call's Exa cost into the per-eval pricing alongside the
   // research search + enrichers.
   const exaUsage = addExaUsage(addExaUsage(researchUsage, enrichmentRun.exaUsage), grounded.exaUsage);
   // Prepend the cited grounded-facts block so Claude reads it first and can mark
-  // supported rows "corroborated" vs LinkedIn-only "self-asserted".
+  // supported rows "corroborated" vs LinkedIn-only "self-asserted". Only the
+  // fact-producing ("ok") enrichments go into the prompt (filtered inside
+  // renderEnrichmentsForPrompt) — skipped/no-key/no-data sources add no signal.
   const enrichmentBlock = [renderGroundedFacts(grounded.facts), renderEnrichmentsForPrompt(enrichments)]
     .filter(Boolean)
     .join("\n");
@@ -506,6 +520,7 @@ export async function researchSubject(
     linkedinPageText: linkedinPageText ?? "",
     mmHits,
     enrichments,
+    enrichmentStatuses,
     enrichmentBlock,
     grounding,
     exaUsage,
@@ -590,6 +605,7 @@ export async function scoreInputs(
     scoringUsage,
     mmHits: inputs.mmHits,
     enrichments: inputs.enrichments,
+    enrichmentStatuses: inputs.enrichmentStatuses,
     grounding: inputs.grounding,
     exaUsage: inputs.exaUsage,
     escalate,
@@ -689,8 +705,9 @@ async function computeFreshScore(
   manualHint?: string | null,
   bdAsync?: BdAsyncMap,
   knownFullName?: string | null,
+  websiteUrl?: string | null,
 ): Promise<ScoredPayload> {
-  const inputs = await researchSubject(linkedinUrl, manualHint, bdAsync, knownFullName);
+  const inputs = await researchSubject(linkedinUrl, manualHint, bdAsync, knownFullName, websiteUrl);
   // Low-signal short-circuits regardless of model; explicit-model jobs bypass any cascade.
   let payload: ScoredPayload;
   if (inputs.lowSignal || model !== DEFAULT_MODEL) {
@@ -880,7 +897,7 @@ function payloadToWriteFields(payload: ScoredPayload, linkedinUrl: string) {
       ...buildCostFields(null, payload.exaUsage),
     };
   }
-  const { scoring, scoringUsage, mmHits, enrichments, grounding, exaUsage } = payload;
+  const { scoring, scoringUsage, mmHits, enrichments, enrichmentStatuses, grounding, exaUsage } = payload;
   const facets = investorFacets(enrichments, scoring.investorStageFocus ?? []);
   // `onNeo` here is *known* — we checked. Distinct from the tri-state null
   // (which means we never checked). For low-signal evals the field stays null
@@ -922,6 +939,15 @@ function payloadToWriteFields(payload: ScoredPayload, linkedinUrl: string) {
         fact_count: e.facts.length,
         citation_count: e.citations.length,
         raw: e.raw,
+      })),
+      // Per-source run status for the full enricher roster (ok / no_api_key /
+      // no_data / error). Lets the profile surface EVERY source and which ran vs.
+      // which need a key — instead of silently dropping skipped/empty sources.
+      enrichmentStatuses: enrichmentStatuses.map((s) => ({
+        source: s.source,
+        status: s.status,
+        note: s.note ?? null,
+        factCount: s.factCount,
       })),
       // Actual token usage from the scoring call. Lets /admin/profiles tune
       // its per-eval cost estimate against real data instead of the
@@ -1148,6 +1174,22 @@ export async function runEval(
   return rowToResult(row);
 }
 
+// The personal website the claimed user (if any) entered for this evaluation.
+// Null when the eval is unclaimed or the user left it blank. Best-effort: a
+// missing/erroring lookup must not fail a re-score.
+async function loadClaimedWebsiteUrl(evaluationId: string): Promise<string | null> {
+  try {
+    const [row] = await db
+      .select({ websiteUrl: users.websiteUrl })
+      .from(users)
+      .where(eq(users.evaluationId, evaluationId))
+      .limit(1);
+    return row?.websiteUrl ?? null;
+  } catch {
+    return null;
+  }
+}
+
 export async function reEvaluate(
   evaluationId: string,
   opts: RunEvalOptions = {},
@@ -1170,6 +1212,10 @@ export async function reEvaluate(
   // `recommendation_responses.evaluation_id` survive — and the user's claim
   // + rating history isn't blown away on every re-score.
   const model = opts.model ?? DEFAULT_MODEL;
+  // The claimed user's self-entered personal website (if anyone has claimed this
+  // eval and set one), threaded to the website enricher so a re-score after they
+  // add their site picks it up. Null when unclaimed or unset.
+  const claimedWebsiteUrl = await loadClaimedWebsiteUrl(evaluationId);
   // Admin-entered manual hint (for private/unreadable profiles) seeds the research.
   // Cached async BrightData facts (folded in by the sweep) feed the per-dataset
   // enrichers so a sweep-triggered re-score picks them up.
@@ -1181,6 +1227,7 @@ export async function reEvaluate(
     // The row's legal name from a prior scoring (e.g. "Daniel Rubén Odio"), so the
     // patents enricher isn't stuck with a vanity LinkedIn handle ("DROdio").
     existing.fullName,
+    claimedWebsiteUrl,
   );
   const fields = payloadToWriteFields(payload, linkedinUrl);
   // Preserve a previously-known founder/investor status when this re-score's

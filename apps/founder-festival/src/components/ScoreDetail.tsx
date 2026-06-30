@@ -297,6 +297,7 @@ export function ScoreDetail({
   const identity = profileObj?.identity;
   const extractedMetrics = profileObj?.extractedMetrics;
   const enrichments = asArr(profileObj?.enrichments);
+  const enrichmentStatuses = asArr(profileObj?.enrichmentStatuses);
   const usage = profileObj?.usage;
   const mmHits = profileObj?.mmHits;
   const groundingObj = asObj(grounding);
@@ -438,6 +439,35 @@ export function ScoreDetail({
         <Section title="Extracted metrics">
           <ObjectDump value={extractedMetrics} empty="No extracted metrics stored." />
         </Section>
+
+        {enrichmentStatuses.length > 0 && (
+          <Section title={`Source statuses (${enrichmentStatuses.length})`}>
+            <div className="flex flex-col gap-1">
+              {enrichmentStatuses.map((s, i) => {
+                const so = asObj(s);
+                const src = typeof so?.source === "string" ? (so.source as string) : `source ${i}`;
+                const status = typeof so?.status === "string" ? (so.status as string) : "ok";
+                const note = typeof so?.note === "string" ? (so.note as string) : null;
+                const factCount = typeof so?.factCount === "number" ? (so.factCount as number) : null;
+                const color =
+                  status === "ok"
+                    ? "text-emerald-400"
+                    : status === "error"
+                      ? "text-amber-500"
+                      : "text-zinc-500";
+                return (
+                  <div key={`${src}-${i}`} className="flex items-center gap-2 text-sm">
+                    <span className="text-zinc-200 font-medium">{src}</span>
+                    <span className={`${color} text-xs uppercase tracking-wide`}>{status}</span>
+                    <span className="text-zinc-500 text-xs ml-auto">
+                      {note ? note : factCount != null ? `${factCount} facts` : ""}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Section>
+        )}
 
         <Section title={`Enrichment sources (${enrichments.length})`}>
           {enrichments.length === 0 ? (

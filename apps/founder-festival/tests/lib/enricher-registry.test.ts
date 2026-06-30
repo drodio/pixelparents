@@ -13,6 +13,7 @@ const EXPECTED_SOURCES: EnrichmentResult["source"][] = [
   "crates", "tranco",
   "nfx", "neo", "devto", "hn-tokenmaxxing", "librariesio", "google-kg", "youtube",
   "brightdata", "crunchbase", "linkedin-company", "crunchbase-person", "patents", "twitter",
+  "website",
 ];
 
 // Minimal ctx — the fake enrichers below ignore it.
@@ -38,28 +39,56 @@ describe("ENRICHERS registry", () => {
 });
 
 describe("runRegistry", () => {
-  it("collects results that produced facts and drops empty ones", async () => {
+  it("KEEPS every result (including empty) but only fact-producing ones are 'ok'", async () => {
     const enrichers = [
       fake("github", async () => ok("github", ["Built X (1.2k★)"])),
-      fake("npm", async () => ok("npm", [])), // empty → dropped
+      fake("npm", async () => ok("npm", [])), // empty → kept, status derived no_data
       fake("devto", async () => ok("devto", ["Wrote 3 posts"])),
     ];
-    const { enrichments } = await runRegistry(enrichers, CTX);
-    expect(enrichments.map((e) => e.source).sort()).toEqual(["devto", "github"]);
+    const { enrichments, okEnrichments, statuses } = await runRegistry(enrichers, CTX);
+    // The full roster is retained so the UI can show which sources ran.
+    expect(enrichments.map((e) => e.source).sort()).toEqual(["devto", "github", "npm"]);
+    // Only fact-producing sources feed downstream consumers.
+    expect(okEnrichments.map((e) => e.source).sort()).toEqual(["devto", "github"]);
+    // The empty npm result derives a "no_data" status.
+    const npm = statuses.find((s) => s.source === "npm");
+    expect(npm?.status).toBe("no_data");
+    expect(npm?.factCount).toBe(0);
   });
 
-  it("a throwing enricher can't sink the run (isolated to empty)", async () => {
+  it("surfaces an explicit no_api_key status (visible, intentional skip)", async () => {
+    const enrichers = [
+      fake("github", async () => ok("github", ["ok"])),
+      fake("producthunt", async () => ({
+        source: "producthunt" as const,
+        status: "no_api_key" as const,
+        note: "API key not set",
+        facts: [],
+        citations: [],
+      })),
+    ];
+    const { enrichments, okEnrichments, statuses } = await runRegistry(enrichers, CTX);
+    expect(enrichments.map((e) => e.source).sort()).toEqual(["github", "producthunt"]);
+    expect(okEnrichments.map((e) => e.source)).toEqual(["github"]);
+    const ph = statuses.find((s) => s.source === "producthunt");
+    expect(ph?.status).toBe("no_api_key");
+    expect(ph?.note).toBe("API key not set");
+  });
+
+  it("a throwing enricher is kept with an 'error' status (can't sink the run)", async () => {
     const enrichers = [
       fake("github", async () => ok("github", ["ok"])),
       fake("npm", async () => {
         throw new Error("boom");
       }),
     ];
-    const { enrichments } = await runRegistry(enrichers, CTX);
-    expect(enrichments.map((e) => e.source)).toEqual(["github"]);
+    const { enrichments, okEnrichments, statuses } = await runRegistry(enrichers, CTX);
+    expect(enrichments.map((e) => e.source).sort()).toEqual(["github", "npm"]);
+    expect(okEnrichments.map((e) => e.source)).toEqual(["github"]);
+    expect(statuses.find((s) => s.source === "npm")?.status).toBe("error");
   });
 
-  it("honors a per-source timeoutMs (a hung source resolves empty, others proceed)", async () => {
+  it("honors a per-source timeoutMs (a hung source is kept as 'error', others proceed)", async () => {
     const enrichers = [
       fake("github", async () => ok("github", ["fast"])),
       fake(
@@ -68,7 +97,8 @@ describe("runRegistry", () => {
         20, // 20ms budget → times out before the 200ms resolve
       ),
     ];
-    const { enrichments } = await runRegistry(enrichers, CTX);
-    expect(enrichments.map((e) => e.source)).toEqual(["github"]);
+    const { okEnrichments, statuses } = await runRegistry(enrichers, CTX);
+    expect(okEnrichments.map((e) => e.source)).toEqual(["github"]);
+    expect(statuses.find((s) => s.source === "sec-edgar")?.status).toBe("error");
   });
 });

@@ -56,7 +56,10 @@ function subjectTokens(ctx: EnricherContext): Set<string> {
 export async function enrichWithGoogleKg(ctx: EnricherContext): Promise<EnrichmentResult> {
   const empty: EnrichmentResult = { source: "google-kg", facts: [], citations: [] };
   const key = process.env.GOOGLE_API_KEY;
-  if (!key || !ctx.fullName) return empty;
+  if (!key) {
+    return { source: "google-kg", status: "no_api_key", note: "API key not set", facts: [], citations: [] };
+  }
+  if (!ctx.fullName) return empty;
   let data: KgResult | null = null;
   try {
     const res = await fetch(

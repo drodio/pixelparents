@@ -5,6 +5,7 @@ import {
   validateNickname,
   validateSlug,
   validateSlugKind,
+  validateWebsiteUrl,
   type SlugKind,
 } from "@/lib/profile-slug-validate";
 
@@ -13,6 +14,7 @@ type Initial = {
   slug: string;
   slugKind: SlugKind;
   fullName: string | null;
+  websiteUrl: string | null;
 };
 
 type Props = {
@@ -28,12 +30,15 @@ const ERROR_COPY: Record<string, string> = {
   nickname_too_long: "Nickname is too long (max 32 characters).",
   nickname_invalid_chars: "Nickname can't contain line breaks or control characters.",
   role_invalid: "Pick founder or investor.",
+  website_invalid: "Enter a valid website URL (e.g. https://acme.com).",
+  website_too_long: "Website URL is too long.",
 };
 
 export function ProfileSettingsSection({ initial }: Props) {
   const [nickname, setNickname] = useState<string>(initial.nickname ?? "");
   const [slug, setSlug] = useState<string>(initial.slug);
   const [slugKind, setSlugKind] = useState<SlugKind>(initial.slugKind);
+  const [websiteUrl, setWebsiteUrl] = useState<string>(initial.websiteUrl ?? "");
   const [saving, setSaving] = useState(false);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
@@ -44,18 +49,22 @@ export function ProfileSettingsSection({ initial }: Props) {
   const nicknameCheck = validateNickname(nickname);
   const slugCheck = validateSlug(slug);
   const roleCheck = validateSlugKind(slugKind);
+  const websiteCheck = validateWebsiteUrl(websiteUrl);
 
   const nicknameErr =
     !nicknameCheck.ok ? ERROR_COPY[nicknameCheck.error] : null;
   const slugErr = !slugCheck.ok ? ERROR_COPY[slugCheck.error] : null;
   const roleErr = !roleCheck.ok ? ERROR_COPY[roleCheck.error] : null;
+  const websiteErr = !websiteCheck.ok ? ERROR_COPY[websiteCheck.error] : null;
 
   const dirty =
     (nicknameCheck.ok ? nicknameCheck.value : null) !== initial.nickname ||
     (slugCheck.ok ? slugCheck.value : initial.slug) !== initial.slug ||
-    slugKind !== initial.slugKind;
+    slugKind !== initial.slugKind ||
+    (websiteCheck.ok ? websiteCheck.value : null) !== initial.websiteUrl;
 
-  const canSave = dirty && nicknameCheck.ok && slugCheck.ok && roleCheck.ok && !saving;
+  const canSave =
+    dirty && nicknameCheck.ok && slugCheck.ok && roleCheck.ok && websiteCheck.ok && !saving;
 
   const previewName = nickname.trim() || initial.fullName || "there";
   const previewSlug = slugCheck.ok ? slugCheck.value : slug;
@@ -75,6 +84,7 @@ export function ProfileSettingsSection({ initial }: Props) {
           nickname: nicknameCheck.ok ? nicknameCheck.value : null,
           slug: slugCheck.ok ? slugCheck.value : slug,
           slugKind,
+          websiteUrl: websiteCheck.ok ? websiteCheck.value : null,
         }),
       });
       const data: { ok?: boolean; error?: string; field?: string } = await res
@@ -92,6 +102,7 @@ export function ProfileSettingsSection({ initial }: Props) {
           nickname: nicknameCheck.ok ? nicknameCheck.value : null,
           slug: slugCheck.ok ? slugCheck.value : slug,
           slugKind,
+          websiteUrl: websiteCheck.ok ? websiteCheck.value : null,
         });
       }
     } catch {
@@ -202,6 +213,32 @@ export function ProfileSettingsSection({ initial }: Props) {
           <div className="text-xs text-zinc-500 mt-1">
             Your profile URL: <span className="text-zinc-300">{previewUrl}</span>
           </div>
+        </div>
+
+        {/* Personal website */}
+        <div className="flex flex-col gap-2">
+          <label htmlFor="ps-website" className="text-sm font-medium text-zinc-200">
+            Personal website
+          </label>
+          <p className="text-xs text-zinc-500 -mt-1">
+            Optional. Shown as a link on your profile alongside LinkedIn and
+            GitHub. We also read its title and description to enrich your
+            profile. Leave blank to remove it.
+          </p>
+          <input
+            id="ps-website"
+            type="url"
+            inputMode="url"
+            value={websiteUrl}
+            onChange={(e) => setWebsiteUrl(e.target.value)}
+            maxLength={2048}
+            placeholder="e.g. https://yoursite.com"
+            className="bg-zinc-900 border border-zinc-700 rounded px-3 py-2 text-sm focus:outline-none focus:border-zinc-500"
+          />
+          {websiteErr && <p className="text-xs text-red-400">{websiteErr}</p>}
+          {serverErrorField === "websiteUrl" && serverError && (
+            <p className="text-xs text-red-400">{serverError}</p>
+          )}
         </div>
 
         {/* Save row */}

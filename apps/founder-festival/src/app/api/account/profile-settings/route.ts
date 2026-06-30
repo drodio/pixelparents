@@ -7,8 +7,10 @@ import {
   validateNickname,
   validateSlug,
   validateSlugKind,
+  validateWebsiteUrl,
   type NicknameValidationError,
   type SlugValidationError,
+  type WebsiteUrlValidationError,
 } from "@/lib/profile-slug-validate";
 
 export const dynamic = "force-dynamic";
@@ -17,12 +19,14 @@ type Body = Partial<{
   nickname: string | null;
   slugKind: string;
   slug: string;
+  websiteUrl: string | null;
 }>;
 
 type FieldError =
   | { field: "nickname"; error: NicknameValidationError }
   | { field: "slug"; error: SlugValidationError | "slug_taken" }
-  | { field: "role"; error: "role_invalid" };
+  | { field: "role"; error: "role_invalid" }
+  | { field: "websiteUrl"; error: WebsiteUrlValidationError };
 
 // Postgres unique-violation SQLSTATE. Caught when two concurrent slug
 // edits race; converted to a typed slug_taken error.
@@ -44,6 +48,7 @@ export async function POST(req: Request) {
     .select({
       id: users.id,
       nickname: users.nickname,
+      websiteUrl: users.websiteUrl,
       evaluationId: users.evaluationId,
     })
     .from(users)
@@ -96,10 +101,20 @@ export async function POST(req: Request) {
     nextSlug = r.value;
   }
 
+  let nextWebsiteUrl: string | null | undefined;
+  if ("websiteUrl" in body) {
+    const r = validateWebsiteUrl(body.websiteUrl);
+    if (!r.ok) {
+      return fieldError({ field: "websiteUrl", error: r.error });
+    }
+    nextWebsiteUrl = r.value;
+  }
+
   // Determine what's actually changing.
   const slugChanging = nextSlug !== undefined && nextSlug !== evalRow.slug;
   const slugKindChanging = nextSlugKind !== undefined && nextSlugKind !== evalRow.slugKind;
   const nicknameChanging = nextNickname !== undefined && nextNickname !== userRow.nickname;
+  const websiteUrlChanging = nextWebsiteUrl !== undefined && nextWebsiteUrl !== userRow.websiteUrl;
 
   // Pre-flight uniqueness check on the new slug. Race with concurrent
   // edits is defended by the UPDATE catch below, but the pre-check gives
@@ -168,10 +183,14 @@ export async function POST(req: Request) {
       .where(eq(evaluations.id, evalRow.id));
   }
 
-  if (nicknameChanging) {
+  // nickname + websiteUrl both live on the users row — write in one UPDATE.
+  if (nicknameChanging || websiteUrlChanging) {
     await db
       .update(users)
-      .set({ nickname: nextNickname })
+      .set({
+        ...(nicknameChanging ? { nickname: nextNickname } : {}),
+        ...(websiteUrlChanging ? { websiteUrl: nextWebsiteUrl } : {}),
+      })
       .where(eq(users.id, userRow.id));
   }
 
@@ -180,6 +199,7 @@ export async function POST(req: Request) {
     nickname: nicknameChanging ? nextNickname : userRow.nickname,
     slug: slugChanging ? nextSlug : evalRow.slug,
     slugKind: slugKindChanging ? nextSlugKind : evalRow.slugKind,
+    websiteUrl: websiteUrlChanging ? nextWebsiteUrl : userRow.websiteUrl,
   });
 }
 
