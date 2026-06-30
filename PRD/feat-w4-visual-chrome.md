@@ -1,3 +1,30 @@
+## Progress Update as of [June 30, 2026 — 7:09 AM Pacific]
+
+### Summary of changes since last update
+Polished the **Events** surface (presentation only — no event logic/data
+touched). List event cards now carry a left accent stripe colored by kind
+(violet=OHS, sky=online, amber=in-person), hover-lift + press feedback + focus
+rings, and a chevron nudge. Today's calendar cell gets an amber tint + inset
+ring (clearer than the date-pill alone). A reusable `OhsBadge` (violet dot +
+label) unifies the OHS school-calendar badge across list rows and the detail
+drawer. The list "no events" empty state gained an icon + a "Post the first
+event" inline CTA (upcoming tab). The Events gate/unavailable empty states in
+`page.tsx` gained icons (lock / calendar) and focus rings.
+
+### Detail of changes made:
+- `app/(authed)/events/events-calendar-client.tsx`: `EventRowCard` left-accent
+  stripe via `before:` pseudo + hover/press/focus; new `OhsBadge` component used
+  in the row and `DetailDrawer`; today-cell amber ring/tint + focus-visible ring
+  on day cells; "this week" cards got press feedback; list empty state → icon +
+  "Post the first event" Link to /events/new.
+- `app/(authed)/events/page.tsx`: verify-gate and not-available empty states now
+  render an icon chip; meta text raised to white/60; primary CTAs got focus rings
+  + active press. Imported IconCalendar/IconLock.
+- Validation: `npm run lint` clean; `npx tsc --noEmit` clean except 3 pre-existing
+  `jose`-missing errors in lib/oauth/* (the shared node_modules lacks `jose`);
+  `npm test` → 465 pass, only the 2 pre-existing jose-import test files fail (same
+  env cause). None of my files touch oauth.
+
 ## Progress Update as of [June 30, 2026 — 7:07 AM Pacific]
 
 ### Summary of changes since last update

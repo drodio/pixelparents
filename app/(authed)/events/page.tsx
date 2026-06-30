@@ -15,7 +15,7 @@ import {
 } from "@/lib/db/events";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
-import { IconPlus } from "@/components/icons";
+import { IconPlus, IconCalendar, IconLock } from "@/components/icons";
 import { EventsCalendarClient } from "./events-calendar-client";
 import type { CalendarEvent } from "@/lib/events/calendar";
 import { toCalendarEvent } from "./shared";
@@ -84,16 +84,19 @@ export default async function EventsPage() {
     return shell(
       <>
         <PageHeader />
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
+        <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
+          <span className="mb-4 grid h-12 w-12 place-items-center rounded-full bg-amber-400/10 text-amber-300">
+            <IconLock className="h-6 w-6" />
+          </span>
           <h2 className="text-lg font-semibold">Verify to see Events</h2>
-          <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
+          <p className="mx-auto mt-2 max-w-md text-sm text-white/60">
             {viewerSignup
               ? "Confirm your OHS student's Stanford email to see the community calendar and create events."
               : "Your account isn't recognized as an OHS family yet. Join Pixel Parents to use Events."}
           </p>
           <Link
             href={viewerSignup ? "/verify" : "/signup"}
-            className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
+            className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-0)] active:scale-[0.98] motion-reduce:transition-none"
           >
             {viewerSignup ? "Verify now" : "Join Pixel Parents"}
           </Link>
@@ -106,8 +109,11 @@ export default async function EventsPage() {
     return shell(
       <>
         <PageHeader />
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-white/55">
-          Events aren&apos;t available yet — check back soon.
+        <div className="flex flex-col items-center rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
+          <span className="mb-4 grid h-12 w-12 place-items-center rounded-full bg-white/[0.06] text-white/50">
+            <IconCalendar className="h-6 w-6" />
+          </span>
+          <p className="text-sm text-white/60">Events aren&apos;t available yet — check back soon.</p>
         </div>
       </>,
     );

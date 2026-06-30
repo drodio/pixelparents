@@ -14,6 +14,7 @@ import {
   IconChevronRight,
   IconCalendar,
   IconSparkles,
+  IconPlus,
 } from "@/components/icons";
 import { AddToCalendar } from "./add-to-calendar";
 import { RsvpControl, PlaceBadge, formatEventWhen } from "./event-bits";
@@ -106,7 +107,7 @@ export function EventsCalendarClient({ events }: { events: CalendarEvent[] }) {
                 key={ev.id}
                 type="button"
                 onClick={() => setSelectedEventId(ev.id)}
-                className="min-w-[180px] shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 text-left transition hover:border-amber-400/40"
+                className="min-w-[180px] shrink-0 rounded-xl border border-white/10 bg-black/30 p-3 text-left transition-all hover:-translate-y-0.5 hover:border-amber-400/40 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 active:translate-y-0 active:scale-[0.98] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
               >
                 <div className="truncate text-sm font-medium text-white">{ev.title}</div>
                 <div className="mt-1 text-xs text-white/55">{formatEventWhen(ev)}</div>
@@ -277,8 +278,12 @@ function CalendarGrid({
               type="button"
               key={key}
               onClick={() => onPickDay(key)}
-              className={`flex min-h-[92px] flex-col gap-1 border-b border-r border-white/[0.06] p-1.5 text-left align-top transition hover:bg-white/[0.03] ${
-                cell.inMonth ? "" : "bg-black/20"
+              className={`relative flex min-h-[92px] flex-col gap-1 border-b border-r border-white/[0.06] p-1.5 text-left align-top transition hover:bg-white/[0.03] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/50 ${
+                cell.isToday
+                  ? "bg-amber-400/[0.06] ring-1 ring-inset ring-amber-400/30"
+                  : cell.inMonth
+                    ? ""
+                    : "bg-black/20"
               }`}
             >
               <span
@@ -347,8 +352,22 @@ function ListView({
       </div>
 
       {list.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-white/55">
-          No {tab} events.
+        <div className="flex flex-col items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
+          <span className="grid h-12 w-12 place-items-center rounded-full bg-amber-400/10 text-amber-300">
+            <IconCalendar className="h-6 w-6" />
+          </span>
+          <p className="text-sm text-white/60">
+            No {tab} events{tab === "upcoming" ? " yet" : ""}.
+          </p>
+          {tab === "upcoming" && (
+            <Link
+              href="/events/new"
+              className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-0)] active:scale-[0.98] motion-reduce:transition-none"
+            >
+              <IconPlus className="h-4 w-4" />
+              Post the first event
+            </Link>
+          )}
         </div>
       ) : (
         <ul className="flex flex-col gap-2.5">
@@ -365,30 +384,44 @@ function ListView({
 
 function EventRowCard({ event, onClick }: { event: CalendarEvent; onClick: () => void }) {
   const isOhs = event.source === "ohs";
+  // A left accent stripe colored by kind makes the list scannable at a glance:
+  // violet = OHS calendar, sky = online community event, amber = in-person.
+  const accent = isOhs
+    ? "before:bg-violet-400/70"
+    : event.isOnline
+      ? "before:bg-sky-400/70"
+      : "before:bg-amber-400/70";
   return (
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-left transition hover:border-white/20 hover:bg-white/[0.04]"
+      className={`group relative flex w-full items-start gap-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-4 pl-5 text-left transition-all before:absolute before:inset-y-0 before:left-0 before:w-1 ${accent} hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/50 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-0)] active:translate-y-0 active:scale-[0.995] motion-reduce:transition-none motion-reduce:hover:translate-y-0`}
     >
       <DateBlock event={event} />
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-medium text-white">{event.title}</span>
-          {isOhs && (
-            <span className="rounded-full bg-violet-400/15 px-2 py-0.5 text-[11px] font-medium text-violet-200">
-              OHS
-            </span>
-          )}
+          {isOhs && <OhsBadge />}
         </div>
-        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/55">
+        <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-white/60">
           <span>{formatEventWhen(event)}</span>
           <PlaceBadge event={event} />
           {event.goingCount > 0 && <span>{event.goingCount} going</span>}
         </div>
       </div>
-      <IconChevronRight className="mt-1 h-4 w-4 shrink-0 text-white/30" />
+      <IconChevronRight className="mt-1 h-4 w-4 shrink-0 text-white/30 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
     </button>
+  );
+}
+
+// Distinct, consistent OHS school-calendar badge — a violet dot + label so it
+// reads the same everywhere it appears (list rows, detail drawers).
+function OhsBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-violet-400/30 bg-violet-400/15 px-2 py-0.5 text-[11px] font-medium text-violet-200">
+      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-violet-300" />
+      OHS
+    </span>
   );
 }
 
@@ -416,11 +449,7 @@ function DetailDrawer({ event, onClose }: { event: CalendarEvent; onClose: () =>
         <div>
           <div className="flex flex-wrap items-center gap-2">
             <h3 className="text-lg font-semibold text-white">{event.title}</h3>
-            {isOhs && (
-              <span className="rounded-full bg-violet-400/15 px-2 py-0.5 text-[11px] font-medium text-violet-200">
-                OHS
-              </span>
-            )}
+            {isOhs && <OhsBadge />}
           </div>
           <p className="mt-1 text-sm text-white/60">{formatEventWhen(event)}</p>
         </div>
