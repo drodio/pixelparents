@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
@@ -8,6 +7,7 @@ import { getSignupByEmail } from "@/lib/db/signups";
 import { getStats } from "@/lib/db/aggregates";
 import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { SignedOutPanel } from "@/components/signed-out-panel";
 import {
   IconUsers,
   IconCode,
@@ -117,7 +117,17 @@ function VerificationCard({ status }: { status: ApprovalStatus }) {
 
 export default async function DashboardPage() {
   const user = await currentUser();
-  if (!user) redirect("/sign-in");
+
+  // Signed-out: render the grayed shell (locked tabs + sign-in CTA) instead of
+  // bouncing to /sign-in. Crucially we return BEFORE touching the DB — no
+  // signup/stats/PII is loaded or rendered in this branch.
+  if (!user) {
+    return (
+      <DashboardShell authed={false} firstName={null} email={null} status={null}>
+        <SignedOutPanel area="dashboard" />
+      </DashboardShell>
+    );
+  }
 
   const email = primaryEmail(user);
   const [signup, isAdmin, stats] = await Promise.all([
@@ -178,7 +188,6 @@ export default async function DashboardPage() {
               title="Developers"
               desc="Build on the Pixel Parents API — request a key and read the docs."
               Icon={IconCode}
-              external
             />
           </div>
         </section>

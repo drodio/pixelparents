@@ -1,7 +1,6 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { desc } from "drizzle-orm";
 import { primaryEmail } from "@/lib/clerk";
@@ -21,6 +20,7 @@ import { isAdminEmail } from "@/lib/admin";
 import { buildMarkers } from "@/lib/community-map";
 import { WorldMap } from "@/components/world-map";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { SignedOutPanel } from "@/components/signed-out-panel";
 import { UnverifiedNotice } from "@/components/unverified-notice";
 import { ShowcaseClient } from "./showcase-client";
 
@@ -64,9 +64,18 @@ function StatChip({ label, value }: { label: string; value: number }) {
 }
 
 export default async function CommunityPage() {
-  // 1) Auth: signed-in only. Anonymous → sign-in.
+  // 1) Auth: signed-in only. Anonymous → render the grayed shell (locked tabs +
+  //    sign-in CTA), NOT a redirect. We return BEFORE any DB query, so a
+  //    signed-out visitor never loads or sees community PII (signups, kids,
+  //    photos, map markers).
   const viewer = await currentUser();
-  if (!viewer) redirect("/sign-in");
+  if (!viewer) {
+    return (
+      <DashboardShell authed={false} firstName={null} email={null} status={null}>
+        <SignedOutPanel area="community" />
+      </DashboardShell>
+    );
+  }
   const email = primaryEmail(viewer);
 
   // 2) OHS-family gate — identical to the old /directory + /community pages.

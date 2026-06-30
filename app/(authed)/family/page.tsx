@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
@@ -12,6 +11,7 @@ import { buildFamilyDisplay } from "@/lib/family-display";
 import { coerceShareVisibility } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
 import { DashboardShell } from "@/components/dashboard-shell";
+import { SignedOutPanel } from "@/components/signed-out-panel";
 import { StudentVerify } from "@/components/student-verify";
 import { IconGradCap, IconUsers } from "@/components/icons";
 import FamilyForm from "@/app/signup/thanks/family-form";
@@ -27,7 +27,17 @@ export const metadata: Metadata = {
 
 export default async function FamilyPage() {
   const user = await currentUser();
-  if (!user) redirect("/sign-in");
+
+  // Signed-out: render the grayed shell (locked tabs + sign-in CTA) instead of
+  // bouncing. We return BEFORE any DB query, so a signed-out visitor never loads
+  // or sees family PII (members, kids, photos, verification).
+  if (!user) {
+    return (
+      <DashboardShell authed={false} firstName={null} email={null} status={null}>
+        <SignedOutPanel area="family" />
+      </DashboardShell>
+    );
+  }
 
   const email = primaryEmail(user);
   const [family, isAdmin] = await Promise.all([
