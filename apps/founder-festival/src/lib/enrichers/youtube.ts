@@ -67,7 +67,10 @@ async function ytJson(path: string): Promise<{ items?: unknown[] } | null> {
 
 export async function enrichWithYouTube(ctx: EnricherContext): Promise<EnrichmentResult> {
   const empty: EnrichmentResult = { source: "youtube", facts: [], citations: [] };
-  if (!process.env.GOOGLE_API_KEY || !ctx.fullName) return empty;
+  if (!process.env.GOOGLE_API_KEY) {
+    return { source: "youtube", status: "no_api_key", note: "API key not set", facts: [], citations: [] };
+  }
+  if (!ctx.fullName) return empty;
   const tokens = companyTokensFor(ctx.linkedinPageText);
   if (tokens.size === 0) return empty; // nothing to corroborate against → skip
   const companies = extractCompanyNames(ctx.linkedinPageText ?? "");

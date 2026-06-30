@@ -67,7 +67,9 @@ export async function enrichWithKaggle(
   knownKaggleUrls: string[],
 ): Promise<EnrichmentResult> {
   const empty: EnrichmentResult = { source: "kaggle", facts: [], citations: [] };
-  if (!process.env.KAGGLE_API_TOKEN) return empty;
+  if (!process.env.KAGGLE_API_TOKEN) {
+    return { source: "kaggle", status: "no_api_key", note: "API key not set", facts: [], citations: [] };
+  }
 
   let handle = handleFromKaggleUrls(knownKaggleUrls);
   let datasets: KaggleDataset[] | null = null;

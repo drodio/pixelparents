@@ -55,7 +55,14 @@ type UserSearchResult = {
 
 export async function enrichWithProductHunt(ctx: EnricherContext, knownPhUrls: string[]): Promise<EnrichmentResult> {
   if (!process.env.PRODUCT_HUNT_TOKEN) {
-    return { source: "producthunt", facts: [], citations: [], raw: { skipped: "PRODUCT_HUNT_TOKEN unset" } };
+    return {
+      source: "producthunt",
+      status: "no_api_key",
+      note: "API key not set",
+      facts: [],
+      citations: [],
+      raw: { skipped: "PRODUCT_HUNT_TOKEN unset" },
+    };
   }
   // If we already saw a producthunt.com profile in the Exa data, skip the name
   // search and use the username from that URL.

@@ -147,6 +147,7 @@ type ClaimedProfileInitial = {
   city: string | null;
   region: string | null;
   country: string | null;
+  websiteUrl: string | null;
 };
 
 async function loadViewerEvaluationId(clerkUserId: string): Promise<string | null> {
@@ -179,6 +180,7 @@ async function loadClaimedProfile(clerkUserId: string): Promise<ClaimedProfileIn
       city: users.city,
       region: users.region,
       country: users.country,
+      websiteUrl: users.websiteUrl,
     })
     .from(users)
     .innerJoin(evaluations, eq(evaluations.id, users.evaluationId))
@@ -196,6 +198,7 @@ async function loadClaimedProfile(clerkUserId: string): Promise<ClaimedProfileIn
     city: row.city,
     region: row.region,
     country: row.country,
+    websiteUrl: row.websiteUrl,
   };
 }
 

@@ -12,6 +12,8 @@ import { ProfileSocialCard, type SocialCardData } from "@/components/ProfileSoci
 import { deriveEvalStatus } from "@/lib/eval-pipeline";
 import { isOwningConfidence } from "@/lib/identity-match";
 import { ScoreTable } from "@/components/ScoreTable";
+import { EnrichmentSourcesSection } from "@/components/EnrichmentSourcesSection";
+import { ProfileWebsiteLink } from "@/components/ProfileWebsiteLink";
 import { CombinedScoreModal } from "@/components/CombinedScoreModal";
 import { ReScoreButton } from "@/components/ReScoreButton";
 import { Recommendations } from "@/components/Recommendations";
@@ -433,6 +435,7 @@ export default async function WelcomePage({ searchParams }: PageProps) {
       city: users.city,
       region: users.region,
       country: users.country,
+      websiteUrl: users.websiteUrl,
     })
     .from(users)
     .where(
@@ -458,7 +461,7 @@ export default async function WelcomePage({ searchParams }: PageProps) {
   const dossier = row.source !== "code" ? await getProfileDossier(row.id) : null;
   // Location: first non-blank value across all claim rows. Trim so a row
   // with empty strings (vs. NULL) doesn't win over a row with real data.
-  const firstNonBlank = (key: "city" | "region" | "country"): string | null => {
+  const firstNonBlank = (key: "city" | "region" | "country" | "websiteUrl"): string | null => {
     for (const r of claimRows) {
       const v = r[key]?.trim();
       if (v) return v;
@@ -471,8 +474,12 @@ export default async function WelcomePage({ searchParams }: PageProps) {
         city: firstNonBlank("city"),
         region: firstNonBlank("region"),
         country: firstNonBlank("country"),
+        websiteUrl: firstNonBlank("websiteUrl"),
       }
     : null;
+  // The owner's self-entered personal website (owner-grade claims only), shown as
+  // a clickable link next to the LinkedIn icon on the profile heading.
+  const websiteUrl = anyClaim?.websiteUrl ?? null;
 
   // When the claim callback bounces back with ?claim_failed=github|email, we
   // auto-open the Claim Your Profile modal with a yellow banner steering the
@@ -703,6 +710,9 @@ export default async function WelcomePage({ searchParams }: PageProps) {
                     </svg>
                   </a>
                 )}
+                {!nickname && websiteUrl && (
+                  <ProfileWebsiteLink url={websiteUrl} name={fullName} size="lg" />
+                )}
               </div>
               {nickname && fullName && (
                 <div className="flex items-center gap-2 mt-0.5">
@@ -719,6 +729,9 @@ export default async function WelcomePage({ searchParams }: PageProps) {
                         <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.852 3.37-1.852 3.601 0 4.267 2.37 4.267 5.455v6.288zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.063 2.063 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
                       </svg>
                     </a>
+                  )}
+                  {websiteUrl && (
+                    <ProfileWebsiteLink url={websiteUrl} name={fullName} size="sm" />
                   )}
                   {/* Inline location suffix on the fullName row when the user
                       has a nickname (the welcome line above shows the
@@ -1014,6 +1027,7 @@ export default async function WelcomePage({ searchParams }: PageProps) {
           fullName={fullName}
           isAdminViewer={isAdminViewer}
         />
+        <EnrichmentSourcesSection profile={row.profile} />
         {recs && (
           <Recommendations
             evaluationId={row.id}

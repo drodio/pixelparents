@@ -3,6 +3,7 @@ import {
   validateSlug,
   validateNickname,
   validateSlugKind,
+  validateWebsiteUrl,
 } from "@/lib/profile-slug-validate";
 
 describe("validateSlug", () => {
@@ -101,5 +102,33 @@ describe("validateSlugKind", () => {
     expect(validateSlugKind("admin")).toEqual({ ok: false, error: "role_invalid" });
     expect(validateSlugKind("")).toEqual({ ok: false, error: "role_invalid" });
     expect(validateSlugKind(null)).toEqual({ ok: false, error: "role_invalid" });
+  });
+});
+
+describe("validateWebsiteUrl", () => {
+  it("clears the field on null / blank", () => {
+    expect(validateWebsiteUrl(null)).toEqual({ ok: true, value: null });
+    expect(validateWebsiteUrl("")).toEqual({ ok: true, value: null });
+    expect(validateWebsiteUrl("   ")).toEqual({ ok: true, value: null });
+  });
+
+  it("accepts http(s) URLs and normalizes a bare host to https", () => {
+    expect(validateWebsiteUrl("https://acme.com")).toEqual({ ok: true, value: "https://acme.com/" });
+    expect(validateWebsiteUrl("http://acme.com/about")).toEqual({ ok: true, value: "http://acme.com/about" });
+    expect(validateWebsiteUrl("acme.com")).toEqual({ ok: true, value: "https://acme.com/" });
+  });
+
+  it("rejects non-http schemes, hosts without a dot, and junk", () => {
+    expect(validateWebsiteUrl("ftp://acme.com")).toEqual({ ok: false, error: "website_invalid" });
+    expect(validateWebsiteUrl("javascript:alert(1)")).toEqual({ ok: false, error: "website_invalid" });
+    expect(validateWebsiteUrl("localhost")).toEqual({ ok: false, error: "website_invalid" });
+    expect(validateWebsiteUrl("not a url")).toEqual({ ok: false, error: "website_invalid" });
+  });
+
+  it("rejects over-long input", () => {
+    expect(validateWebsiteUrl(`https://acme.com/${"a".repeat(2100)}`)).toEqual({
+      ok: false,
+      error: "website_too_long",
+    });
   });
 });
