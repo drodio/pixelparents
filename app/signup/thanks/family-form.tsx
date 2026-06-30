@@ -19,6 +19,17 @@ const inputCls =
   "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40";
 const h3Cls = "text-base font-semibold text-white";
 
+// Client-safe mirror of lib/verify.ts#isStudentEmail. We deliberately do NOT
+// import that module here — it imports node:crypto at the top level, which would
+// be pulled into the client bundle. The server (patchChild) sanitizes anyway;
+// this is just a soft inline hint.
+function looksLikeStanfordEmail(raw: string): boolean {
+  const e = raw.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
+  const domain = e.split("@")[1] ?? "";
+  return domain === "stanford.edu" || domain.endsWith(".stanford.edu");
+}
+
 // Highlights the typed portion of a suggestion in gold as it matches.
 function HighlightedText({ text, query }: { text: string; query: string }) {
   if (!query) return <>{text}</>;
@@ -342,6 +353,7 @@ export type ExistingChild = {
   birthYear: number | null;
   interests: string[] | null;
   notes: string | null;
+  studentEmail: string | null;
   photos: Photo[];
   photoPreviews: Record<string, string>;
 };
@@ -376,6 +388,7 @@ function ChildCard({
   const [birthYear, setBirthYear] = useState(child.birthYear ? String(child.birthYear) : "");
   const [interests, setInterests] = useState<string[]>(child.interests ?? []);
   const [notes, setNotes] = useState(child.notes ?? "");
+  const [studentEmail, setStudentEmail] = useState(child.studentEmail ?? "");
   const currentYear = new Date().getFullYear();
 
   return (
@@ -447,6 +460,33 @@ function ChildCard({
       )}
 
       <div>
+        <label className={labelCls}>Student&apos;s Stanford email (optional)</label>
+        <input
+          type="email"
+          inputMode="email"
+          autoCapitalize="none"
+          autoCorrect="off"
+          spellCheck={false}
+          value={studentEmail}
+          onChange={(e) => {
+            setStudentEmail(e.target.value);
+            queue({ studentEmail: e.target.value });
+          }}
+          placeholder="name@ohs.stanford.edu"
+          className={inputCls}
+        />
+        {studentEmail.trim() !== "" && !looksLikeStanfordEmail(studentEmail) ? (
+          <p className="mt-1 text-xs text-amber-400/80">
+            This doesn&apos;t look like a stanford.edu address — it&apos;ll still save.
+          </p>
+        ) : (
+          <p className="mt-1 text-xs text-white/40">
+            Your OHS student&apos;s stanford.edu address — used to verify your family.
+          </p>
+        )}
+      </div>
+
+      <div>
         <h4 className={h3Cls}>Your child&apos;s interests</h4>
         <TagPicker
           value={interests}
@@ -507,7 +547,7 @@ export default function FamilyForm({
     if ("id" in r) {
       setChildren((cs) => [
         ...cs,
-        { id: r.id, firstName: "", grade: null, birthYear: null, interests: [], notes: null, photos: [], photoPreviews: {} },
+        { id: r.id, firstName: "", grade: null, birthYear: null, interests: [], notes: null, studentEmail: null, photos: [], photoPreviews: {} },
       ]);
     }
   }

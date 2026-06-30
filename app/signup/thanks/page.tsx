@@ -132,6 +132,7 @@ export default async function ThanksPage({
               birthYear: k.birthYear,
               interests: k.interests,
               notes: k.notes,
+              studentEmail: k.studentEmail,
               photos: k.photos ?? [],
               photoPreviews: childPreviewsById[k.id] ?? {},
             }))}
