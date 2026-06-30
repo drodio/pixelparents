@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { iconForInterest } from "@/lib/interest-icons";
 import { IconX, IconClock, IconCircleCheck } from "@/components/icons";
+import { TagList } from "@/components/tag-list";
 import {
   distinctTags,
   filterAndSortPosts,
@@ -205,28 +206,34 @@ export function ExchangeBoardClient({
         )}
       </div>
 
-      {/* Expertise-tag facet (reuses the directory chip-filter pattern) */}
+      {/* Expertise-tag facet (reuses the directory chip-filter pattern).
+          Collapsed to a handful with a "+N more" toggle; chips stay clickable filters. */}
       {allTags.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
-          {allTags.map((label) => {
-            const active = selectedTags.has(label.toLowerCase());
-            const Icon = iconForInterest(label);
-            return (
-              <button
-                key={label}
-                type="button"
-                onClick={() => toggleTag(label)}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                  active
-                    ? "border-amber-400 bg-amber-400 text-black"
-                    : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/10"
-                }`}
-              >
-                <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                {label}
-              </button>
-            );
-          })}
+          <TagList
+            tags={allTags}
+            max={12}
+            className="flex flex-wrap items-center gap-2"
+            renderTag={(label) => {
+              const active = selectedTags.has(label.toLowerCase());
+              const Icon = iconForInterest(label);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleTag(label)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                    active
+                      ? "border-amber-400 bg-amber-400 text-black"
+                      : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+                  {label}
+                </button>
+              );
+            }}
+          />
           {selectedTags.size > 0 && (
             <button
               type="button"
@@ -290,8 +297,11 @@ export function ExchangeBoardClient({
                 </div>
 
                 {p.tags.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-1.5">
-                    {p.tags.map((t) => {
+                  <TagList
+                    tags={p.tags}
+                    max={6}
+                    className="mt-3 flex flex-wrap items-center gap-1.5"
+                    renderTag={(t) => {
                       const Icon = iconForInterest(t);
                       return (
                         <span
@@ -302,8 +312,8 @@ export function ExchangeBoardClient({
                           {t}
                         </span>
                       );
-                    })}
-                  </div>
+                    }}
+                  />
                 )}
               </Link>
             );
