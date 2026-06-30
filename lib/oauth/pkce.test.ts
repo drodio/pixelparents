@@ -18,7 +18,10 @@ describe("PKCE S256", () => {
   it("verifyPkce accepts a matching verifier and rejects a mismatch", () => {
     const { verifier, challenge } = generatePkcePair();
     expect(verifyPkce(verifier, challenge)).toBe(true);
-    expect(verifyPkce(verifier + "x".repeat(0), challenge.slice(0, -1) + "A")).toBe(false);
+    // Tamper the last challenge char to a GUARANTEED-different one (same flake
+    // class as the tampered-verifier test: a fixed "A" is a no-op ~1/64 runs).
+    const lastDiff = challenge.slice(-1) === "A" ? "B" : "A";
+    expect(verifyPkce(verifier, challenge.slice(0, -1) + lastDiff)).toBe(false);
   });
 
   it("rejects a tampered verifier", () => {
