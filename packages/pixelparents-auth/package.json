@@ -1,0 +1,52 @@
+{
+  "name": "@pixelparents/auth",
+  "version": "0.1.0",
+  "description": "Sign in with Pixel Parents — a tiny OIDC (OAuth 2.0 Authorization Code + PKCE S256) client SDK that returns a signed, verified-OHS-identity assertion (ohs_verified).",
+  "license": "MIT",
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "sideEffects": false,
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [
+    "oidc",
+    "oauth2",
+    "pkce",
+    "pixelparents",
+    "sign-in",
+    "authentication",
+    "stanford-ohs"
+  ],
+  "peerDependencies": {
+    "jose": ">=5"
+  },
+  "peerDependenciesMeta": {
+    "jose": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "jose": "^6.2.3",
+    "typescript": "^5",
+    "vitest": "^3.2.4"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}
