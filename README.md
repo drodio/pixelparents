@@ -24,6 +24,10 @@ Claude will read the project's conventions, explore the code, and report back th
 
 > New to Claude Code? Drop the `-p` flag (`claude`) to start an interactive session you can keep chatting in.
 
+### Prefer a desktop app?
+
+If you'd rather not live in a terminal, download the [Claude desktop app](https://claude.ai/download) for Mac or Windows. Once it's installed and you've set up Claude Code (the CLI above), you can run Claude Code directly inside the desktop app and build on this repo without the command line — handy if a terminal feels unfamiliar.
+
 ## Pixel Parents API
 
 Pixel Parents has a small developer API that exposes **high-level, non-PII community stats** — counts and taxonomies only (signups by state, skillset, tech depth, grade, interests, and more), never names, emails, phones, or photos. It's a safe, fun dataset to build on: a community dashboard, a data viz, a school project, or querying the community from an AI agent.
