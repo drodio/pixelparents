@@ -10,6 +10,8 @@ import {
   isFamilyVerified,
   VERIFICATION_CUTOFF,
   childFullName,
+  aggregatedChildInterests,
+  linkedStudentAccountForChild,
 } from "@/lib/directory";
 import { familyMatchesAgeRange, familyWithinRadius } from "@/lib/directory-filters";
 import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
@@ -660,5 +662,148 @@ describe("buildDirectoryCard — enrichment is gated behind profile_enrichment",
       YEAR,
     );
     expect(card.enrichment).toBeNull();
+  });
+});
+
+// The fix for the "two records, different tags" bug: a child row carries the
+// kid-interest tags the parent typed on the family form; when that child is ALSO a
+// real student account (matched by the child's studentEmail == one of the
+// account's verified OHS emails), the directory must show the de-duplicated UNION
+// of those kid interests and the student account's accurate expertise signals
+// (enrichment expertiseTags + skillsets + parentInterests).
+describe("aggregatedChildInterests (child↔student tag union)", () => {
+  // A student account in the same family, verified to the child's student email,
+  // whose enrichment expertise + skillsets are the accurate tag set.
+  function studentAccount(overrides: Partial<SignupRow> = {}): SignupRow {
+    return signup({
+      id: "student-1",
+      firstName: "Byron",
+      lastName: "Lovelace",
+      skillsets: ["Python", "JavaScript"],
+      parentInterests: null,
+      extra: {
+        accountType: "student",
+        verifiedStudentEmails: ["byron@ohs.stanford.edu"],
+        enrichment: {
+          info: {
+            bio: "Builds things.",
+            expertiseTags: ["AI", "Finance", "Cybersecurity"],
+            canHelpWith: ["mentoring"],
+          },
+        },
+      },
+      ...overrides,
+    });
+  }
+
+  it("returns the child's interests unchanged when no student account matches", () => {
+    const kid = child({ interests: ["Robotics"], studentEmail: "byron@ohs.stanford.edu" });
+    // No student accounts passed → nothing to link to.
+    expect(aggregatedChildInterests(kid, [])).toEqual(["Robotics"]);
+  });
+
+  it("returns the child's interests unchanged when the child has no studentEmail", () => {
+    const kid = child({ interests: ["Robotics"], studentEmail: null });
+    expect(aggregatedChildInterests(kid, [studentAccount()])).toEqual(["Robotics"]);
+  });
+
+  it("unions kid interests with the linked student account's expertise signals", () => {
+    const kid = child({
+      interests: ["Finance", "Mountain biking", "Cars"],
+      studentEmail: "byron@ohs.stanford.edu",
+    });
+    const result = aggregatedChildInterests(kid, [studentAccount()]);
+    // Child interests come first, in order; then NEW student signals appended.
+    // "Finance" is shared and not duplicated.
+    expect(result).toEqual([
+      "Finance",
+      "Mountain biking",
+      "Cars",
+      "AI",
+      "Cybersecurity",
+      "Python",
+      "JavaScript",
+    ]);
+  });
+
+  it("matches the verified email case-insensitively and dedupes case-insensitively", () => {
+    const kid = child({
+      interests: ["finance"],
+      studentEmail: "BYRON@OHS.STANFORD.EDU",
+    });
+    const result = aggregatedChildInterests(kid, [studentAccount()]);
+    // "finance" (child label kept) is not duplicated by the student's "Finance".
+    expect(result).toContain("finance");
+    expect(result.filter((t) => t.toLowerCase() === "finance")).toHaveLength(1);
+    expect(result).toContain("AI");
+  });
+
+  it("tolerates the legacy singular verifiedStudentEmail field", () => {
+    const acct = studentAccount({
+      skillsets: null,
+      extra: {
+        accountType: "student",
+        verifiedStudentEmail: "byron@ohs.stanford.edu",
+        enrichment: { info: { bio: "", expertiseTags: ["AI"], canHelpWith: [] } },
+      },
+    });
+    const kid = child({ interests: ["Robotics"], studentEmail: "byron@ohs.stanford.edu" });
+    expect(aggregatedChildInterests(kid, [acct])).toEqual(["Robotics", "AI"]);
+  });
+
+  it("linkedStudentAccountForChild resolves the right account (or null)", () => {
+    const acct = studentAccount();
+    expect(
+      linkedStudentAccountForChild(
+        { studentEmail: "byron@ohs.stanford.edu" },
+        [acct],
+      ),
+    ).toBe(acct);
+    expect(
+      linkedStudentAccountForChild({ studentEmail: "nobody@ohs.stanford.edu" }, [acct]),
+    ).toBeNull();
+    expect(linkedStudentAccountForChild({ studentEmail: null }, [acct])).toBeNull();
+  });
+});
+
+describe("buildDirectoryCard — aggregates a linked child's student-account tags", () => {
+  function studentAccount(): SignupRow {
+    return signup({
+      id: "student-1",
+      firstName: "Byron",
+      lastName: "Lovelace",
+      skillsets: ["Python"],
+      parentInterests: null,
+      extra: {
+        accountType: "student",
+        verifiedStudentEmails: ["byron@ohs.stanford.edu"],
+        enrichment: {
+          info: { bio: "", expertiseTags: ["AI", "Finance"], canHelpWith: [] },
+        },
+      },
+    });
+  }
+
+  const noUrlsLocal = new Map<string, string>();
+
+  it("shows the union on the child row AND in the card's combined interest chips", () => {
+    const parent = signup({ parentInterests: ["Chess"] });
+    const kid = child({
+      interests: ["Finance", "Cars"],
+      studentEmail: "byron@ohs.stanford.edu",
+    });
+    const card = buildDirectoryCard(parent, [kid], noUrlsLocal, 4, YEAR, [studentAccount()]);
+    // Per-child interests are the aggregated union.
+    expect(card.children[0]?.interests).toEqual(["Finance", "Cars", "AI", "Python"]);
+    // Combined card chips = parent interests + the aggregated child interests.
+    expect(card.interests).toEqual(["Chess", "Finance", "Cars", "AI", "Python"]);
+  });
+
+  it("leaves an unlinked child's interests untouched (default empty student list)", () => {
+    const parent = signup({ parentInterests: ["Chess"] });
+    const kid = child({ interests: ["Robotics"], studentEmail: null });
+    const card = buildDirectoryCard(parent, [kid], noUrlsLocal, 4, YEAR);
+    expect(card.children[0]?.interests).toEqual(["Robotics"]);
+    expect(card.interests).toEqual(["Chess", "Robotics"]);
   });
 });
