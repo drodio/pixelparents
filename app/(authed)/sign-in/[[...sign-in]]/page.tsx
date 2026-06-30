@@ -1,4 +1,5 @@
 import { SignIn } from "@clerk/nextjs";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 
 // Catch-all route ([[...sign-in]]) so Clerk can own its sub-paths (factor-two,
 // sso-callback, etc.). Centered so it works as a standalone login screen.
@@ -16,7 +17,7 @@ export default async function SignInPage({
   const dest = redirect_url?.startsWith("/") ? redirect_url : "/dashboard";
   return (
     <main className="flex min-h-full items-center justify-center p-6">
-      <SignIn forceRedirectUrl={dest} signUpForceRedirectUrl={dest} />
+      <SignIn forceRedirectUrl={dest} signUpForceRedirectUrl={dest} appearance={clerkAppearance} />
     </main>
   );
 }

@@ -34,11 +34,39 @@ function FieldError({ msg }: { msg?: string }) {
   return <p className="mt-1 text-sm text-red-400">{msg}</p>;
 }
 
+// Grouped section card: a titled, bordered container that gives related fields a
+// clear visual home and consistent rhythm. Each section opens with a heading (+
+// optional description) so the long form reads as a handful of steps instead of
+// one wall of inputs. Purely presentational — no field/state lives here.
+function Section({
+  title,
+  description,
+  children,
+}: {
+  title: string;
+  description?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5 sm:p-6">
+      <div className="mb-5 border-b border-white/10 pb-4">
+        <h2 className="text-lg font-semibold tracking-tight text-white">{title}</h2>
+        {description && <p className="mt-1 text-sm text-white/55">{description}</p>}
+      </div>
+      <div className="flex flex-col gap-5">{children}</div>
+    </section>
+  );
+}
+
 const labelCls = "block text-sm font-medium text-white/80";
-// Section headers (fieldset legends) are bold to stand out from field labels.
+// Sub-group headers (fieldset legends) are bold to stand out from field labels.
 const legendCls = "block text-sm font-bold text-white/80";
 const inputCls =
-  "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40";
+  "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none transition-colors focus:border-amber-400/60 focus:ring-1 focus:ring-amber-400/60";
+// Prefixed inputs (linkedin.com/in/, github.com/) share one focus treatment so
+// every text field in the form lights up the same amber on focus.
+const prefixWrapCls =
+  "mt-1 flex items-center rounded-lg border border-white/15 bg-white/5 transition-colors focus-within:border-amber-400/60 focus-within:ring-1 focus-within:ring-amber-400/60";
 
 const empty = {
   firstName: "",
@@ -316,15 +344,17 @@ export default function SignupForm({
   return (
     <>
       <BotIdClient protect={[{ path: "/signup", method: "POST" }]} />
-      <div className="flex flex-col gap-6">
+      <div className="flex flex-col gap-8">
         {message && (
           <p className="rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2 text-sm text-red-300">
             {message}
           </p>
         )}
 
-        <h2 className="text-xl font-semibold text-white">First Parent&apos;s Info:</h2>
-
+        <Section
+          title="First parent's info"
+          description="The basics so other OHS families can recognize and reach you."
+        >
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={labelCls} htmlFor="firstName">
@@ -384,7 +414,7 @@ export default function SignupForm({
             <label className={labelCls} htmlFor="linkedinHandle">
               LinkedIn (this really helps other parents get to know you)
             </label>
-            <div className="mt-1 flex items-center rounded-lg border border-white/15 bg-white/5 focus-within:border-white/40 focus-within:ring-1 focus-within:ring-white/40">
+            <div className={prefixWrapCls}>
               <span className="select-none px-3 py-2 text-sm text-white/40">linkedin.com/in/</span>
               <input
                 id="linkedinHandle"
@@ -447,7 +477,12 @@ export default function SignupForm({
             </div>
           )}
         </div>
+        </Section>
 
+        <Section
+          title="Where you're based"
+          description="Helps us place your family on the OHS community map."
+        >
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={labelCls} htmlFor="country">Country</label>
@@ -493,7 +528,12 @@ export default function SignupForm({
             </div>
           )}
         </div>
+        </Section>
 
+        <Section
+          title="Interests & photos"
+          description="What you're into, and a friendly face or two — both are optional."
+        >
         <div>
           <h3 className="text-base font-semibold text-white">
             Your interests (select existing or add new ones)
@@ -522,7 +562,12 @@ export default function SignupForm({
             showMainPill
           />
         </div>
+        </Section>
 
+        <Section
+          title="Stanford OHS & building together"
+          description="Tell us how you're connected to OHS and whether you'd like to help build."
+        >
         <fieldset>
           <legend className={legendCls}>
             Stanford OHS affiliation <span className="text-red-400">*</span>
@@ -625,7 +670,7 @@ export default function SignupForm({
               <label className={labelCls} htmlFor="githubUsername">
                 GitHub username
               </label>
-              <div className="mt-1 flex items-center rounded-lg border border-white/15 bg-white/5 focus-within:border-white/40 focus-within:ring-1 focus-within:ring-white/40">
+              <div className={prefixWrapCls}>
                 <span className="select-none px-3 py-2 text-sm text-white/40">github.com/</span>
                 <input
                   id="githubUsername"
@@ -697,10 +742,15 @@ export default function SignupForm({
             </div>
           </fieldset>
         )}
+        </Section>
 
         {/* Invite a spouse / other parent(s) to fill out their own info. They
             join the same family and share these children. */}
-        <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+        <Section
+          title="Invite a co-parent"
+          description="Optional — they'll fill out their own info and join the same family."
+        >
+        <div>
           <label className={labelCls} htmlFor="coParentInvites">
             Invite your spouse / other parent(s) to fill their information out, too:
           </label>
@@ -734,6 +784,7 @@ export default function SignupForm({
             </p>
           )}
         </div>
+        </Section>
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <button
@@ -741,7 +792,7 @@ export default function SignupForm({
             onClick={onContinue}
             disabled={submitting || status === "error"}
             title={status === "error" ? "Your info hasn't been saved yet — retry the save first." : undefined}
-            className="rounded-lg bg-white px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {submitting ? "…" : "Add Your Child(ren) →"}
           </button>

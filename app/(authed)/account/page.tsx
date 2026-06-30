@@ -1,6 +1,7 @@
 import { UserButton } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { readApprovalStatus } from "@/lib/approval";
@@ -62,7 +63,7 @@ function AccountHeader() {
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Account</h1>
         <p className="mt-1 text-sm text-white/55">Your API access and family profile.</p>
       </div>
-      <UserButton />
+      <UserButton appearance={clerkAppearance} />
     </header>
   );
 }

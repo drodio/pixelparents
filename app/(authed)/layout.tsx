@@ -2,6 +2,7 @@ import { ClerkProvider } from "@clerk/nextjs";
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { getFamilyForEmail } from "@/lib/db/signups";
@@ -67,5 +68,9 @@ export default async function AuthedLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   await enforceVerificationGate();
-  return <ClerkProvider>{children}</ClerkProvider>;
+  // Theme every Clerk surface under this provider (sign-in, UserButton popover,
+  // "Manage account" modal) with the shared dark/amber appearance so Clerk's
+  // default light UI never leaks through. The verification gate above is
+  // unaffected — appearance is purely presentational.
+  return <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>;
 }

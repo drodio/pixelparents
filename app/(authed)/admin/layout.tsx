@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
+import { clerkAppearance } from "@/lib/clerk-appearance";
 import { isAdminEmail } from "@/lib/admin";
 import AdminNav from "./admin-nav";
 
@@ -35,7 +36,7 @@ export default async function AdminLayout({
             Pixel Parents Admin
           </span>
         </Link>
-        <UserButton />
+        <UserButton appearance={clerkAppearance} />
       </header>
 
       {admin ? (
