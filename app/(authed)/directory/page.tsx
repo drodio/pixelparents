@@ -15,7 +15,9 @@ import {
   type DirectoryCard,
 } from "@/lib/directory";
 import { signedPhotoUrls } from "@/lib/blob";
+import { readApprovalStatus } from "@/lib/approval";
 import { PixelMascot } from "@/components/pixel-mascot";
+import { UnverifiedNotice } from "@/components/unverified-notice";
 import { DirectoryClient } from "./directory-client";
 
 export const dynamic = "force-dynamic";
@@ -77,7 +79,8 @@ export default async function DirectoryPage() {
   // 2) OHS-family gate — IDENTICAL to /p/[token]: a signed-in viewer counts as an
   //    OHS family only if they themselves have a signup. A logged-in non-signup
   //    user sees NO directory data.
-  const isOhsFamily = Boolean(viewerEmail && (await getSignupByEmail(viewerEmail)));
+  const viewerSignup = viewerEmail ? await getSignupByEmail(viewerEmail) : null;
+  const isOhsFamily = Boolean(viewerSignup);
   if (!isOhsFamily) {
     return (
       <Shell isAdmin={isAdmin}>
@@ -145,6 +148,10 @@ export default async function DirectoryPage() {
     if (signed[i]) urlByPath.set(p, signed[i]);
   });
 
+  // Non-breaking nudge: unverified families still see the full directory, but get
+  // a banner inviting them to verify their OHS student.
+  const viewerStatus = readApprovalStatus((viewerSignup?.extra ?? {}) as Record<string, unknown>);
+
   const currentYear = new Date().getFullYear();
   const cards: DirectoryCard[] = included.map((row) =>
     buildDirectoryCard(
@@ -158,6 +165,7 @@ export default async function DirectoryPage() {
 
   return (
     <Shell>
+      <UnverifiedNotice status={viewerStatus} />
       {cards.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-white/55">
           No families are sharing with the OHS directory yet.

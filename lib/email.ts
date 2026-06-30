@@ -100,6 +100,34 @@ export async function notifyAdminsVerifyProfile(n: {
   }
 }
 
+// --- Student-email verification: mail a short code to an OHS student email ---
+// Sent from the hello@ address (VERIFY_FROM) so a stanford.edu inbox accepts it.
+// Best-effort like every other send; returns whether it went out so the action
+// can tell the parent if email is misconfigured.
+export async function sendStudentVerificationCode(n: {
+  to: string;
+  code: string;
+}): Promise<boolean> {
+  const text = [
+    `Hi,`,
+    ``,
+    `Here is your Pixel Parents verification code:`,
+    ``,
+    `    ${n.code}`,
+    ``,
+    `Enter it on the Pixel Parents page to confirm your Stanford OHS student and`,
+    `unlock the OHS family directory. This code expires in 10 minutes.`,
+    ``,
+    `If you didn't request this, you can safely ignore this email.`,
+  ].join("\n");
+  return sendEmail({
+    to: n.to,
+    from: VERIFY_FROM,
+    subject: "Your Pixel Parents verification code",
+    text,
+  });
+}
+
 const ACCOUNT_URL = "https://pixelparents.org/account";
 
 export type SignupNotification = {

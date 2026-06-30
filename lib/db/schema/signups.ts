@@ -87,6 +87,11 @@ export const children = pgTable("children", {
   notes: text("notes"),
   // Photos of this specific child (separate from family-level signups.photos).
   photos: jsonb("photos").$type<Photo[]>().default([]),
+  // The child's OHS (stanford.edu) student email, captured + confirmed via the
+  // student-email verification flow. Its presence means a real OHS student email
+  // was verified for this family; the family's approvalStatus is set to
+  // "approved" at the same time. See lib/verify.ts + the thanks verify-actions.
+  studentEmail: text("student_email"),
 });
 
 export type FamilyRow = typeof families.$inferSelect;

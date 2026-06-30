@@ -5,9 +5,11 @@ import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { getStats, getBreakdowns, getTrends } from "@/lib/db/aggregates";
+import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
 import { buildMarkers } from "@/lib/community-map";
 import { WorldMap } from "@/components/world-map";
 import { PixelMascot } from "@/components/pixel-mascot";
+import { UnverifiedNotice } from "@/components/unverified-notice";
 
 export const dynamic = "force-dynamic";
 
@@ -129,7 +131,8 @@ export default async function CommunityPage() {
   const viewer = await currentUser();
   if (!viewer) redirect("/sign-in");
   const email = primaryEmail(viewer);
-  const isOhsFamily = Boolean(email && (await getSignupByEmail(email)));
+  const viewerSignup = email ? await getSignupByEmail(email) : null;
+  const isOhsFamily = Boolean(viewerSignup);
   if (!isOhsFamily) {
     return (
       <Shell>
@@ -149,6 +152,11 @@ export default async function CommunityPage() {
       </Shell>
     );
   }
+
+  // Non-breaking nudge for families who haven't verified their OHS student yet.
+  const viewerStatus: ApprovalStatus = readApprovalStatus(
+    (viewerSignup?.extra ?? {}) as Record<string, unknown>,
+  );
 
   const [stats, breakdowns, trends] = await Promise.all([
     getStats(),
@@ -178,6 +186,7 @@ export default async function CommunityPage() {
 
   return (
     <Shell>
+      <UnverifiedNotice status={viewerStatus} />
       <div className="flex flex-col gap-9">
         <section>
           <SectionLabel>Where we&apos;re building</SectionLabel>

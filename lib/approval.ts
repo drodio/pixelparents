@@ -6,6 +6,16 @@ import { getSql } from "./db";
 //   approvalAt:     ISO timestamp of the decision
 export type ApprovalStatus = "pending" | "approved" | "denied";
 
+// Read the directory-access approval status off a signup's `extra` jsonb. A
+// missing/unknown value is treated as "pending" (the default for older rows that
+// predate the approval model). Pure + safe to call from server components.
+export function readApprovalStatus(
+  extra: Record<string, unknown> | null | undefined,
+): ApprovalStatus {
+  const v = extra?.approvalStatus;
+  return v === "approved" || v === "denied" ? v : "pending";
+}
+
 export type ApprovalDecision = {
   // "done" = this call recorded the decision; "already" = another admin (or this
   // one) had already acted, so we left the existing decision untouched.

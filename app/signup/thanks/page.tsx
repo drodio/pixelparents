@@ -8,6 +8,8 @@ import { shareUrlFor } from "@/lib/url";
 import { signedPhotoUrls } from "@/lib/blob";
 import FamilyForm from "./family-form";
 import { ShareSettings } from "./share-settings";
+import { getVerifyState } from "./verify-actions";
+import { StudentVerify } from "@/components/student-verify";
 
 export const metadata: Metadata = {
   title: "Welcome — Pixel Parents",
@@ -23,9 +25,10 @@ export default async function ThanksPage({
 }) {
   const { id, admin } = await searchParams;
   const validId = id && UUID_RE.test(id) ? id : null;
-  const [editData, interestPool] = await Promise.all([
+  const [editData, interestPool, verifyState] = await Promise.all([
     validId ? getSignupForEdit(validId) : Promise.resolve(null),
     getInterestPool(),
+    validId ? getVerifyState(validId) : Promise.resolve(null),
   ]);
 
   const signup = editData?.signup ?? null;
@@ -134,6 +137,12 @@ export default async function ThanksPage({
             }))}
           />
         </div>
+
+        {validId && signup && verifyState && (
+          <div className="mt-10">
+            <StudentVerify signupId={validId} initial={verifyState} />
+          </div>
+        )}
 
         {!hasExistingData && sharePanel && <div className="mt-12">{sharePanel}</div>}
       </div>
