@@ -235,14 +235,14 @@ function BoardCardItem({
       initial={reduce ? false : { opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.2, delay: reduce ? 0 : Math.min(index * 0.03, 0.2) }}
-      className="group relative flex flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-amber-400/30"
+      className="group relative flex cursor-pointer flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-amber-400/30"
     >
       <Link href={`/resources/${board.id}`} className="absolute inset-0 z-0" aria-label={board.title}>
         <span className="sr-only">{board.title}</span>
       </Link>
 
       <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="min-w-0">
+        <div className="pointer-events-none min-w-0">
           <div className="flex items-center gap-2">
             {board.pinned && (
               <span
@@ -259,7 +259,7 @@ function BoardCardItem({
           </h3>
         </div>
         {/* Upvote sits above the overlay link so clicking it doesn't navigate. */}
-        <div className="relative z-10 shrink-0">
+        <div className="pointer-events-auto relative z-10 shrink-0">
           <UpvoteButton
             initialCount={board.upvotes}
             initialUpvoted={board.viewerUpvoted}
@@ -271,16 +271,16 @@ function BoardCardItem({
       </div>
 
       {board.description && (
-        <p className="relative z-10 mt-1.5 line-clamp-2 text-sm text-white/60">{board.description}</p>
+        <p className="pointer-events-none relative z-10 mt-1.5 line-clamp-2 text-sm text-white/60">{board.description}</p>
       )}
 
       {board.tags.length > 0 && (
-        <div className="relative z-10 mt-3">
+        <div className="pointer-events-none relative z-10 mt-3">
           <TagList tags={board.tags} max={4} />
         </div>
       )}
 
-      <div className="relative z-10 mt-3 flex items-center gap-3 text-xs text-white/40">
+      <div className="pointer-events-none relative z-10 mt-3 flex items-center gap-3 text-xs text-white/40">
         <span className="inline-flex items-center gap-1">
           <IconBook className="h-3.5 w-3.5" />
           {board.contributionCount} {board.contributionCount === 1 ? "item" : "items"}
