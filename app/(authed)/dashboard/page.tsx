@@ -4,10 +4,12 @@ import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { getSignupByEmail } from "@/lib/db/signups";
-import { getStats } from "@/lib/db/aggregates";
+import { getStats, getBreakdowns } from "@/lib/db/aggregates";
 import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
+import { CountUp } from "./count-up";
+import { CommunityPulse } from "./community-pulse";
 import {
   IconHeart,
   IconUsers,
@@ -26,13 +28,25 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function StatTile({ label, value }: { label: string; value: number | null }) {
+function StatTile({
+  label,
+  value,
+  Icon,
+}: {
+  label: string;
+  value: number | null;
+  Icon: (p: { className?: string }) => React.ReactElement;
+}) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="text-2xl font-semibold tracking-tight text-amber-400">
-        {(value ?? 0).toLocaleString()}
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4 transition-colors hover:border-amber-400/30">
+      <span className="mb-3 grid h-8 w-8 place-items-center rounded-lg bg-amber-400/15 text-amber-300">
+        <Icon className="h-4 w-4" />
+      </span>
+      <div className="text-2xl font-semibold tracking-tight text-white">
+        <CountUp value={value ?? 0} />
       </div>
-      <div className="mt-0.5 text-sm text-white/55">{label}</div>
+      <div className="mt-1 h-0.5 w-6 rounded-full bg-amber-400/70" aria-hidden />
+      <div className="mt-1.5 text-sm text-white/60">{label}</div>
     </div>
   );
 }
@@ -54,7 +68,7 @@ function LinkCard({
     <Link
       href={href}
       {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
-      className="group flex items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-colors hover:border-amber-400/40 hover:bg-white/[0.05]"
+      className="group flex items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-400/40 hover:bg-white/[0.05] hover:shadow-lg hover:shadow-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-0)] active:translate-y-0 active:scale-[0.99] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-400/15 text-amber-300">
         <Icon className="h-5 w-5" />
@@ -132,11 +146,14 @@ export default async function DashboardPage() {
   }
 
   const email = primaryEmail(user);
-  const [signup, isAdmin, stats] = await Promise.all([
+  const [signup, isAdmin, stats, breakdowns] = await Promise.all([
     email ? getSignupByEmail(email) : Promise.resolve(null),
     isAdminEmail(email),
     getStats(),
+    getBreakdowns(),
   ]);
+
+  const builderInterest = breakdowns.signups_by_builder_interest ?? {};
 
   const firstName = signup?.firstName ?? user.firstName ?? null;
   const status: ApprovalStatus | null = signup
@@ -212,11 +229,21 @@ export default async function DashboardPage() {
               Community at a glance
             </h2>
             <div className="grid grid-cols-3 gap-3">
-              <StatTile label="Families" value={stats.total_families} />
-              <StatTile label="Parents" value={stats.total_signups} />
-              <StatTile label="Kids at OHS" value={stats.total_children} />
+              <StatTile label="Families" value={stats.total_families} Icon={IconHome} />
+              <StatTile label="Parents" value={stats.total_signups} Icon={IconUsers} />
+              <StatTile label="Kids at OHS" value={stats.total_children} Icon={IconGradCap} />
             </div>
           </section>
+        )}
+
+        {breakdowns.database === "ready" && (
+          <CommunityPulse
+            topInterests={breakdowns.top_interests}
+            builders={{
+              builder: builderInterest["builder"] ?? 0,
+              aspiring: builderInterest["aspiring"] ?? 0,
+            }}
+          />
         )}
       </div>
     </DashboardShell>
