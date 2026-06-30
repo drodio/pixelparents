@@ -1,10 +1,10 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
-// The admin area and the developer /account page are gated. The public
-// coming-soon splash and the public /developers docs stay open and never boot
-// Clerk JS (ClerkProvider is scoped to the (authed) route group, not the root
-// layout — see app/(authed)/layout.tsx).
-const isProtectedRoute = createRouteMatcher(["/admin(.*)", "/account(.*)"]);
+// The admin area, the developer /account page, and the /family hub are gated. The
+// public coming-soon splash and the public /developers docs stay open and never
+// boot Clerk JS (ClerkProvider is scoped to the (authed) route group, not the
+// root layout — see app/(authed)/layout.tsx).
+const isProtectedRoute = createRouteMatcher(["/admin(.*)", "/account(.*)", "/family(.*)"]);
 
 export default clerkMiddleware(async (auth, req) => {
   if (isProtectedRoute(req)) {

@@ -121,10 +121,18 @@ export type SignupPatch = Partial<{
   studentResourceOptIn: boolean;
 }>;
 
-// Patch only the provided columns on an existing (draft or saved) signup row.
-// Sanitizes each field; enum fields are membership-checked. No bot re-check.
-export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok: boolean }> {
-  if (!UUID_RE.test(id)) return { ok: false };
+// Translate a (trusted-but-untyped) SignupPatch into a sanitized Drizzle `set`
+// object: each field is trimmed/length-capped and enum fields are membership-
+// checked, so a client can never write an out-of-range value or an unexpected
+// column. Shared by patchSignup AND patchFamilyMember so the two can't drift —
+// they differ ONLY in the WHERE clause (own-UUID vs. family-scoped) that
+// authorizes the write. `rowId` is the row whose `extra` jsonb is read for the
+// builderInterest / studentResourceOptIn read-modify-write merge (so we don't
+// clobber sibling keys like `notified`); it must be the row about to be UPDATEd.
+export async function sanitizeSignupPatch(
+  rowId: string,
+  patch: SignupPatch,
+): Promise<Record<string, unknown>> {
   const set: Record<string, unknown> = {};
   if ("firstName" in patch) set.firstName = text(patch.firstName, 100);
   if ("lastName" in patch) set.lastName = text(patch.lastName, 100);
@@ -172,11 +180,25 @@ export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok:
     const [cur] = await getDb()
       .select({ extra: signups.extra })
       .from(signups)
-      .where(eq(signups.id, id))
+      .where(eq(signups.id, rowId))
       .limit(1);
     const extra = (cur?.extra ?? {}) as Record<string, unknown>;
     set.extra = { ...extra, ...extraPatch };
   }
+  return set;
+}
+
+// Patch only the provided columns on an existing (draft or saved) signup row.
+// Sanitizes each field; enum fields are membership-checked. No bot re-check.
+//
+// NOTE: this authorizes by UUID alone (anyone holding the row's id may write it)
+// — fine for the signup/thanks self-edit + admin flows that already gate access
+// upstream, but NOT for cross-account family editing. The /family hub uses
+// patchFamilyMember instead, which derives the caller from the session and scopes
+// the write to the caller's family. Keep the sanitizer shared (sanitizeSignupPatch).
+export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok: boolean }> {
+  if (!UUID_RE.test(id)) return { ok: false };
+  const set = await sanitizeSignupPatch(id, patch);
   if (Object.keys(set).length === 0) return { ok: true };
   try {
     await getDb().update(signups).set(set).where(eq(signups.id, id));

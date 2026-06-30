@@ -7,6 +7,7 @@ import type { ApprovalStatus } from "@/lib/approval";
 import { VerifiedBadge } from "@/components/verified-badge";
 import {
   IconGrid,
+  IconHome,
   IconUsers,
   IconGlobe,
   IconCode,
@@ -24,6 +25,7 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", Icon: IconGrid },
+  { href: "/family", label: "Family", Icon: IconHome },
   { href: "/directory", label: "Directory", Icon: IconUsers },
   { href: "/community", label: "Community", Icon: IconGlobe },
   { href: "/developers", label: "Developers", Icon: IconCode, external: true },

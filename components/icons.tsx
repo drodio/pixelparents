@@ -150,6 +150,18 @@ export function IconGrid(props: IconProps) {
   );
 }
 
+// House — the family hub (your own family: you, co-parents, kids). Distinct from
+// IconUsers (the directory of OTHER families).
+export function IconHome(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 11.5 12 4l8 7.5" />
+      <path d="M5.5 10v9.5h13V10" />
+      <path d="M9.5 19.5v-5.5h5v5.5" />
+    </Icon>
+  );
+}
+
 // Two people — the family directory.
 export function IconUsers(props: IconProps) {
   return (

@@ -28,6 +28,57 @@ export async function getSignupByEmail(email: string): Promise<SignupRow | null>
   return row ?? null;
 }
 
+// The caller's family, resolved from their signed-in email. Returns the caller's
+// own signup, EVERY signup in the same family (the caller + co-parents), and the
+// family's shared children. Used by the /family hub. The family_id is the sharing
+// key: any parent in the family may view + edit any member (authorized server-side
+// by patchFamilyMember, which re-derives the caller from the session).
+export type FamilyForEmail = {
+  self: SignupRow;
+  members: SignupRow[]; // all parents in the family (includes self), oldest first
+  kids: ChildRow[];
+};
+
+export async function getFamilyForEmail(email: string): Promise<FamilyForEmail | null> {
+  // Self-heal before any SELECT * — the recent P0 was a missing column on exactly
+  // this kind of read; ensureFamiliesSchema() backfills family_id/country/etc.
+  await ensureFamiliesSchema();
+  // Resolve the caller's own signup (case-insensitive, most-recent-wins — same
+  // rule as getSignupByEmail, so a user with multiple rows lands on the same one).
+  const self = await getSignupByEmail(email);
+  if (!self) return null;
+
+  // All parents sharing this family_id (the caller + any co-parents), oldest first.
+  const members = await getDb()
+    .select()
+    .from(signups)
+    .where(eq(signups.familyId, self.familyId))
+    .orderBy(signups.createdAt);
+
+  // The family's shared children (every parent sees + edits the same kids).
+  const kids = await getDb()
+    .select()
+    .from(children)
+    .where(eq(children.familyId, self.familyId))
+    .orderBy(children.createdAt);
+
+  return { self, members, kids };
+}
+
+// The family_id for a signed-in email (most-recent signup wins). Used by the
+// secure cross-account editor (patchFamilyMember) to scope an UPDATE to the
+// caller's family. Returns null when the email has no signup. Self-heals first.
+export async function familyIdForEmail(email: string): Promise<string | null> {
+  await ensureFamiliesSchema();
+  const [row] = await getDb()
+    .select({ familyId: signups.familyId })
+    .from(signups)
+    .where(sql`lower(${signups.email}) = ${email.toLowerCase()}`)
+    .orderBy(desc(signups.createdAt))
+    .limit(1);
+  return row?.familyId ?? null;
+}
+
 // Total number of parents who have signed up. Used on /signup to show
 // "Join N other Pixel Parents" as social proof.
 export async function getSignupCount(): Promise<number> {
