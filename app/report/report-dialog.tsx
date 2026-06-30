@@ -14,6 +14,11 @@ export default function ReportDialog() {
   const [open, setOpen] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
+  // Tracks the previous `open` value so we only restore focus on a genuine
+  // open→close transition — never on the initial mount (when `open` starts
+  // false), which would otherwise focus the trigger on page load and leave a
+  // visible ring until the user clicks elsewhere.
+  const wasOpenRef = useRef(false);
   const titleId = useId();
 
   // Close on Escape; restore focus to the trigger when closing.
@@ -28,9 +33,16 @@ export default function ReportDialog() {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
-  // Return focus to the trigger after the dialog closes.
+  // Return focus to the trigger ONLY after the dialog actually closes (i.e. it
+  // was open on the previous render and is now closed). Guarding on the prior
+  // state avoids focusing the trigger on first mount. Restored focus is a
+  // programmatic .focus(), so it won't match :focus-visible — no ring shows for
+  // a mouse/Escape close, while keyboard users still get the ring when they Tab.
   useEffect(() => {
-    if (!open) triggerRef.current?.focus({ preventScroll: true });
+    if (!open && wasOpenRef.current) {
+      triggerRef.current?.focus({ preventScroll: true });
+    }
+    wasOpenRef.current = open;
   }, [open]);
 
   return (
@@ -39,7 +51,10 @@ export default function ReportDialog() {
         ref={triggerRef}
         type="button"
         onClick={() => setOpen(true)}
-        className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
+        // Ring is driven by :focus-visible only (focus:outline-none clears the
+        // UA :focus outline), so a programmatic focus restore on dialog close —
+        // or focus on page load — never shows a box; keyboard Tab still does.
+        className="rounded-sm text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300 focus:outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
       >
         Report a bug or abuse
       </button>
