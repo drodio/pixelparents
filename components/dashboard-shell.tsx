@@ -28,10 +28,11 @@ const NAV: NavItem[] = [
   // (member grid + map + stats) with in-tab profile views. /directory now
   // redirects here, so a single nav item covers both.
   { href: "/community", label: "Community", Icon: IconUsers },
-  // Asks board — verified OHS families post asks + get matched to helpers. The
-  // surface itself gates to verified families; the tab is shown to all authed
+  // Exchange — the bidirectional help board: verified OHS families (parent OR
+  // student) post Asks ("I need help") or Offers ("I can help") + get matched.
+  // The surface itself gates to verified families; the tab is shown to all authed
   // users (an unverified family lands on a verify prompt, matching Community).
-  { href: "/asks", label: "Asks", Icon: IconHeart },
+  { href: "/exchange", label: "Exchange", Icon: IconHeart },
   // Developers now lives INSIDE the shell (no more new-tab jump): signed-in users
   // get the in-dashboard developer hub at /dashboard/developers. The public
   // marketing/docs page at /developers stays for signed-out / unauth visitors.

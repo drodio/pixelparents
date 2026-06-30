@@ -47,15 +47,15 @@ describe("rankCandidates", () => {
     expect(out[1].overlapTags).toEqual(["three"]);
   });
 
-  it("excludes student accounts even on a perfect match", () => {
+  it("includes student accounts on a match (Exchange: anyone can help)", () => {
     const out = rankCandidates({
       askTags: ["ai"],
       candidates: [cand({ signupId: "stu", isStudent: true, expertiseSignals: ["AI"] })],
     });
-    expect(out).toEqual([]);
+    expect(out.map((m) => m.signupId)).toEqual(["stu"]);
   });
 
-  it("treats a non-student member as a helper", () => {
+  it("treats a non-student member as a helper too", () => {
     const out = rankCandidates({
       askTags: ["ai"],
       candidates: [cand({ signupId: "p", isStudent: false, expertiseSignals: ["AI"] })],

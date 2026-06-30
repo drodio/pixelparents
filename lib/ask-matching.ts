@@ -17,7 +17,9 @@ export type HelperCandidate = {
   signupId: string;
   token: string | null; // /community/<token> link, when the member shares
   name: string | null;
-  isStudent: boolean; // students seek help, they don't offer it — excluded
+  // Carried for display only. In the Exchange model anyone (parent OR student)
+  // can help, so this no longer excludes the candidate — kept for the card badge.
+  isStudent: boolean;
   expertiseSignals: string[];
   signalCount: number;
 };
@@ -60,7 +62,8 @@ function normalizeTagSet(tags: readonly unknown[]): Set<string> {
 //
 // Rules (overlap is the ONLY v1 signal):
 //   - No ask tags → no signal → [] (nothing to match on).
-//   - Exclude the asker (excludeSignupId) and any student account.
+//   - Exclude the author (excludeSignupId). Students are NOT excluded — in the
+//     Exchange model anyone can help (the #109 student restriction is removed).
 //   - overlapTags = ask tags (in ask order) present in the candidate's signals.
 //   - Drop zero-overlap candidates.
 //   - score = overlapTags.length.
@@ -87,7 +90,7 @@ export function rankCandidates(opts: RankOptions): AskMatch[] {
 
   for (const c of candidates) {
     if (excludeSignupId && c.signupId === excludeSignupId) continue;
-    if (c.isStudent) continue; // students don't help
+    // Students are NO LONGER excluded — anyone can help in the Exchange model.
 
     const candSet = normalizeTagSet(c.expertiseSignals);
     // Iterate the ASK's tags so overlap stays in ask order. Map back to a display

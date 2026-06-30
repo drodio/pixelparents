@@ -134,10 +134,14 @@ export function ensureAsksSchema(): Promise<void> {
           updated_at timestamptz NOT NULL DEFAULT now(),
           author_signup_id uuid NOT NULL REFERENCES signups(id) ON DELETE CASCADE,
           author_clerk_id text,
+          kind text NOT NULL DEFAULT 'ask',
           title text NOT NULL,
           body text NOT NULL,
           expertise_tags text[],
-          status text NOT NULL DEFAULT 'open'
+          urgency text NOT NULL DEFAULT 'normal',
+          valid_until timestamptz,
+          status text NOT NULL DEFAULT 'open',
+          resolved_at timestamptz
         )
       `,
         sql`
@@ -158,12 +162,21 @@ export function ensureAsksSchema(): Promise<void> {
         sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS author_clerk_id text`,
         sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS expertise_tags text[]`,
         sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'open'`,
+        // Exchange (bidirectional) columns — added idempotently so an older
+        // one-directional `asks` table upgrades in place (the country-column P0
+        // lesson: new columns must self-heal AND read paths must call ensure).
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS kind text NOT NULL DEFAULT 'ask'`,
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS urgency text NOT NULL DEFAULT 'normal'`,
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS valid_until timestamptz`,
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS resolved_at timestamptz`,
         sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS responder_clerk_id text`,
         sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS proposes text NOT NULL DEFAULT 'async'`,
         sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'offered'`,
         sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS decided_at timestamptz`,
-        // Helpful indexes for the board (newest open asks) + per-ask responses.
+        // Helpful indexes for the board (open posts oldest-first) + kind split +
+        // per-post responses.
         sql`CREATE INDEX IF NOT EXISTS asks_status_created_idx ON asks (status, created_at DESC)`,
+        sql`CREATE INDEX IF NOT EXISTS asks_kind_status_idx ON asks (kind, status)`,
         sql`CREATE INDEX IF NOT EXISTS ask_responses_ask_idx ON ask_responses (ask_id)`,
       ]);
     })().catch((e) => {
