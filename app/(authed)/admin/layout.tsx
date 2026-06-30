@@ -4,6 +4,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { UserButton } from "@clerk/nextjs";
 import { clerkAppearance } from "@/lib/clerk-appearance";
 import { isAdminEmail } from "@/lib/admin";
+import { openReportCount } from "@/lib/db/reports";
 import AdminNav from "./admin-nav";
 
 // Reads live auth on every request — never statically cached.
@@ -17,6 +18,9 @@ export default async function AdminLayout({
   const user = await currentUser();
   const email = user?.primaryEmailAddress?.emailAddress ?? undefined;
   const admin = await isAdminEmail(email);
+  // Open-report count for the nav badge — only fetched for admins (cheap COUNT),
+  // and self-healing if the table doesn't exist yet (falls back to 0).
+  const openReports = admin ? await openReportCount().catch(() => 0) : 0;
 
   return (
     <div className="min-h-dvh bg-black text-white">
@@ -42,7 +46,7 @@ export default async function AdminLayout({
       {admin ? (
         <div className="flex">
           <aside className="w-48 shrink-0 border-r border-white/10 p-4">
-            <AdminNav />
+            <AdminNav openReports={openReports} />
           </aside>
           <div className="min-w-0 flex-1 p-6">{children}</div>
         </div>

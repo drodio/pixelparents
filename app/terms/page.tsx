@@ -98,10 +98,10 @@ export default function TermsPage() {
           <h2 className="text-xl font-bold">Changes &amp; contact</h2>
           <p className="text-white/70">
             We may update these terms as the project grows; we&apos;ll keep them
-            short and post the latest here. Questions or concerns? Email{" "}
-            <a href="mailto:hello@pixelparents.org" className={linkCls}>
-              hello@pixelparents.org
-            </a>{" "}
+            short and post the latest here. Questions or concerns?{" "}
+            <Link href="/report" className={linkCls}>
+              Send us a message
+            </Link>{" "}
             or open an issue on{" "}
             <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={linkCls}>
               GitHub

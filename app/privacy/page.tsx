@@ -77,10 +77,10 @@ export default function PrivacyPage() {
             Your data is yours. You can ask us to delete it at any time and
             we&apos;ll take care of it. Use the{" "}
             <span className="font-semibold text-white/90">Report a bug or abuse</span>{" "}
-            link at the bottom of the home page, or email{" "}
-            <a href="mailto:hello@pixelparents.org" className={linkCls}>
-              hello@pixelparents.org
-            </a>
+            link at the bottom of the home page, or{" "}
+            <Link href="/report" className={linkCls}>
+              send us a message
+            </Link>
             .
           </p>
         </section>
@@ -98,10 +98,10 @@ export default function PrivacyPage() {
         <section className="flex flex-col gap-3">
           <h2 className="text-xl font-bold">Questions?</h2>
           <p className="text-white/70">
-            We&apos;re happy to help. Reach us at{" "}
-            <a href="mailto:hello@pixelparents.org" className={linkCls}>
-              hello@pixelparents.org
-            </a>{" "}
+            We&apos;re happy to help.{" "}
+            <Link href="/report" className={linkCls}>
+              Send us a message
+            </Link>{" "}
             or open an issue on{" "}
             <a href={REPO_URL} target="_blank" rel="noopener noreferrer" className={linkCls}>
               GitHub
