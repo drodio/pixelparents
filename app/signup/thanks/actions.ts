@@ -57,6 +57,7 @@ export type ChildPatch = Partial<{
   birthYear: number | null;
   interests: string[];
   notes: string;
+  studentEmail: string;
   photos: Photo[];
 }>;
 
@@ -92,6 +93,9 @@ export async function patchChild(
     set.birthYear = Number.isInteger(y) && y >= 1980 && y <= 2100 ? y : null;
   }
   if ("notes" in patch) set.notes = String(patch.notes ?? "").trim().slice(0, 2000) || null;
+  if ("studentEmail" in patch) {
+    set.studentEmail = String(patch.studentEmail ?? "").trim().toLowerCase().slice(0, 254) || null;
+  }
   if ("interests" in patch) {
     const s = (patch.interests ?? [])
       .filter((x): x is string => typeof x === "string")
