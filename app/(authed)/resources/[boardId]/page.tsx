@@ -126,6 +126,7 @@ export default async function BoardDetailPage({
       filePath: c.filePath,
       fileName: c.fileName,
       body: c.body,
+      pinned: c.pinned,
       upvotes: c.upvotes,
       viewerUpvoted: c.viewerUpvoted,
       createdAt: (c.createdAt ?? new Date()).toISOString(),

@@ -98,7 +98,12 @@ export function ensureBoardsTables(): Promise<void> {
             created_at timestamptz NOT NULL DEFAULT now()
           )
         `,
+        // Pinning: a board owner can pin contributions to the top. Nullable —
+        // NULL = not pinned; the timestamp records WHEN it was pinned so pinned
+        // items render in the order they were pinned (top to bottom).
+        sql`ALTER TABLE board_contributions ADD COLUMN IF NOT EXISTS pinned_at timestamptz`,
         sql`CREATE INDEX IF NOT EXISTS board_contributions_board_idx ON board_contributions (board_id, created_at DESC)`,
+        sql`CREATE INDEX IF NOT EXISTS board_contributions_pinned_idx ON board_contributions (board_id, pinned_at)`,
 
         // --- Upvotes (one row per member per target → UNIQUE enforces "one vote") ---
         sql`
@@ -245,6 +250,7 @@ export type ContributionRow = {
   filePath: string | null;
   fileName: string | null;
   body: string | null;
+  pinned: boolean;
   createdAt: Date | null;
 };
 
@@ -280,6 +286,7 @@ type RawContribution = {
   file_path: string | null;
   file_name: string | null;
   body: string | null;
+  pinned_at?: string | null;
   created_at: string | null;
   upvotes?: number | string | null;
   viewer_upvoted?: boolean | null;
@@ -326,6 +333,7 @@ function mapContribution(r: RawContribution): ContributionWithCounts {
     filePath: r.file_path,
     fileName: r.file_name,
     body: r.body,
+    pinned: r.pinned_at != null,
     createdAt: toDate(r.created_at),
     upvotes: toInt(r.upvotes),
     viewerUpvoted: Boolean(r.viewer_upvoted),
@@ -458,6 +466,42 @@ export async function deleteBoard(input: {
   return rows.length > 0;
 }
 
+// Update a board — SCOPED to the owner (WHERE id AND author_signup_id, so
+// someone else's board matches 0 rows → returns null, no write). Bumps
+// updated_at so "hot" reflects the edit. Tags are replaced wholesale with the
+// caller-sanitized list.
+export async function updateBoard(input: {
+  id: string;
+  authorSignupId: string;
+  title: string;
+  description: string | null;
+  tags: string[];
+}): Promise<BoardRow | null> {
+  await ensureBoardsTables();
+  const rows = (await getSql()`
+    UPDATE resource_boards
+    SET title = ${input.title},
+        description = ${input.description},
+        tags = ${input.tags}::text[],
+        updated_at = now()
+    WHERE id = ${input.id} AND author_signup_id = ${input.authorSignupId}
+    RETURNING *
+  `) as unknown as RawBoard[];
+  const r = rows[0];
+  if (!r) return null;
+  return {
+    id: r.id,
+    title: r.title,
+    description: r.description,
+    authorSignupId: r.author_signup_id,
+    authorClerkId: r.author_clerk_id,
+    tags: r.tags ?? [],
+    pinned: Boolean(r.pinned),
+    createdAt: toDate(r.created_at),
+    updatedAt: toDate(r.updated_at),
+  };
+}
+
 export async function countBoardsByAuthorSince(
   authorSignupId: string,
   sinceMs: number,
@@ -513,8 +557,11 @@ export async function createContribution(
   return mapContribution(r);
 }
 
-// List a board's contributions with upvote counts + the viewer's vote state,
-// sorted by upvotes desc then recency (the Reddit-thread ordering).
+// List a board's contributions with upvote counts + the viewer's vote state.
+// Ordering: PINNED contributions first, in the order they were pinned
+// (pinned_at ASC — earliest-pinned at the very top); then UNPINNED by the
+// Reddit-thread rule (upvotes desc, then recency). The `pinned_at IS NULL`
+// primary sort key keeps every pinned row ahead of every unpinned one.
 export async function listContributions(opts: {
   boardId: string;
   viewerSignupId: string;
@@ -529,7 +576,11 @@ export async function listContributions(opts: {
       ) AS viewer_upvoted
     FROM board_contributions c
     WHERE c.board_id = ${opts.boardId}
-    ORDER BY upvotes DESC, c.created_at DESC
+    ORDER BY
+      (c.pinned_at IS NULL),
+      c.pinned_at ASC,
+      upvotes DESC,
+      c.created_at DESC
   `) as unknown as RawContribution[];
   return rows.map(mapContribution);
 }
@@ -554,6 +605,56 @@ export async function deleteContribution(input: {
     RETURNING id
   `) as unknown as { id: string }[];
   return rows.length > 0;
+}
+
+// Pin or unpin a contribution. Authorization (board owner) lives in the server
+// action — this is pure DB. `boardId` is included in the WHERE as a safety belt
+// so a stale/forged contributionId can't pin a row on a different board. Pin
+// sets pinned_at = now() (recording the pin order); unpin clears it to NULL.
+export async function setContributionPinned(input: {
+  contributionId: string;
+  boardId: string;
+  pinned: boolean;
+}): Promise<boolean> {
+  await ensureBoardsTables();
+  const rows = (await getSql()`
+    UPDATE board_contributions
+    SET pinned_at = ${input.pinned ? "now()" : null}::timestamptz
+    WHERE id = ${input.contributionId} AND board_id = ${input.boardId}
+    RETURNING id
+  `) as unknown as { id: string }[];
+  return rows.length > 0;
+}
+
+// Update a contribution — SCOPED to the author (WHERE id AND author_signup_id →
+// someone else's row matches 0 rows → returns null). The kind is FIXED at create
+// time; only the kind-relevant editable field changes here:
+//   • title  — always editable
+//   • link   — url
+//   • text   — body
+//   • file   — title only (uploads are NOT re-handled on edit; file_path stays)
+// Callers pass already-validated values. Bumps the board's updated_at.
+export async function updateContribution(input: {
+  id: string;
+  authorSignupId: string;
+  title: string;
+  url?: string | null;
+  body?: string | null;
+}): Promise<ContributionRow | null> {
+  await ensureBoardsTables();
+  const rows = (await getSql()`
+    UPDATE board_contributions
+    SET title = ${input.title},
+        url = CASE WHEN kind = 'link' THEN ${input.url ?? null} ELSE url END,
+        body = CASE WHEN kind = 'text' THEN ${input.body ?? null} ELSE body END
+    WHERE id = ${input.id} AND author_signup_id = ${input.authorSignupId}
+    RETURNING *
+  `) as unknown as RawContribution[];
+  const r = rows[0];
+  if (!r) return null;
+  // Bump the owning board's updated_at so "hot" reflects the edit.
+  await getSql()`UPDATE resource_boards SET updated_at = now() WHERE id = ${r.board_id}`;
+  return mapContribution(r);
 }
 
 export async function countContributionsByAuthorSince(

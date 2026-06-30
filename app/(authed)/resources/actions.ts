@@ -10,9 +10,12 @@ import { createNotification } from "@/lib/db/notifications";
 import {
   createBoard,
   deleteBoard,
+  updateBoard,
   countBoardsByAuthorSince,
   createContribution,
   deleteContribution,
+  updateContribution,
+  setContributionPinned,
   getContributionBoardId,
   countContributionsByAuthorSince,
   toggleBoardUpvote,
@@ -122,6 +125,45 @@ export async function deleteBoardAction(input: { id: string }): Promise<ActionRe
   } catch (err) {
     console.error("deleteBoardAction failed:", err);
     return { ok: false, error: "Couldn't remove this board. Please try again." };
+  }
+}
+
+// Edit a board — OWNER ONLY (the data fn scopes the UPDATE to author_signup_id,
+// so a non-owner edit matches 0 rows and returns null). Title + description are
+// re-validated with the same validators as create; tags are sanitized. Unlike
+// create we do NOT re-run the AI auto-labeler — the owner is curating tags by
+// hand here, so we honor exactly what they pass (sanitized + capped).
+export async function updateBoardAction(input: {
+  boardId: string;
+  title: string;
+  description: string;
+  tags?: string[];
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.boardId)) return { ok: false, error: "Unknown board." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+
+  const title = validateBoardTitle(input.title);
+  if (!title.ok) return { ok: false, error: title.error };
+  const description = validateBoardDescription(input.description);
+  if (!description.ok) return { ok: false, error: description.error };
+  const tags = normalizeResourceTags(input.tags ?? []);
+
+  try {
+    const row = await updateBoard({
+      id: input.boardId,
+      authorSignupId: caller.user.id,
+      title: title.value,
+      description: description.value || null,
+      tags,
+    });
+    if (!row) return { ok: false, error: "You can only edit boards you created." };
+    revalidatePath(`/resources/${input.boardId}`);
+    revalidatePath("/resources");
+    return { ok: true, id: row.id };
+  } catch (err) {
+    console.error("updateBoardAction failed:", err);
+    return { ok: false, error: "Couldn't save this board. Please try again." };
   }
 }
 
@@ -247,6 +289,92 @@ export async function deleteContributionAction(input: { id: string }): Promise<A
   } catch (err) {
     console.error("deleteContributionAction failed:", err);
     return { ok: false, error: "Couldn't remove this contribution. Please try again." };
+  }
+}
+
+// Edit a contribution — AUTHOR ONLY (the data fn scopes the UPDATE to
+// author_signup_id). The kind is fixed at create time; the caller edits the
+// title (always) plus the one kind-relevant field. We re-validate exactly the
+// fields that kind allows and ignore the rest:
+//   link → url required; text → body required; file → title only.
+export async function updateContributionAction(input: {
+  id: string;
+  kind: ContributionKind | string;
+  title: string;
+  url?: string;
+  body?: string;
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.id)) return { ok: false, error: "Unknown contribution." };
+  if (!isContributionKind(input.kind)) return { ok: false, error: "Pick a contribution type." };
+
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+
+  const title = validateContributionTitle(input.title);
+  if (!title.ok) return { ok: false, error: title.error };
+
+  let url: string | null = null;
+  let body: string | null = null;
+  if (input.kind === "link") {
+    const u = validateResourceUrl(input.url);
+    if (!u.ok) return { ok: false, error: u.error };
+    url = u.value;
+  } else if (input.kind === "text") {
+    const b = validateContributionBody(input.body);
+    if (!b.ok) return { ok: false, error: b.error };
+    if (!b.value) return { ok: false, error: "Add some text for this contribution." };
+    body = b.value;
+  }
+  // kind === "file" → title only; nothing else to validate (uploads aren't
+  // re-handled on edit, the stored file_path is left untouched).
+
+  try {
+    const boardId = await getContributionBoardId(input.id);
+    const row = await updateContribution({
+      id: input.id,
+      authorSignupId: caller.user.id,
+      title: title.value,
+      url,
+      body,
+    });
+    if (!row) return { ok: false, error: "You can only edit contributions you added." };
+    if (boardId) revalidatePath(`/resources/${boardId}`);
+    revalidatePath("/resources");
+    return { ok: true, id: row.id };
+  } catch (err) {
+    console.error("updateContributionAction failed:", err);
+    return { ok: false, error: "Couldn't save this contribution. Please try again." };
+  }
+}
+
+// Pin / unpin a contribution — BOARD OWNER ONLY. We resolve the contribution's
+// board, confirm the caller owns that board, then flip pinned_at. Multiple pins
+// are allowed; ordering (pinned_at ASC) is handled by listContributions.
+export async function setContributionPinnedAction(input: {
+  contributionId: string;
+  pinned: boolean;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  if (!UUID_RE.test(input.contributionId)) return { ok: false, error: "Unknown contribution." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+  try {
+    const boardId = await getContributionBoardId(input.contributionId);
+    if (!boardId) return { ok: false, error: "Unknown contribution." };
+    const board = await getBoard({ id: boardId, viewerSignupId: caller.user.id });
+    if (!board || board.authorSignupId !== caller.user.id) {
+      return { ok: false, error: "Only the board owner can pin contributions." };
+    }
+    const ok = await setContributionPinned({
+      contributionId: input.contributionId,
+      boardId,
+      pinned: input.pinned,
+    });
+    if (!ok) return { ok: false, error: "Couldn't update this contribution." };
+    revalidatePath(`/resources/${boardId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("setContributionPinnedAction failed:", err);
+    return { ok: false, error: "Couldn't update the pin. Please try again." };
   }
 }
 
