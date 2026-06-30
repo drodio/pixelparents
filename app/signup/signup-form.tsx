@@ -106,12 +106,22 @@ const empty = {
 export default function SignupForm({
   suggestedInterests = [],
   joinToken,
+  refToken,
+  defaultAccountType,
 }: {
   suggestedInterests?: string[];
   joinToken?: string;
+  // Referral attribution token from a "spread the word" link (?ref=…). Passed to
+  // createDraftSignup so the new family records who referred them. No PII.
+  refToken?: string;
+  // When a student referral link is opened (?as=student), default the new account
+  // to the student flow so the friend lands in the right signup path.
+  defaultAccountType?: "parent" | "student";
 } = {}) {
   const router = useRouter();
-  const [v, setV] = useState(empty);
+  const [v, setV] = useState(() =>
+    defaultAccountType ? { ...empty, accountType: defaultAccountType } : empty,
+  );
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -171,7 +181,7 @@ export default function SignupForm({
   const ensureId = useCallback(async (): Promise<string | null> => {
     if (idRef.current) return idRef.current;
     if (!ensuring.current) {
-      const create = joinToken ? createCoParentDraft(joinToken) : createDraftSignup();
+      const create = joinToken ? createCoParentDraft(joinToken) : createDraftSignup(refToken);
       ensuring.current = create.then((r) => {
         const id = "id" in r ? r.id : null;
         idRef.current = id;
@@ -186,7 +196,7 @@ export default function SignupForm({
       });
     }
     return ensuring.current;
-  }, [joinToken, ID_KEY]);
+  }, [joinToken, refToken, ID_KEY]);
 
   // --- Co-parent invite UI state ---
   const [inviteRaw, setInviteRaw] = useState("");

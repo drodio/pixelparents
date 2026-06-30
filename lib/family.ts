@@ -21,6 +21,18 @@ export async function createFamily(): Promise<FamilyRow> {
   return row;
 }
 
+// Resolve a family's invite token by its id (used by the /family invite cards to
+// build the shareable join link). Returns null if the family doesn't exist.
+export async function getInviteTokenForFamily(familyId: string): Promise<string | null> {
+  await ensureFamiliesSchema();
+  const [row] = await getDb()
+    .select({ inviteToken: families.inviteToken })
+    .from(families)
+    .where(eq(families.id, familyId))
+    .limit(1);
+  return row?.inviteToken ?? null;
+}
+
 // Resolve a family by its invite token (used by the co-parent join flow).
 export async function getFamilyByInviteToken(token: string): Promise<FamilyRow | null> {
   await ensureFamiliesSchema();

@@ -9,6 +9,12 @@ import {
   getInterestsCount,
 } from "@/lib/db/signups";
 import { getInterestPool } from "@/lib/interests";
+import { sanitizeRefToken, REFERRAL_PARAM, REFERRAL_AS_PARAM } from "@/lib/referral";
+
+// First value of a possibly-array search param.
+function firstParam(v: string | string[] | undefined): string | undefined {
+  return Array.isArray(v) ? v[0] : v;
+}
 
 export const metadata: Metadata = {
   title: "Sign up — Pixel Parents",
@@ -19,7 +25,19 @@ export const metadata: Metadata = {
 // Always reflect the live signup count.
 export const dynamic = "force-dynamic";
 
-export default async function SignupPage() {
+export default async function SignupPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  // Referral attribution off a "spread the word" link (?ref=…&as=student). The
+  // token is sanitized; an unknown-but-well-formed token is just stored as
+  // provenance. `as=student` defaults the friend into the student signup path.
+  const sp = await searchParams;
+  const ref = sanitizeRefToken(firstParam(sp[REFERRAL_PARAM])) ?? undefined;
+  const defaultAccountType =
+    firstParam(sp[REFERRAL_AS_PARAM]) === "student" ? ("student" as const) : undefined;
+
   let count = 0;
   let kidsCount = 0;
   let interestsCount = 0;
@@ -68,7 +86,11 @@ export default async function SignupPage() {
         </div>
 
         <div className="mt-10">
-          <SignupForm suggestedInterests={interests} />
+          <SignupForm
+            suggestedInterests={interests}
+            refToken={ref}
+            defaultAccountType={defaultAccountType}
+          />
         </div>
       </div>
     </main>

@@ -10,6 +10,8 @@ import { isStudentEmail, verifiedEmailsOf } from "@/lib/verify";
 import { buildFamilyDisplay } from "@/lib/family-display";
 import { coerceShareVisibility } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
+import { getInviteTokenForFamily, joinUrlFor } from "@/lib/family";
+import { familyReferralLinkFor, studentReferralLinkFor } from "@/lib/referral";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import { StudentVerify } from "@/components/student-verify";
@@ -17,6 +19,11 @@ import { IconGradCap, IconUsers } from "@/components/icons";
 import FamilyForm from "@/app/signup/thanks/family-form";
 import { getVerifyState } from "@/app/signup/thanks/verify-actions";
 import { MemberCard } from "./member-card";
+import {
+  FamilyInviteCard,
+  SpreadTheWordCard,
+  StudentReferralCard,
+} from "./invite-card";
 
 export const dynamic = "force-dynamic";
 
@@ -93,10 +100,27 @@ export default async function FamilyPage() {
   const { parentMembers, studentMembers, studentProfileByAccountId, unmatchedKids } =
     buildFamilyDisplay(family.members, family.kids, self.id, verifiedEmailsOf);
 
-  const [interestPool, verifyState] = await Promise.all([
+  const [interestPool, verifyState, inviteToken] = await Promise.all([
     getInterestPool(),
     getVerifyState(self.id),
+    getInviteTokenForFamily(self.familyId),
   ]);
+
+  // Invite links (the growth flywheel). All reuse the family's existing
+  // hard-to-guess inviteToken — no new secret, no PII in any URL.
+  // - joinUrl: co-parent join flow (/signup/join/<token>)
+  // - familyReferralUrl: public "spread the word" signup link (/signup?ref=…)
+  // - studentReferralUrl: student-to-student link (/signup?ref=…&as=student)
+  const joinUrl = inviteToken ? joinUrlFor(inviteToken) : null;
+  const familyReferralUrl = inviteToken ? familyReferralLinkFor(inviteToken) : null;
+  const studentReferralUrl = inviteToken ? studentReferralLinkFor(inviteToken) : null;
+
+  // Student-to-student referral is verification-gated: only surface it once the
+  // family has at least one VERIFIED OHS student (a real student node). We check
+  // every member's verified-emails blob (server-side; verifiedEmailsOf is pure).
+  const hasVerifiedStudent = family.members.some(
+    (m) => verifiedEmailsOf((m.extra ?? {}) as Record<string, unknown>).length > 0,
+  );
 
   // Presign each child's private photos (keyed by child id) so the FamilyForm
   // editor can render them — mirrors app/signup/thanks/page.tsx.
@@ -124,6 +148,19 @@ export default async function FamilyPage() {
       </header>
 
       <div className="flex flex-col gap-10">
+        {/* Grow the community — invites (the growth flywheel). Prominent, warm,
+            and reusing the existing family inviteToken + join/signup flows. */}
+        <section className="flex flex-col gap-4">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
+            Grow your community
+          </h2>
+          {joinUrl && <FamilyInviteCard signupId={self.id} joinUrl={joinUrl} />}
+          {familyReferralUrl && <SpreadTheWordCard referralUrl={familyReferralUrl} />}
+          {hasVerifiedStudent && studentReferralUrl && (
+            <StudentReferralCard referralUrl={studentReferralUrl} />
+          )}
+        </section>
+
         {/* Visibility is per-member, and ANY family member can manage everyone's —
             authorized server-side by family membership (setFamilyMemberVisibility). */}
         <p className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/55">
