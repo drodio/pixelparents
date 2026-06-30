@@ -2,6 +2,7 @@ import { canViewProfile, coerceShareVisibility, shareFieldsOrDefault } from "@/l
 import { childAge } from "@/lib/directory-filters";
 import { builderStatusOf } from "@/lib/builder";
 import { isStudentAccount } from "@/lib/family-display";
+import { verifiedEmailsOf } from "@/lib/verify";
 import { curatedEnrichmentOf, type StoredEnrichment } from "@/lib/enrichment/profile";
 import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
 
@@ -106,6 +107,62 @@ export function expertiseSignalsOf(row: Pick<SignupRow, "skillsets" | "parentInt
   return Array.from(byKey.values());
 }
 
+// The shape needed to resolve a child to its linked student account: a signup row
+// that carries the `extra` blob (for accountType + verified emails) and the
+// expertise-signal source fields. SignupRow satisfies this.
+export type StudentAccountForLink = Pick<
+  SignupRow,
+  "extra" | "skillsets" | "parentInterests"
+>;
+
+// Resolve a child row to the family's linked STUDENT account, if any. A child is
+// the SAME person as a student account when the child's `studentEmail` matches one
+// of that account's verified OHS emails (case-insensitively). Returns the matching
+// student account, or null when the child has no email or no account matches.
+// Mirrors the join in lib/family-display.buildFamilyDisplay (single source of the
+// linking rule), but kept here so the directory card builder can reuse it.
+export function linkedStudentAccountForChild<T extends StudentAccountForLink>(
+  child: Pick<ChildRow, "studentEmail">,
+  familyStudentAccounts: T[],
+): T | null {
+  const key = child.studentEmail?.trim().toLowerCase();
+  if (!key) return null;
+  for (const acct of familyStudentAccounts) {
+    const verified = verifiedEmailsOf((acct.extra ?? {}) as Record<string, unknown>);
+    if (verified.some((e) => e.trim().toLowerCase() === key)) return acct;
+  }
+  return null;
+}
+
+// The interests to DISPLAY for a child, aggregating in the linked student
+// account's accurate expertise signals. The child row carries kid-interest tags
+// the parent typed on the family form; when that child is ALSO a real student
+// account, that account's `expertiseSignalsOf` (enrichment expertise + skillsets +
+// interests) is the fuller, more accurate set. We return the de-duplicated UNION
+// (child interests first, then any new student signals) so the Directory shows the
+// complete picture and nothing the parent entered is lost. A child with no linked
+// student account is returned unchanged. Pure; reuses expertiseSignalsOf — does NOT
+// hand-roll the student signal extraction.
+export function aggregatedChildInterests(
+  child: Pick<ChildRow, "studentEmail" | "interests">,
+  familyStudentAccounts: StudentAccountForLink[],
+): string[] {
+  const childInterests = (child.interests ?? []).filter(
+    (s): s is string => typeof s === "string",
+  );
+  const linked = linkedStudentAccountForChild(child, familyStudentAccounts);
+  if (!linked) return childInterests;
+  const studentSignals = expertiseSignalsOf(linked);
+  const byKey = new Map<string, string>();
+  for (const t of [...childInterests, ...studentSignals]) {
+    const v = t.trim();
+    if (!v) continue;
+    const k = v.toLowerCase();
+    if (!byKey.has(k)) byKey.set(k, v);
+  }
+  return Array.from(byKey.values());
+}
+
 // Families that signed up BEFORE this cutoff are grandfathered into the directory
 // so the live directory isn't suddenly emptied; everyone who joins after must
 // verify (approvalStatus="approved", set by the student-email flow, an admin, or
@@ -191,6 +248,12 @@ export function buildDirectoryCard(
   urlByPath: Map<string, string>,
   maxThumbs: number,
   currentYear: number,
+  // The family's STUDENT accounts (extra.accountType === "student"), used to
+  // resolve a rendered child to its own student account so the card shows the
+  // child's accurate, aggregated tag set (kid interests UNION the student
+  // account's expertise signals). Defaults to [] so existing callers/tests keep
+  // their behavior (a child with no linked account renders its interests as-is).
+  familyStudentAccounts: SignupRow[] = [],
 ): DirectoryCard {
   const fields = new Set(shareFieldsOrDefault(row.shareFields));
   // A STUDENT account is a minor — coarsen their card regardless of what they
@@ -223,7 +286,11 @@ export function buildDirectoryCard(
           // "Ansh Vasani"), without doubling an already-present surname.
           name: childFullName(k.firstName, row.lastName),
           grade: k.grade ?? null,
-          interests: k.interests ?? [],
+          // When this child is also a real student account, show the de-duplicated
+          // UNION of their kid-interest tags and the student account's accurate
+          // expertise signals — not just the kid-form interests. Unchanged for an
+          // unlinked child.
+          interests: aggregatedChildInterests(k, familyStudentAccounts),
           age: childAge(k, currentYear),
         }))
       : [];
@@ -231,10 +298,11 @@ export function buildDirectoryCard(
   // Combined interest set for chips + filtering: parent + child interests, but
   // only those whose source field was shared. Deduped case-insensitively,
   // keeping the first-seen display label. (Student cards hide children, so no
-  // child interests are mixed in for them.)
+  // child interests are mixed in for them.) Child interests are the SAME
+  // aggregated (kid + linked-student) set used for the per-child rows above.
   const childInterests =
     fields.has("children") && !isStudent
-      ? familyKids.flatMap((k) => k.interests ?? [])
+      ? familyKids.flatMap((k) => aggregatedChildInterests(k, familyStudentAccounts))
       : [];
   const interestByKey = new Map<string, string>();
   for (const i of [...parentInterests, ...childInterests]) {

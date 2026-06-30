@@ -8,7 +8,7 @@ import { isStudentAccount } from "@/lib/family-display";
 import { signedPhotoUrls } from "@/lib/blob";
 import { renderCaption } from "@/lib/mentions";
 import { builderStatusOf } from "@/lib/builder";
-import { childFullName } from "@/lib/directory";
+import { childFullName, aggregatedChildInterests } from "@/lib/directory";
 import {
   websiteUrlOf,
   curatedEnrichmentOf,
@@ -74,7 +74,7 @@ export async function ProfileView({
   const profile = await getSharedProfileByToken(token);
   if (!profile) notFound();
 
-  const { signup, kids } = profile;
+  const { signup, kids, familyStudentAccounts } = profile;
   const visible = new Set(shareFieldsOrDefault(signup.shareFields));
   const isStudent = isStudentAccount(signup);
 
@@ -361,6 +361,10 @@ export async function ProfileView({
           <div className="flex flex-col gap-3.5">
             {kids.map((kid) => {
               const kidPhotos = toCarousel(kid.photos ?? []);
+              // When this child is also a real student account, show the
+              // de-duplicated UNION of their kid-interest tags and that account's
+              // accurate expertise signals — consistent with the directory card.
+              const kidInterests = aggregatedChildInterests(kid, familyStudentAccounts);
               return (
                 <div
                   key={kid.id}
@@ -380,9 +384,9 @@ export async function ProfileView({
                   {kid.grade && (
                     <div className="mt-0.5 text-sm font-semibold text-amber-400">{kid.grade}</div>
                   )}
-                  {kid.interests && kid.interests.length > 0 && (
+                  {kidInterests.length > 0 && (
                     <div className="mt-3">
-                      <Pills items={kid.interests} />
+                      <Pills items={kidInterests} />
                     </div>
                   )}
                   {kid.notes && <p className="mt-3 text-sm text-white/55">{kid.notes}</p>}

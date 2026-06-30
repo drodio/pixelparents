@@ -7,7 +7,8 @@ import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { getStats, getBreakdowns } from "@/lib/db/aggregates";
 import { getDb, hasDatabase } from "@/lib/db";
-import { signups, children, type ChildRow } from "@/lib/db/schema/signups";
+import { signups, children, type ChildRow, type SignupRow } from "@/lib/db/schema/signups";
+import { isStudentAccount } from "@/lib/family-display";
 import {
   buildDirectoryCard,
   directoryPhotoPaths,
@@ -150,6 +151,19 @@ export default async function CommunityPage() {
     else kidsByFamily.set(k.familyId, [k]);
   }
 
+  // The STUDENT accounts in each family, grouped by familyId. A rendered child is
+  // resolved to its own student account (verified-email match) so the card shows
+  // the child's accurate, aggregated tag set (kid interests UNION the student
+  // account's expertise signals). Built from ALL rows (not just `included`) — the
+  // student account need not earn its own directory card to enrich its parent's.
+  const studentsByFamily = new Map<string, SignupRow[]>();
+  for (const r of allRows) {
+    if (!isStudentAccount(r)) continue;
+    const arr = studentsByFamily.get(r.familyId);
+    if (arr) arr.push(r);
+    else studentsByFamily.set(r.familyId, [r]);
+  }
+
   // Presign every needed photo (hero + up to MAX_THUMBS per card) in one deduped
   // batch. Per-field exposure (and student coarsening) lives in buildDirectoryCard.
   const allPaths = Array.from(
@@ -173,6 +187,7 @@ export default async function CommunityPage() {
       urlByPath,
       MAX_THUMBS,
       currentYear,
+      studentsByFamily.get(row.familyId) ?? [],
     ),
   );
 

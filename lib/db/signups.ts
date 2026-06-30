@@ -162,9 +162,16 @@ export async function getSignupForEdit(
   return { signup, kids };
 }
 
-// Public secret page: the parent + their children. Returns the row for any valid
-// token; the /p page itself applies the share_visibility gate (ohs/private).
-export type SharedProfile = { signup: SignupRow; kids: ChildRow[] };
+// Public secret page: the parent + their children + the family's STUDENT accounts.
+// Returns the row for any valid token; the /p page itself applies the
+// share_visibility gate (ohs/private). `familyStudentAccounts` lets the profile
+// view aggregate a child's accurate tag set (kid interests UNION the linked
+// student account's expertise signals) — same enrichment the directory card does.
+export type SharedProfile = {
+  signup: SignupRow;
+  kids: ChildRow[];
+  familyStudentAccounts: SignupRow[];
+};
 
 export async function getSharedProfileByToken(token: string): Promise<SharedProfile | null> {
   await ensureFamiliesSchema();
@@ -175,12 +182,20 @@ export async function getSharedProfileByToken(token: string): Promise<SharedProf
     .limit(1);
   if (!signup) return null;
 
-  // Show the whole family's shared children on the secret page.
-  const kids = await getDb()
-    .select()
-    .from(children)
-    .where(eq(children.familyId, signup.familyId))
-    .orderBy(children.createdAt);
+  // Show the whole family's shared children on the secret page, and load every
+  // signup in the family so we can pick out the student accounts (a child may be
+  // the same person as one of them — see lib/directory.aggregatedChildInterests).
+  const [kids, familyMembers] = await Promise.all([
+    getDb()
+      .select()
+      .from(children)
+      .where(eq(children.familyId, signup.familyId))
+      .orderBy(children.createdAt),
+    getDb().select().from(signups).where(eq(signups.familyId, signup.familyId)),
+  ]);
+  const familyStudentAccounts = familyMembers.filter(
+    (m) => ((m.extra ?? {}) as Record<string, unknown>).accountType === "student",
+  );
 
-  return { signup, kids };
+  return { signup, kids, familyStudentAccounts };
 }
