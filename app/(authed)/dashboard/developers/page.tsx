@@ -12,6 +12,8 @@ import { SignedOutPanel } from "@/components/signed-out-panel";
 import { IconArrowRight, IconClock, IconCode } from "@/components/icons";
 import { KeyPanel } from "@/app/(authed)/account/key-panel";
 import { RequestForm } from "@/app/(authed)/account/request-form";
+import { OAuthAppsPanel } from "./oauth-apps-panel";
+import { getMyOAuthApps } from "./oauth-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -88,6 +90,10 @@ export default async function DashboardDevelopersPage() {
   const req = await getRequestByClerkUser(user.id);
   const reqStatus = req?.status ?? "none";
 
+  // The caller's registered "Sign in with Pixel Parents" OAuth apps. Owner-scoped
+  // (keyed to their Clerk user) and best-effort (returns [] on any read error).
+  const oauthApps = await getMyOAuthApps();
+
   return shell(
     <>
       <DevHeader />
@@ -142,6 +148,23 @@ export default async function DashboardDevelopersPage() {
               <RequestForm />
             </>
           )}
+        </section>
+
+        {/* Sign in with Pixel Parents — register a connected app + reveal/rotate
+            its client_id + one-time client_secret. Self-serve for MVP. */}
+        <section className="border-t border-white/10 pt-8">
+          <OAuthAppsPanel
+            apps={oauthApps.map((a) => ({
+              id: a.id,
+              name: a.name,
+              client_id: a.client_id,
+              redirect_uris: a.redirect_uris,
+              allowed_scopes: a.allowed_scopes,
+              secret_prefix: a.secret_prefix,
+              authorization_count: a.authorization_count,
+              created_at: a.created_at,
+            }))}
+          />
         </section>
 
         {/* Docs summary — counts/taxonomies only, never PII. */}
