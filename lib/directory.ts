@@ -28,8 +28,9 @@ export type DirectoryCard = {
   location: string | null;
   // Children the parent chose to share (name/grade/interests/derived age). Empty
   // when the "children" field wasn't shared. `age` is null when neither a
-  // birthYear nor a numeric grade is available to derive it from.
-  children: { firstName: string; grade: string | null; interests: string[]; age: number | null }[];
+  // birthYear nor a numeric grade is available to derive it from. `name` is the
+  // child's full name (first + the family/parent surname) for display.
+  children: { firstName: string; name: string; grade: string | null; interests: string[]; age: number | null }[];
   // Deduped parent + child interests the parent chose to share — drives the
   // chips and the interest filter. Empty when neither field was shared.
   interests: string[];
@@ -85,6 +86,9 @@ export function isDirectoryVisible(row: SignupRow): boolean {
     row.shareEnabled === true &&
     Boolean(row.shareToken) &&
     Boolean(row.firstName?.trim()) &&
+    // Kids/students are NOT standalone cards — a student account appears only as a
+    // (full) name on their linked parent's card, never as its own directory entry.
+    !isStudentAccount(row) &&
     isFamilyVerified(row) &&
     canViewProfile(coerceShareVisibility(row.shareVisibility), {
       isOwner: false,
@@ -146,6 +150,9 @@ export function buildDirectoryCard(
     fields.has("children") && !isStudent
       ? familyKids.map((k) => ({
           firstName: k.firstName,
+          // Full name = child's first + the card owner's (parent's) surname, so
+          // the directory shows e.g. "Ansh Vasani" rather than just "Ansh".
+          name: [k.firstName, row.lastName].filter(Boolean).join(" ") || k.firstName,
           grade: k.grade ?? null,
           interests: k.interests ?? [],
           age: childAge(k, currentYear),

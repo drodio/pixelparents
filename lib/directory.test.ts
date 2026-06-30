@@ -88,6 +88,12 @@ describe("isDirectoryVisible (directory inclusion gate)", () => {
     expect(isDirectoryVisible(signup({ firstName: "  " }))).toBe(false);
   });
 
+  it("excludes student accounts (shown as a child name on the parent card, not standalone)", () => {
+    expect(
+      isDirectoryVisible(signup({ extra: { approvalStatus: "approved", accountType: "student" } })),
+    ).toBe(false);
+  });
+
   it("excludes unverified families who joined after the cutoff", () => {
     expect(
       isDirectoryVisible(signup({ extra: {}, createdAt: new Date(VERIFICATION_CUTOFF + 86_400_000) })),
@@ -144,7 +150,7 @@ describe("buildDirectoryCard (per-field redaction)", () => {
     expect(card.name).toBe("Ada Lovelace");
     expect(card.location).toBe("Palo Alto, CA");
     expect(card.children).toEqual([
-      { firstName: "Byron", grade: "9th", interests: ["Robotics"], age: 14 },
+      { firstName: "Byron", name: "Byron Lovelace", grade: "9th", interests: ["Robotics"], age: 14 },
     ]);
     // Parent + child interests, deduped, in first-seen order.
     expect(card.interests).toEqual(["Chess", "AI", "Robotics"]);

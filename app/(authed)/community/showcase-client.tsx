@@ -104,7 +104,7 @@ function StudentBadge() {
 
 function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
   const thumbs = card.thumbUrls.slice(0, 4);
-  const childNames = card.children.map((c) => c.firstName).filter(Boolean);
+  const childNames = card.children.map((c) => c.name).filter(Boolean);
   // Interests + skillsets share one chip strip; deduped case-insensitively.
   const tagByKey = new Map<string, string>();
   for (const t of [...card.interests, ...card.skillsets]) {
@@ -479,7 +479,7 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
       }
       // Search: name, any child name, or any interest/skill (substring).
       if (q) {
-        const haystack = [c.name, ...c.children.map((k) => k.firstName), ...cardTags]
+        const haystack = [c.name, ...c.children.map((k) => k.name), ...cardTags]
           .join(" ")
           .toLowerCase();
         if (!haystack.includes(q)) return false;

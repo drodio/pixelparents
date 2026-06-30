@@ -309,7 +309,9 @@ export async function ProfileView({
                   className="scroll-mt-24 rounded-2xl border border-white/10 bg-white/[0.02] p-5 target:ring-2 target:ring-amber-400/60"
                 >
                   <div className="flex items-baseline justify-between gap-3">
-                    <h3 className="text-lg font-semibold">{kid.firstName}</h3>
+                    <h3 className="text-lg font-semibold">
+                      {`${kid.firstName} ${signup.lastName ?? ""}`.trim()}
+                    </h3>
                     {kid.grade === "Not an OHS child" && kid.birthYear && (
                       <span className="shrink-0 text-sm font-semibold text-amber-400">
                         age {currentYear - kid.birthYear}
