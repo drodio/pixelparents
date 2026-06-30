@@ -6,9 +6,12 @@ import { getSignupForEdit } from "@/lib/db/signups";
 import { shareFieldsOrDefault, coerceShareVisibility } from "@/lib/share";
 import { shareUrlFor } from "@/lib/url";
 import { signedPhotoUrls } from "@/lib/blob";
+import { getInviteTokenForFamily } from "@/lib/family";
+import { familyReferralLinkFor } from "@/lib/referral";
 import FamilyForm from "./family-form";
 import StudentParentForm from "./student-parent-form";
 import { ShareSettings } from "./share-settings";
+import { ThanksInviteCta } from "./thanks-invite-cta";
 import { getVerifyState } from "./verify-actions";
 import { getStudentParentLinkStatus } from "./actions";
 import { StudentVerify } from "@/components/student-verify";
@@ -48,6 +51,12 @@ export default async function ThanksPage({
   // Family-level photos are now collected on the first signup form; the thanks
   // page only needs whether any exist (to vary the heading), not their URLs.
   const initialPhotos = signup?.photos ?? [];
+
+  // Light-touch growth CTA: once they've signed up, offer a shareable referral
+  // link so they can pull in another OHS family. Reuses the family's existing
+  // inviteToken (no new secret, no PII). Resolved server-side from the family id.
+  const inviteToken = signup ? await getInviteTokenForFamily(signup.familyId) : null;
+  const familyReferralUrl = inviteToken ? familyReferralLinkFor(inviteToken) : null;
 
   // Presign each child's photos too, keyed by child id — all children in
   // parallel so render latency doesn't grow with the number of children.
@@ -171,6 +180,12 @@ export default async function ThanksPage({
         )}
 
         {!hasExistingData && sharePanel && <div className="mt-12">{sharePanel}</div>}
+
+        {familyReferralUrl && (
+          <div className="mt-12">
+            <ThanksInviteCta referralUrl={familyReferralUrl} />
+          </div>
+        )}
       </div>
     </main>
   );

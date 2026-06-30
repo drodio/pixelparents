@@ -26,6 +26,7 @@ import {
 import { getAdminRecipients } from "@/lib/admin";
 import { createFamily, getFamilyByInviteToken, joinUrlFor } from "@/lib/family";
 import { parseInviteEmails, INVITE_LIFETIME_CAP } from "@/lib/invite";
+import { sanitizeRefToken } from "@/lib/referral";
 import { canonicalizeAgainstPool } from "@/lib/interests";
 import { normalizeWebsiteUrl } from "@/lib/enrichment/profile";
 import { runEnrichmentForSignup } from "@/lib/db/enrichment-trigger";
@@ -46,11 +47,17 @@ const UUID_RE =
 // patches skip it. Required columns are NOT NULL, so we seed empty strings.
 // Every signup gets its own brand-new family (a co-parent joining via an invite
 // link uses createCoParentDraft instead, which reuses an existing family).
-export async function createDraftSignup(): Promise<{ id: string } | { error: string }> {
+export async function createDraftSignup(
+  refToken?: string,
+): Promise<{ id: string } | { error: string }> {
   const v = await checkBotId();
   if (v.isBot) return { error: "blocked" };
   try {
     const family = await createFamily();
+    // Optional referral attribution: if this signup arrived via a family/student
+    // "spread the word" link, stamp the (sanitized) referrer token into `extra`
+    // for future credit. Opaque provenance only — no PII, no access granted.
+    const ref = sanitizeRefToken(refToken);
     const [row] = await getDb()
       .insert(signups)
       .values({
@@ -60,6 +67,7 @@ export async function createDraftSignup(): Promise<{ id: string } | { error: str
         email: "",
         phone: "",
         githubUsername: "",
+        ...(ref ? { extra: { referredBy: ref } } : {}),
       })
       .returning({ id: signups.id });
     return { id: row.id };
