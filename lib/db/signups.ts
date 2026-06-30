@@ -1,7 +1,7 @@
 import { eq, desc, sql } from "drizzle-orm";
 import { getDb, getSql } from "@/lib/db";
 import { signups, children, type SignupRow, type ChildRow } from "@/lib/db/schema/signups";
-import { ensureFamiliesSchema } from "@/lib/db/ensure";
+import { ensureFamiliesSchema, ensureDirectoryIndex } from "@/lib/db/ensure";
 import { OHS_AFFILIATIONS } from "@/lib/options";
 
 // The two student affiliations from OHS_AFFILIATIONS — current students and
@@ -26,6 +26,41 @@ export async function getSignupByEmail(email: string): Promise<SignupRow | null>
     .orderBy(desc(signups.createdAt))
     .limit(1);
   return row ?? null;
+}
+
+// Rows the Directory page needs, with the CHEAP visibility preconditions pushed
+// into SQL so a cold render reads a fraction of the table instead of every signup.
+//
+// The page still applies the authoritative isDirectoryVisible() gate in JS (so
+// semantics are byte-for-byte identical) — this just feeds it far fewer rows. The
+// WHERE clause returns the UNION of:
+//   (a) directory CANDIDATES: share_enabled = true AND share_token IS NOT NULL AND
+//       first_name <> '' — the index-friendly subset of isDirectoryVisible's
+//       preconditions (the remaining checks — verification, share_visibility,
+//       not-a-student — stay in JS); and
+//   (b) every STUDENT account (extra.accountType = 'student'), regardless of its
+//       own sharing — the page needs these to enrich a visible PARENT's card
+//       (a child resolved to its linked student account). Student accounts are
+//       few, so including them all keeps studentsByFamily complete without a
+//       second round-trip, while (a) still drops the bulk of non-sharing parents.
+//
+// Ordered newest-first to match the page's prior `orderBy(desc(createdAt))`. The
+// partial index (ensureDirectoryIndex) backs the (a) branch's ordered scan.
+export async function getDirectorySignups(): Promise<SignupRow[]> {
+  // Self-heal the signups schema before SELECT * (same rationale as the reads
+  // below), and ensure the supporting partial index exists, both idempotent.
+  await Promise.all([ensureFamiliesSchema(), ensureDirectoryIndex()]);
+  return getDb()
+    .select()
+    .from(signups)
+    .where(
+      sql`(
+        ${signups.shareEnabled} = true
+        AND ${signups.shareToken} IS NOT NULL
+        AND btrim(${signups.firstName}) <> ''
+      ) OR ${signups.extra}->>'accountType' = 'student'`,
+    )
+    .orderBy(desc(signups.createdAt));
 }
 
 // The caller's family, resolved from their signed-in email. Returns the caller's
