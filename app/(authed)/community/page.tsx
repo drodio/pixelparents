@@ -178,9 +178,15 @@ export default async function CommunityPage() {
     );
   }
 
-  const markers = buildMarkers(breakdowns.signups_by_state);
+  const markers = buildMarkers(breakdowns.signups_by_state, breakdowns.signups_by_country);
   const builders = breakdowns.signups_by_builder_interest.builder ?? 0;
   const statesCount = Object.keys(breakdowns.signups_by_state).length;
+  // Distinct countries represented: the explicit country breakdown, plus an
+  // implicit "United States" whenever any US-state family is on the map (US
+  // families are captured by state, not always a redundant country pick).
+  const countrySet = new Set(Object.keys(breakdowns.signups_by_country));
+  if (statesCount > 0) countrySet.add("United States");
+  const countriesCount = countrySet.size;
   const topSkills = Object.entries(breakdowns.signups_by_skillset)
     .sort((a, b) => b[1] - a[1])
     .slice(0, 8) as Array<[string, number]>;
@@ -197,9 +203,13 @@ export default async function CommunityPage() {
           <SectionLabel>Where we&apos;re building</SectionLabel>
           <WorldMap markers={markers} accent={AMBER} />
           <p className="mt-2 text-xs text-white/40">
-            A pin for every state with a Pixel Parents family
-            {statesCount ? ` · ${statesCount} state${statesCount === 1 ? "" : "s"} so far` : ""}. We&apos;re
-            an online school, so the map keeps filling in as families join from around the world.
+            A pin for every place Pixel Parents families call home
+            {countriesCount
+              ? ` · ${countriesCount} countr${countriesCount === 1 ? "y" : "ies"}`
+              : ""}
+            {statesCount ? `, ${statesCount} US state${statesCount === 1 ? "" : "s"}` : ""}
+            {countriesCount || statesCount ? " so far" : ""}. We&apos;re an online school, so the map keeps
+            filling in as families join from around the world.
           </p>
         </section>
 

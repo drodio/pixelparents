@@ -31,6 +31,14 @@ describe("parseFilters", () => {
     expect(parseFilters(p("builder_interest=maybe")).errors).toHaveLength(1);
   });
 
+  it("validates country against the allow-list", () => {
+    expect(parseFilters(p("country=Canada")).filters.country).toBe("Canada");
+    expect(parseFilters(p("country=United+States")).filters.country).toBe("United States");
+    const r = parseFilters(p("country=Atlantis"));
+    expect(r.errors).toHaveLength(1);
+    expect(r.filters.country).toBeUndefined();
+  });
+
   it("ignores absent params", () => {
     const r = parseFilters(p(""));
     expect(r.errors).toEqual([]);

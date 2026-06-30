@@ -20,6 +20,7 @@ const EXAMPLE_STATS = `{
 
 const EXAMPLE_BREAKDOWNS = `{
   "signups_by_state":           { "California": 18, "Washington": 6, "New York": 4 },
+  "signups_by_country":         { "United States": 31, "Canada": 5, "India": 4 },
   "signups_by_affiliation":     { "Existing parent (currently enrolled)": 22, "New parent …": 12 },
   "signups_by_tech_depth":      { "10x Developer": 9, "Vibe coder": 7 },
   "signups_by_time_commitment": { "1-2hr/wk": 14, "2-5hr/wk": 11 },

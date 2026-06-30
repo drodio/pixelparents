@@ -1,5 +1,6 @@
 import {
   US_STATES,
+  COUNTRIES,
   OHS_AFFILIATIONS,
   TECHNICAL_DEPTH,
   TIME_COMMITMENT,
@@ -33,6 +34,7 @@ export function parseFilters(params: URLSearchParams): { filters: Filters; error
   }
 
   const checks: Array<[keyof Filters, readonly string[], string]> = [
+    ["country", COUNTRIES, "country"],
     ["affiliation", OHS_AFFILIATIONS, "affiliation"],
     ["tech_depth", TECHNICAL_DEPTH, "tech_depth"],
     ["time_commitment", TIME_COMMITMENT, "time_commitment"],

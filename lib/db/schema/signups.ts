@@ -49,6 +49,9 @@ export const signups = pgTable("signups", {
   // Optional family-level profile (step 2 — entered once).
   city: text("city"),
   state: text("state"),
+  // Country (optional). OHS is a global online school, so the community map plots
+  // international families by country centroid; US families keep plotting by `state`.
+  country: text("country"),
   parentInterests: text("parent_interests").array(),
   photos: jsonb("photos").$type<Photo[]>().default([]),
 

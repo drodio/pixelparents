@@ -33,6 +33,7 @@ export type JsonRpcResponse = {
 
 const FILTER_PROPS: Json = {
   state: { type: "string", description: "US state (full name or USPS abbreviation)" },
+  country: { type: "string", description: "Country (e.g. United States, Canada, India)" },
   affiliation: { type: "string", description: "OHS affiliation" },
   tech_depth: { type: "string", description: "Self-described technical depth" },
   time_commitment: { type: "string", description: "Weekly time commitment" },
@@ -51,7 +52,7 @@ export const MCP_TOOLS = [
   {
     name: "community_breakdowns",
     description:
-      "Signup counts by state, affiliation, technical depth, time commitment, skillset, grade, plus a tech-depth×skillset cross-tab and top interests (optionally filtered).",
+      "Signup counts by state, country, affiliation, technical depth, time commitment, skillset, grade, plus a tech-depth×skillset cross-tab and top interests (optionally filtered).",
     inputSchema: { type: "object", properties: FILTER_PROPS },
   },
   {
@@ -73,6 +74,7 @@ function pickFilters(args: Json): Filters {
   const f: Filters = {};
   for (const k of [
     "state",
+    "country",
     "affiliation",
     "tech_depth",
     "time_commitment",

@@ -9,6 +9,7 @@ import {
   SKILLSETS,
   TIME_COMMITMENT,
   US_STATES,
+  COUNTRIES,
 } from "@/lib/options";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
@@ -26,7 +27,7 @@ import { TagPicker, PhotoUploader } from "./thanks/family-form";
 
 // Bump when the `empty` shape changes incompatibly — stored drafts from an older
 // shape are discarded on restore rather than spread in with stale keys.
-const DRAFT_VERSION = 1;
+const DRAFT_VERSION = 2;
 
 function FieldError({ msg }: { msg?: string }) {
   if (!msg) return null;
@@ -53,6 +54,8 @@ const empty = {
   parentInterests: [] as string[],
   city: "",
   state: "",
+  // OHS is global; default to the most common country (matches lib/options.ts).
+  country: "United States",
   // Resource-for-students opt-in (only surfaced once LinkedIn is filled).
   // Defaults to "yes" to match the pre-checked option in the prompt.
   studentResource: "yes" as "yes" | "no",
@@ -225,6 +228,14 @@ export default function SignupForm({
     setV((prev) => ({ ...prev, studentResource: choice }));
     queue({ studentResourceOptIn: choice === "yes" }, true);
   }
+  // State only applies to US families. When the country is switched away from the
+  // US, clear any previously-picked state in the same save so the row stays
+  // consistent (and the map plots by country centroid, not a stale state pin).
+  function setCountry(value: string) {
+    const clearState = value !== "United States";
+    setV((prev) => ({ ...prev, country: value, ...(clearState ? { state: "" } : {}) }));
+    queue({ country: value, ...(clearState ? { state: "" } : {}) }, true);
+  }
   function setBuilderInterest(choice: "builder" | "aspiring" | "no") {
     setV((prev) => ({ ...prev, builderInterest: choice }));
     queue({ builderInterest: choice }, true);
@@ -268,7 +279,10 @@ export default function SignupForm({
         skillsets: v.skillsets,
         parentInterests: v.parentInterests,
         city: v.city,
-        state: v.state,
+        country: v.country,
+        // State only applies to US families; clear it otherwise so a switched
+        // country doesn't leave a stale state on the row.
+        state: v.country === "United States" ? v.state : "",
         builderInterest: v.builderInterest,
         ...(v.linkedinHandle.trim() !== ""
           ? { studentResourceOptIn: v.studentResource === "yes" }
@@ -436,6 +450,21 @@ export default function SignupForm({
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
+            <label className={labelCls} htmlFor="country">Country</label>
+            <select
+              id="country"
+              value={v.country}
+              onChange={(e) => setCountry(e.target.value)}
+              className={inputCls}
+              autoComplete="country-name"
+            >
+              <option value="">Select…</option>
+              {COUNTRIES.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+          </div>
+          <div>
             <label className={labelCls} htmlFor="city">City</label>
             <input
               id="city"
@@ -445,20 +474,24 @@ export default function SignupForm({
               autoComplete="address-level2"
             />
           </div>
-          <div>
-            <label className={labelCls} htmlFor="state">State</label>
-            <select
-              id="state"
-              value={v.state}
-              onChange={(e) => set("state", e.target.value, true)}
-              className={inputCls}
-            >
-              <option value="">Select…</option>
-              {US_STATES.map((s) => (
-                <option key={s} value={s}>{s}</option>
-              ))}
-            </select>
-          </div>
+          {/* State applies to US families; the world map plots everyone else by
+              country centroid, so only show it when Country is United States. */}
+          {v.country === "United States" && (
+            <div>
+              <label className={labelCls} htmlFor="state">State</label>
+              <select
+                id="state"
+                value={v.state}
+                onChange={(e) => set("state", e.target.value, true)}
+                className={inputCls}
+              >
+                <option value="">Select…</option>
+                {US_STATES.map((s) => (
+                  <option key={s} value={s}>{s}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
         <div>

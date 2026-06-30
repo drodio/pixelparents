@@ -91,6 +91,9 @@ export function ensureFamiliesSchema(): Promise<void> {
       `;
       await sql`ALTER TABLE signups ADD COLUMN IF NOT EXISTS family_id uuid`;
       await sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS family_id uuid`;
+      // Country (lib/db/schema/signups.ts): optional, plotted on the global
+      // community map. Nullable + idempotent, same rationale as the columns above.
+      await sql`ALTER TABLE signups ADD COLUMN IF NOT EXISTS country text`;
       // Student-email verification (lib/verify.ts): the confirmed OHS student
       // email is recorded per child. Nullable + idempotent, same rationale as
       // the family_id columns above.
