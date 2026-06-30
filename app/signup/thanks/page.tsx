@@ -141,6 +141,13 @@ export default async function ThanksPage({
         {validId && signup && verifyState && (
           <div className="mt-10">
             <StudentVerify signupId={validId} initial={verifyState} />
+            {verifyState.status !== "approved" && (
+              <p className="mt-3 text-center text-sm text-white/45">
+                <Link href="/dashboard" className="hover:text-white/80">
+                  I&apos;ll verify later — go to my dashboard →
+                </Link>
+              </p>
+            )}
           </div>
         )}
 

@@ -27,16 +27,34 @@ export type DirectoryCard = {
   thumbUrls: string[];
 };
 
+// Families that signed up BEFORE student-email verification shipped are
+// grandfathered into the directory so the live directory isn't suddenly emptied;
+// everyone who joins after must verify (approvalStatus="approved", set by the
+// student-email flow or an admin) to be listed. Drop this cutoff for a hard gate
+// once existing families have had a chance to verify.
+export const VERIFICATION_CUTOFF = Date.parse("2026-06-30T00:00:00Z");
+
+// A family counts as verified for the directory if an admin/student-email flow
+// approved them, OR they predate verification (grandfathered).
+export function isFamilyVerified(row: Pick<SignupRow, "extra" | "createdAt">): boolean {
+  const extra = (row.extra ?? {}) as Record<string, unknown>;
+  if (extra.approvalStatus === "approved") return true;
+  const created =
+    row.createdAt instanceof Date ? row.createdAt.getTime() : Date.parse(String(row.createdAt));
+  return Number.isFinite(created) && created < VERIFICATION_CUTOFF;
+}
+
 // Inclusion gate for the OHS directory. The visibility decision routes through
 // the SAME unit-tested canViewProfile the /p page uses (single source of truth),
 // so the directory can't silently diverge if the gate's semantics change. The
 // sharing preconditions (enabled, has a token, non-blank name to drop auto-save
-// drafts) wrap that decision.
+// drafts) wrap that decision, and the family must be verified (or grandfathered).
 export function isDirectoryVisible(row: SignupRow): boolean {
   return (
     row.shareEnabled === true &&
     Boolean(row.shareToken) &&
     Boolean(row.firstName?.trim()) &&
+    isFamilyVerified(row) &&
     canViewProfile(coerceShareVisibility(row.shareVisibility), {
       isOwner: false,
       isOhsFamily: true,

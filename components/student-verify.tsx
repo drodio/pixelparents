@@ -4,6 +4,10 @@ import { useState, useTransition } from "react";
 import { requestStudentCode, confirmStudentCode, type VerifyState } from "@/app/signup/thanks/verify-actions";
 import { IconCircleCheck, IconGradCap } from "@/components/icons";
 
+// Optional WhatsApp fallback: a wa.me link (set NEXT_PUBLIC_DRODIO_WHATSAPP_URL
+// in env — no phone number is committed to this public repo). Hidden when unset.
+const WHATSAPP_URL = process.env.NEXT_PUBLIC_DRODIO_WHATSAPP_URL;
+
 type Step = "email" | "code" | "approved";
 
 // Self-serve "this is a real OHS family" check: the parent enters their OHS
@@ -157,6 +161,21 @@ export function StudentVerify({
 
       {notice && <p className="mt-3 text-sm text-emerald-300/90">{notice}</p>}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
+
+      {WHATSAPP_URL && (
+        <p className="mt-4 border-t border-white/10 pt-3 text-xs text-white/45">
+          Don&apos;t have your student&apos;s Stanford email handy?{" "}
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-amber-300 underline-offset-2 hover:underline"
+          >
+            Message Daniel on WhatsApp
+          </a>{" "}
+          to get verified another way.
+        </p>
+      )}
     </div>
   );
 }

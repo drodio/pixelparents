@@ -70,7 +70,7 @@ export default async function Home() {
         </Link>
       ) : signedIn ? null : (
         // Logged-out visitors get a Log in button → /directory after sign-in.
-        <Link href="/sign-in?redirect_url=/directory" className={cornerBtnCls}>
+        <Link href="/sign-in?redirect_url=/dashboard" className={cornerBtnCls}>
           Log in
         </Link>
       )}

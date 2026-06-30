@@ -6,6 +6,8 @@ import {
   geocodeLocation,
   haversineMiles,
   isDirectoryVisible,
+  isFamilyVerified,
+  VERIFICATION_CUTOFF,
 } from "@/lib/directory";
 import { familyMatchesAgeRange, familyWithinRadius } from "@/lib/directory-filters";
 import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
@@ -38,7 +40,9 @@ function signup(overrides: Partial<SignupRow> = {}): SignupRow {
     shareToken: "tok-123",
     shareFields: null, // null => DEFAULT_SHARE_FIELDS (everything)
     shareVisibility: "ohs",
-    extra: {},
+    // Default to verified so the sharing-gate tests below stay focused on sharing;
+    // verification is exercised in its own describe block.
+    extra: { approvalStatus: "approved" },
     ...overrides,
   } as SignupRow;
 }
@@ -82,6 +86,35 @@ describe("isDirectoryVisible (directory inclusion gate)", () => {
 
   it("excludes blank auto-save drafts (no name)", () => {
     expect(isDirectoryVisible(signup({ firstName: "  " }))).toBe(false);
+  });
+
+  it("excludes unverified families who joined after the cutoff", () => {
+    expect(
+      isDirectoryVisible(signup({ extra: {}, createdAt: new Date(VERIFICATION_CUTOFF + 86_400_000) })),
+    ).toBe(false);
+  });
+
+  it("includes verified families who joined after the cutoff", () => {
+    expect(
+      isDirectoryVisible(
+        signup({ extra: { approvalStatus: "approved" }, createdAt: new Date(VERIFICATION_CUTOFF + 86_400_000) }),
+      ),
+    ).toBe(true);
+  });
+});
+
+describe("isFamilyVerified (directory verification gate)", () => {
+  it("treats approvalStatus=approved as verified", () => {
+    expect(isFamilyVerified({ extra: { approvalStatus: "approved" }, createdAt: new Date() })).toBe(true);
+  });
+
+  it("grandfathers families created before the cutoff", () => {
+    expect(isFamilyVerified({ extra: {}, createdAt: new Date(VERIFICATION_CUTOFF - 1) })).toBe(true);
+  });
+
+  it("gates unverified families created after the cutoff", () => {
+    expect(isFamilyVerified({ extra: {}, createdAt: new Date(VERIFICATION_CUTOFF + 1) })).toBe(false);
+    expect(isFamilyVerified({ extra: { approvalStatus: "pending" }, createdAt: new Date(VERIFICATION_CUTOFF + 1) })).toBe(false);
   });
 });
 
