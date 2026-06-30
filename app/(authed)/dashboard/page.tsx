@@ -9,7 +9,9 @@ import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import {
+  IconHeart,
   IconUsers,
+  IconHome,
   IconCode,
   IconCircleCheck,
   IconGradCap,
@@ -178,13 +180,25 @@ export default async function DashboardPage() {
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <LinkCard
+              href="/community"
+              title="Community"
+              desc="The two-way help board — post an Ask when you need a hand or an Offer when you can give one, and get matched."
+              Icon={IconHeart}
+            />
+            <LinkCard
               href="/directory"
               title="Directory"
               desc="Browse OHS families and students who are sharing, plus a map of where we're building."
               Icon={IconUsers}
             />
             <LinkCard
-              href="/developers"
+              href="/family"
+              title="Family"
+              desc="Manage your family profile and your verified OHS students."
+              Icon={IconHome}
+            />
+            <LinkCard
+              href="/dashboard/developers"
               title="Developers"
               desc="Build on the Pixel Parents API — request a key and read the docs."
               Icon={IconCode}

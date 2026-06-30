@@ -23,15 +23,15 @@ type NavItem = {
 
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", Icon: IconGrid },
-  { href: "/family", label: "Family", Icon: IconHome },
   // "Community" is the bidirectional help board (route stays /community), placed
-  // right below Family: verified OHS families (parent OR student) post Asks ("I
+  // right below Dashboard: verified OHS families (parent OR student) post Asks ("I
   // need help") or Offers ("I can help") + get matched. The surface gates to
   // verified families; the tab shows for all authed users (unverified → a prompt).
   { href: "/community", label: "Community", Icon: IconHeart },
   // "Directory" is the consolidated member showcase (grid + map + stats) with
   // in-tab profile views, now served at /directory.
   { href: "/directory", label: "Directory", Icon: IconUsers },
+  { href: "/family", label: "Family", Icon: IconHome },
   // Developers now lives INSIDE the shell (no more new-tab jump): signed-in users
   // get the in-dashboard developer hub at /dashboard/developers. The public
   // marketing/docs page at /developers stays for signed-out / unauth visitors.
