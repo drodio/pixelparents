@@ -7,11 +7,13 @@ import { isAdminEmail } from "@/lib/admin";
 import { getFamilyForEmail } from "@/lib/db/signups";
 import { getInterestPool } from "@/lib/interests";
 import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
-import { isStudentEmail } from "@/lib/verify";
+import { isStudentEmail, verifiedEmailsOf } from "@/lib/verify";
+import { buildFamilyDisplay } from "@/lib/family-display";
+import { coerceShareVisibility } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { StudentVerify } from "@/components/student-verify";
-import { IconGradCap } from "@/components/icons";
+import { IconGradCap, IconUsers } from "@/components/icons";
 import FamilyForm from "@/app/signup/thanks/family-form";
 import { getVerifyState } from "@/app/signup/thanks/verify-actions";
 import { MemberCard } from "./member-card";
@@ -67,14 +69,19 @@ export default async function FamilyPage() {
     );
   }
 
-  // Order members: the caller first, then co-parents (already oldest-first).
-  const others = family.members.filter((m) => m.id !== self.id);
-
   // Per-member "Student" flag: true when the member's OWN login email is an OHS
   // student email. Computed here (server-side) — lib/verify.ts imports node:crypto
   // and must not be pulled into the client bundle (member-card.tsx).
   const isStudentById = new Map<string, boolean>();
   for (const m of family.members) isStudentById.set(m.id, isStudentEmail(m.email));
+
+  // Section into "Parents & guardians" vs "Students" and DEDUP child rows against
+  // student accounts (a child whose verified student email matches a student
+  // account is folded into that account — one entry, not two; no rows deleted).
+  // Pure projection — see lib/family-display.ts. We pass the canonical server-side
+  // verifiedEmailsOf (lib/verify imports node:crypto, so it stays out of the lib).
+  const { parentMembers, studentMembers, studentProfileByAccountId, unmatchedKids } =
+    buildFamilyDisplay(family.members, family.kids, self.id, verifiedEmailsOf);
 
   const [interestPool, verifyState] = await Promise.all([
     getInterestPool(),
@@ -85,7 +92,7 @@ export default async function FamilyPage() {
   // editor can render them — mirrors app/signup/thanks/page.tsx.
   const childPreviewsById: Record<string, Record<string, string>> = {};
   await Promise.all(
-    family.kids.map(async (k) => {
+    unmatchedKids.map(async (k) => {
       const kp = k.photos ?? [];
       if (kp.length === 0) return;
       const urls = await signedPhotoUrls(kp.map((p) => p.pathname));
@@ -107,31 +114,60 @@ export default async function FamilyPage() {
       </header>
 
       <div className="flex flex-col gap-10">
-        {/* Parents (the caller + any co-parents). Any family member can edit any
-            other member's details — authorized server-side by patchFamilyMember. */}
+        {/* Visibility is per-member, and ANY family member can manage everyone's —
+            authorized server-side by family membership (setFamilyMemberVisibility). */}
+        <p className="flex items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/55">
+          <IconUsers className="mt-0.5 h-5 w-5 shrink-0 text-amber-300" />
+          <span>
+            Visibility is set per member. Any family member can manage everyone&apos;s —
+            choose who can see each person&apos;s profile below.
+          </span>
+        </p>
+
+        {/* Parents &amp; guardians (the caller + any co-parents). Any family member
+            can edit any other member's details — authorized server-side by
+            patchFamilyMember. */}
         <section className="flex flex-col gap-4">
           <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
             Parents &amp; guardians
           </h2>
-          <MemberCard
-            member={self}
-            isSelf
-            isStudent={isStudentById.get(self.id) ?? false}
-            suggestedInterests={interestPool}
-          />
-          {others.map((m) => (
+          {parentMembers.map((m) => (
             <MemberCard
               key={m.id}
               member={m}
-              isSelf={false}
+              isSelf={m.id === self.id}
               isStudent={isStudentById.get(m.id) ?? false}
               suggestedInterests={interestPool}
+              initialVisibility={coerceShareVisibility(m.shareVisibility)}
             />
           ))}
         </section>
 
+        {/* Students — student accounts, deduped against matching child rows. Each
+            card is enriched with the matched child's grade + interests. */}
+        {studentMembers.length > 0 && (
+          <section className="flex flex-col gap-4">
+            <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
+              Students
+            </h2>
+            {studentMembers.map((m) => (
+              <MemberCard
+                key={m.id}
+                member={m}
+                isSelf={m.id === self.id}
+                isStudent={isStudentById.get(m.id) ?? false}
+                suggestedInterests={interestPool}
+                initialVisibility={coerceShareVisibility(m.shareVisibility)}
+                studentProfile={studentProfileByAccountId.get(m.id)}
+              />
+            ))}
+          </section>
+        )}
+
         {/* Children — reuses the family form (loads/edits the family's kids and
-            auto-saves via patchChild, which is family-membership-authorized). */}
+            auto-saves via patchChild, which is family-membership-authorized). Kids
+            whose verified student email matches a student account above are folded
+            into that account (deduped) and omitted here — the rows are NOT deleted. */}
         <section className="flex flex-col gap-4">
           <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
             Children
@@ -139,7 +175,7 @@ export default async function FamilyPage() {
           <FamilyForm
             signupId={self.id}
             suggestedInterests={interestPool}
-            existingChildren={family.kids.map((k) => ({
+            existingChildren={unmatchedKids.map((k) => ({
               id: k.id,
               firstName: k.firstName,
               grade: k.grade,
