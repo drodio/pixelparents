@@ -10,9 +10,11 @@ import { hasDatabase } from "@/lib/db";
 import { formatLastUsed } from "@/lib/format";
 import { shareFieldsOrDefault, coerceShareVisibility } from "@/lib/share";
 import { shareUrlFor } from "@/lib/url";
+import { getVerifyState } from "@/app/signup/thanks/verify-actions";
 import { ShareSettings } from "@/app/signup/thanks/share-settings";
 import { DashboardShell } from "@/components/dashboard-shell";
-import { IconClock, IconCode } from "@/components/icons";
+import { StudentVerify } from "@/components/student-verify";
+import { IconClock, IconCode, IconGradCap } from "@/components/icons";
 import { KeyPanel } from "./key-panel";
 import { RequestForm } from "./request-form";
 
@@ -94,6 +96,11 @@ export default async function AccountPage() {
     : null;
   const firstName = signup?.firstName ?? user.firstName ?? null;
 
+  // Verified-students panel: hydrate the same widget the thanks/verify pages use.
+  // verifyState.verifiedEmails carries the family's full deduped list (a family
+  // can verify many OHS students); the widget lets them add another.
+  const verifyState = signup ? await getVerifyState(signup.id) : null;
+
   return (
     <DashboardShell firstName={firstName} email={email} status={approvalStatus} isAdmin={isAdmin}>
       <AccountHeader />
@@ -148,6 +155,39 @@ export default async function AccountPage() {
           </>
         )}
       </section>
+
+      {signup && verifyState && (
+        <section
+          id="students"
+          className="mt-8 flex scroll-mt-8 flex-col gap-4 border-t border-white/10 pt-8"
+        >
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">Your verified students</h2>
+            <p className="mt-1 text-sm text-white/55">
+              Every OHS student your family has verified. You can verify as many as
+              you like.
+            </p>
+          </div>
+          {verifyState.verifiedEmails.length > 0 ? (
+            <ul className="flex flex-wrap gap-2">
+              {verifyState.verifiedEmails.map((studentEmail) => (
+                <li
+                  key={studentEmail}
+                  className="inline-flex items-center gap-1.5 rounded-full border border-emerald-400/30 bg-emerald-400/[0.08] px-3 py-1 text-sm text-emerald-100"
+                >
+                  <IconGradCap className="h-4 w-4 text-emerald-300" />
+                  {studentEmail}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="text-sm text-white/45">
+              No students verified yet. Add one below to unlock the OHS family directory.
+            </p>
+          )}
+          <StudentVerify signupId={signup.id} initial={verifyState} allowAddMore />
+        </section>
+      )}
 
       {signup && (
         <section className="mt-8 flex flex-col gap-4 border-t border-white/10 pt-8">

@@ -41,6 +41,20 @@ export type PendingVerify = {
   lastSentAt: number; // epoch ms
 };
 
+// A family can verify many OHS students. We keep the original singular
+// `verifiedStudentEmail` in lockstep for back-compat AND maintain a
+// `verifiedStudentEmails` array (lowercased, deduped). This reader tolerates a
+// row that only carries the legacy singular field by falling back to it, so older
+// families verified before this feature still list their one student.
+export function verifiedEmailsOf(extra: Record<string, unknown>): string[] {
+  const list = extra.verifiedStudentEmails;
+  if (Array.isArray(list)) {
+    return list.filter((e): e is string => typeof e === "string" && e.length > 0);
+  }
+  const single = extra.verifiedStudentEmail;
+  return typeof single === "string" && single ? [single] : [];
+}
+
 export type VerifyCheck = "ok" | "no-code" | "expired" | "too-many-attempts" | "mismatch";
 
 // Pure decision for a submitted code against the stored pending state.

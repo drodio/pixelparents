@@ -15,6 +15,7 @@ import {
   hashCode,
   isStudentEmail,
   normalizeEmail,
+  verifiedEmailsOf,
   type PendingVerify,
 } from "@/lib/verify";
 
@@ -26,6 +27,10 @@ export type VerifyState = {
   // The verified student email (when approved) or the pending one (when a code
   // is outstanding); null otherwise. Never the code itself.
   email: string | null;
+  // All OHS students this family has verified (lowercased, deduped). A family can
+  // verify many students; `email` stays the most-recent/legacy singular value for
+  // back-compat. Empty until at least one student is verified.
+  verifiedEmails: string[];
   hasPendingCode: boolean;
   attemptsLeft: number;
 };
@@ -41,6 +46,7 @@ export async function getVerifyState(signupId: string): Promise<VerifyState> {
   const fallback: VerifyState = {
     status: "pending",
     email: null,
+    verifiedEmails: [],
     hasPendingCode: false,
     attemptsLeft: MAX_ATTEMPTS,
   };
@@ -60,6 +66,7 @@ export async function getVerifyState(signupId: string): Promise<VerifyState> {
     return {
       status,
       email: status === "approved" ? verifiedEmail : (pending?.email ?? null),
+      verifiedEmails: verifiedEmailsOf(extra),
       hasPendingCode: Boolean(pending),
       attemptsLeft: pending ? Math.max(0, MAX_ATTEMPTS - pending.attempts) : MAX_ATTEMPTS,
     };
@@ -91,7 +98,10 @@ export async function requestStudentCode(
       .limit(1);
     if (!row) return { ok: false, error: "We couldn't find your signup — please reload the page." };
     const extra = (row.extra ?? {}) as Record<string, unknown>;
-    if (readApprovalStatus(extra) === "approved") return { ok: true, sentTo: email };
+    // A family may verify many students. If this exact email is already verified
+    // there's nothing to do — short-circuit. But an already-approved family can
+    // still send a code for a NEW student, so we only stop on an exact re-verify.
+    if (verifiedEmailsOf(extra).includes(email)) return { ok: true, sentTo: email };
 
     const prev = pendingOf(extra);
     const now = Date.now();
@@ -129,7 +139,10 @@ export async function requestStudentCode(
 
 // Step 2: parent enters the emailed code. On success we approve the WHOLE family
 // (every parent sharing the family_id) and record the verified email — both on
-// the signups (extra.verifiedStudentEmail) and on the family's children.
+// the signups (extra.verifiedStudentEmail + extra.verifiedStudentEmails) and on
+// the family's children. A family may verify many students; each successful
+// confirm appends to the deduped verifiedStudentEmails array while keeping the
+// legacy singular field in lockstep.
 export async function confirmStudentCode(
   signupId: string,
   codeRaw: string,
@@ -144,9 +157,14 @@ export async function confirmStudentCode(
       .limit(1);
     if (!row) return { ok: false, error: "We couldn't find your signup — please reload the page." };
     const extra = (row.extra ?? {}) as Record<string, unknown>;
-    if (readApprovalStatus(extra) === "approved") return { ok: true, status: "approved" };
-
     const pending = pendingOf(extra);
+    // Already approved AND nothing in flight: terminal state, nothing to confirm.
+    // If a code IS outstanding we still process it — an approved family verifying
+    // an ADDITIONAL student needs the new email recorded (additive, not re-gating).
+    if (!pending && readApprovalStatus(extra) === "approved") {
+      return { ok: true, status: "approved" };
+    }
+
     const now = Date.now();
     const result = checkCode(pending, code, now);
 
@@ -157,15 +175,52 @@ export async function confirmStudentCode(
       const sql = getSql();
       // Approve every parent in the family. Treat a verified student email as an
       // approval; never resurrect a row an admin explicitly denied. Drop the
-      // now-spent pending code.
+      // now-spent pending code. A family can verify many students, so we ALSO
+      // append the email to the deduped `verifiedStudentEmails` array (jsonb)
+      // while keeping the legacy singular `verifiedStudentEmail` in lockstep.
+      // Approval attribution (approvalBy/approvalAt) is only stamped on rows not
+      // yet approved, so confirming a 2nd student doesn't rewrite the 1st's
+      // approval metadata — this is purely additive, never re-gating.
       await sql`
         UPDATE signups
-        SET extra = jsonb_set(jsonb_set(jsonb_set(jsonb_set(
+        SET extra = jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(
               COALESCE(extra, '{}'::jsonb) - 'studentVerify',
               '{approvalStatus}', to_jsonb('approved'::text), true),
-              '{approvalBy}', to_jsonb('student-email'::text), true),
-              '{approvalAt}', to_jsonb(${at}::text), true),
-              '{verifiedStudentEmail}', to_jsonb(${email}::text), true)
+              '{approvalBy}',
+                CASE WHEN COALESCE(extra->>'approvalStatus', 'pending') = 'approved'
+                  THEN COALESCE(extra->'approvalBy', to_jsonb('student-email'::text))
+                  ELSE to_jsonb('student-email'::text) END,
+                true),
+              '{approvalAt}',
+                CASE WHEN COALESCE(extra->>'approvalStatus', 'pending') = 'approved'
+                  THEN COALESCE(extra->'approvalAt', to_jsonb(${at}::text))
+                  ELSE to_jsonb(${at}::text) END,
+                true),
+              '{verifiedStudentEmail}', to_jsonb(${email}::text), true),
+              '{verifiedStudentEmails}',
+                CASE
+                  -- Already present (in the array, or as a legacy singular that
+                  -- the array would inherit): leave the list untouched.
+                  WHEN COALESCE(
+                         extra->'verifiedStudentEmails',
+                         CASE WHEN jsonb_typeof(extra->'verifiedStudentEmail') = 'string'
+                           THEN jsonb_build_array(extra->'verifiedStudentEmail')
+                           ELSE '[]'::jsonb END
+                       ) @> to_jsonb(${email}::text)
+                    THEN COALESCE(
+                         extra->'verifiedStudentEmails',
+                         CASE WHEN jsonb_typeof(extra->'verifiedStudentEmail') = 'string'
+                           THEN jsonb_build_array(extra->'verifiedStudentEmail')
+                           ELSE '[]'::jsonb END)
+                  -- Otherwise append to the (back-filled) base array.
+                  ELSE COALESCE(
+                         extra->'verifiedStudentEmails',
+                         CASE WHEN jsonb_typeof(extra->'verifiedStudentEmail') = 'string'
+                           THEN jsonb_build_array(extra->'verifiedStudentEmail')
+                           ELSE '[]'::jsonb END
+                       ) || to_jsonb(${email}::text)
+                END,
+                true)
         WHERE family_id = ${row.familyId}
           AND COALESCE(extra->>'approvalStatus', 'pending') <> 'denied'
       `;
