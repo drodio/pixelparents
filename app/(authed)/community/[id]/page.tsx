@@ -12,7 +12,8 @@ import {
   expertiseSignalsOf,
 } from "@/lib/directory";
 import { shareFieldsOrDefault } from "@/lib/share";
-import { websiteUrlOf } from "@/lib/enrichment/profile";
+import { websiteUrlOf, curatedEnrichmentOf, type StoredEnrichment } from "@/lib/enrichment/profile";
+import { aiRankMatches, type AiCandidate } from "@/lib/match-ai";
 import { isStudentAccount } from "@/lib/family-display";
 import {
   getAskById,
@@ -164,12 +165,55 @@ export default async function ExchangePostPage({
   const soon = !expired && isExpiringSoon({ validUntil: ask.validUntil ? new Date(ask.validUntil).toISOString() : null });
   const resolved = ask.status === "resolved";
 
-  const [responses, suggested, alreadyResponded, authorRows] = await Promise.all([
+  const [responses, suggestedRaw, alreadyResponded, authorRows] = await Promise.all([
     listResponsesForAsk(id),
     getSuggestedHelpers(ask, 8),
     hasResponded(id, viewerSignup!.id),
     getDb().select().from(signups).where(eq(signups.id, ask.authorSignupId)).limit(1),
   ]);
+
+  // AI-assisted semantic re-rank of the suggested helpers. getSuggestedHelpers
+  // already applied the deterministic tag-overlap matcher (the candidate
+  // pre-filter + privacy gating); here we hand those top candidates + their
+  // SHAREABLE info-profiles to the model to re-rank by semantic fit and attach a
+  // one-line rationale per card. On no AI key / any failure this returns the
+  // deterministic order unchanged (lib/match-ai never throws), so the page never
+  // breaks. We send ONLY non-PII matching data (the same expertise signals the
+  // matcher uses + the curated bio/expertise slice) — no new contact info is
+  // exposed, and the candidate set itself is exactly what the privacy layer
+  // already allowed to surface.
+  let suggested = suggestedRaw;
+  if (suggestedRaw.length > 1) {
+    const ids = suggestedRaw.map((m) => m.signupId);
+    const profileRows = await getDb().select().from(signups).where(inArray(signups.id, ids));
+    const rowById = new Map(profileRows.map((r) => [r.id, r]));
+    const aiCandidates: AiCandidate[] = suggestedRaw.map((m) => {
+      const row = rowById.get(m.signupId);
+      const stored = row
+        ? (((row.extra ?? {}) as Record<string, unknown>).enrichment as StoredEnrichment | null | undefined)
+        : null;
+      const curated = curatedEnrichmentOf(stored);
+      return {
+        signupId: m.signupId,
+        displayName: m.name,
+        expertiseSignals: row ? expertiseSignalsOf(row) : [],
+        bio: curated?.bio ?? null,
+        enrichmentExpertise: curated?.expertiseTags ?? [],
+        canHelpWith: curated?.canHelpWith ?? [],
+      };
+    });
+    suggested = await aiRankMatches(
+      {
+        id: ask.id,
+        title: ask.title,
+        body: ask.body,
+        tags: ask.expertiseTags ?? [],
+        kind,
+      },
+      suggestedRaw,
+      aiCandidates,
+    );
+  }
 
   // Author profile card data. The profile LINK is gated by whether the author has
   // a SHAREABLE profile — hasShareableProfile, NOT isDirectoryVisible. The latter
@@ -587,7 +631,11 @@ export default async function ExchangePostPage({
               <p className="text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
                 {isOffer ? "Members who might be interested" : "People who can help"}
               </p>
-              <p className="mt-1 text-[11px] text-white/35">By expertise overlap.</p>
+              <p className="mt-1 text-[11px] text-white/35">
+                {suggested.some((m) => m.rationale)
+                  ? "Ranked by fit."
+                  : "By expertise overlap."}
+              </p>
               <div className="mt-3 flex flex-col gap-2.5">
                 {suggested.map((m) => {
                   const inner = (
@@ -595,6 +643,13 @@ export default async function ExchangePostPage({
                       <h4 className="text-sm font-semibold text-white">
                         {m.name ?? "A community member"}
                       </h4>
+                      {/* AI semantic-match rationale, shown subtly when present.
+                          Absent on the deterministic fallback path. */}
+                      {m.rationale && (
+                        <p className="mt-1 text-[11px] italic leading-snug text-white/50">
+                          {m.rationale}
+                        </p>
+                      )}
                       <div className="mt-1.5 flex flex-wrap gap-1">
                         {m.overlapTags.map((t) => (
                           <span

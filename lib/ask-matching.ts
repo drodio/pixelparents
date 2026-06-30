@@ -34,6 +34,11 @@ export type AskMatch = {
   // The exact shared tags, in the ASK's order, so the UI can render stable
   // "matched on: X, Y" chips.
   overlapTags: string[];
+  // OPTIONAL one-line, human rationale for the match ("strong on EdTech +
+  // fundraising"), attached by the AI semantic re-ranker (lib/match-ai). The
+  // deterministic rankCandidates NEVER sets this — it's absent on the keyless
+  // fallback path, so the UI must treat it as optional.
+  rationale?: string;
 };
 
 export type RankOptions = {
