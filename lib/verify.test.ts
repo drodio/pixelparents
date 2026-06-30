@@ -7,6 +7,7 @@ import {
   hashCode,
   isStudentEmail,
   normalizeEmail,
+  verifiedEmailsOf,
   type PendingVerify,
 } from "@/lib/verify";
 
@@ -101,5 +102,39 @@ describe("checkCode", () => {
     expect(
       checkCode(pending({ attempts: MAX_ATTEMPTS }), "123456", now + CODE_TTL_MS + 1),
     ).toBe("expired");
+  });
+});
+
+describe("verifiedEmailsOf", () => {
+  const a = mk("a", `ohs.${STANFORD}`);
+  const b = mk("b", `ohs.${STANFORD}`);
+
+  it("returns the plural array when present", () => {
+    expect(verifiedEmailsOf({ verifiedStudentEmails: [a, b] })).toEqual([a, b]);
+  });
+
+  it("falls back to the legacy singular field when no array exists", () => {
+    expect(verifiedEmailsOf({ verifiedStudentEmail: a })).toEqual([a]);
+  });
+
+  it("prefers the array over the singular field when both exist", () => {
+    expect(verifiedEmailsOf({ verifiedStudentEmails: [a, b], verifiedStudentEmail: a })).toEqual([
+      a,
+      b,
+    ]);
+  });
+
+  it("returns an empty array when neither field is set", () => {
+    expect(verifiedEmailsOf({})).toEqual([]);
+  });
+
+  it("ignores non-string / empty entries in the array", () => {
+    expect(
+      verifiedEmailsOf({ verifiedStudentEmails: [a, "", 42, null, b] as unknown[] }),
+    ).toEqual([a, b]);
+  });
+
+  it("ignores a non-string singular field", () => {
+    expect(verifiedEmailsOf({ verifiedStudentEmail: 42 })).toEqual([]);
   });
 });

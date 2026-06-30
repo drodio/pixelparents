@@ -18,10 +18,15 @@ export function StudentVerify({
   signupId,
   initial,
   compact = false,
+  allowAddMore = false,
 }: {
   signupId: string;
   initial: VerifyState;
   compact?: boolean;
+  // When true, the verified ("approved") state offers an "Add another student"
+  // button that re-opens the email step — a family can verify many students. Off
+  // by default so existing terminal screens (thanks/verify) keep their behavior.
+  allowAddMore?: boolean;
 }) {
   // Resume mid-flow: approved → done; an outstanding code → code step; else email.
   const [step, setStep] = useState<Step>(
@@ -30,6 +35,9 @@ export function StudentVerify({
   const [email, setEmail] = useState(initial.email ?? "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // The most-recently verified email this session, for an accurate success line
+  // after adding another student (initial.email is the server's last-known one).
+  const [verifiedEmail, setVerifiedEmail] = useState<string | null>(initial.email ?? null);
   const [notice, setNotice] = useState<string | null>(
     initial.hasPendingCode && initial.email
       ? `We already sent a code to ${initial.email}. Enter it below, or use a different email.`
@@ -59,9 +67,20 @@ export function StudentVerify({
         setError(r.error ?? "That code didn't match.");
         return;
       }
+      setVerifiedEmail(email || null);
       setStep("approved");
+      setCode("");
       setNotice(null);
     });
+  }
+
+  // Re-open the email step to verify an additional student (account page only).
+  function addAnother() {
+    setEmail("");
+    setCode("");
+    setError(null);
+    setNotice(null);
+    setStep("email");
   }
 
   const box = compact
@@ -76,11 +95,18 @@ export function StudentVerify({
           <h3 className="font-semibold text-white">Your OHS student is verified</h3>
         </div>
         <p className="mt-1.5 text-sm text-white/65">
-          {initial.email
-            ? `Verified with ${initial.email}. `
-            : ""}
+          {verifiedEmail ? `Verified with ${verifiedEmail}. ` : ""}
           Your family is approved for the OHS family directory.
         </p>
+        {allowAddMore && (
+          <button
+            type="button"
+            onClick={addAnother}
+            className="mt-4 inline-flex items-center gap-1.5 rounded-lg border border-emerald-400/30 px-3 py-1.5 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-400/10"
+          >
+            <IconGradCap className="h-4 w-4" /> Verify another student
+          </button>
+        )}
       </div>
     );
   }
