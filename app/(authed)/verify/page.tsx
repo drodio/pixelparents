@@ -3,11 +3,12 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
-import { getSignupByEmail } from "@/lib/db/signups";
+import { getSignupByEmail, getFamilyForEmail } from "@/lib/db/signups";
 import { readApprovalStatus } from "@/lib/approval";
 import { getVerifyState } from "@/app/signup/thanks/verify-actions";
 import { StudentVerify } from "@/components/student-verify";
 import { PixelMascot } from "@/components/pixel-mascot";
+import { studentFirstNames, formatNameList } from "@/lib/verify-copy";
 
 export const dynamic = "force-dynamic";
 
@@ -16,17 +17,27 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-function Shell({ children }: { children: React.ReactNode }) {
+// The page header. `title`/`subtitle` default to the generic copy but are
+// overridden with the student's name(s) once we've loaded the family record.
+function Shell({
+  children,
+  title = "Verify your OHS student",
+  subtitle = (
+    <>Confirm you&apos;re an OHS family with your student&apos;s Stanford email.</>
+  ),
+}: {
+  children: React.ReactNode;
+  title?: React.ReactNode;
+  subtitle?: React.ReactNode;
+}) {
   return (
     <main className="min-h-dvh bg-black text-white">
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         <header className="mb-8 flex items-center gap-4">
           <PixelMascot widthClass="w-14" href="/" />
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Verify your OHS student</h1>
-            <p className="mt-1 text-sm text-white/55">
-              Confirm you&apos;re an OHS family with your student&apos;s Stanford email.
-            </p>
+            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{title}</h1>
+            <p className="mt-1 text-sm text-white/55">{subtitle}</p>
           </div>
         </header>
         {children}
@@ -76,8 +87,25 @@ export default async function VerifyPage({
   const status = readApprovalStatus((signup.extra ?? {}) as Record<string, unknown>);
   const state = await getVerifyState(signup.id);
 
+  // Pull the family's OHS-student first name(s) so the verify copy can reference
+  // the student by name ("Have Maya check her Stanford email…") instead of the
+  // generic "your student". Children are read-only here — no data is changed. If
+  // the lookup fails or the family has no named OHS student, `studentNames` is
+  // [] and every consumer falls back to the existing generic wording.
+  const family = email ? await getFamilyForEmail(email).catch(() => null) : null;
+  const studentNames = studentFirstNames(family?.kids ?? []);
+  const nameList = formatNameList(studentNames, "or");
+  const hasNames = nameList.length > 0;
+
   return (
-    <Shell>
+    <Shell
+      title={hasNames ? `Verify via ${nameList}` : undefined}
+      subtitle={
+        hasNames ? (
+          <>Have {nameList} check their Stanford email to confirm your OHS family.</>
+        ) : undefined
+      }
+    >
       {status === "denied" ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8">
           <h2 className="text-lg font-semibold">Your family&apos;s access was declined</h2>
@@ -90,16 +118,28 @@ export default async function VerifyPage({
           {isRequired && status !== "approved" && (
             <div className="mb-5 rounded-2xl border border-amber-400/40 bg-amber-400/[0.08] p-4">
               <h2 className="text-sm font-semibold text-amber-200">
-                Verify your OHS student to continue
+                {hasNames
+                  ? `Verify via ${nameList} to continue`
+                  : "Verify your OHS student to continue"}
               </h2>
               <p className="mt-1 text-sm text-white/65">
-                Your family needs a verified OHS student to access Pixel Parents.
-                Confirm your student&apos;s Stanford email below to unlock the rest
-                of the site.
+                {hasNames ? (
+                  <>
+                    Your family needs a verified OHS student to access Pixel
+                    Parents. Have {nameList} check their Stanford email and enter
+                    the code below to unlock the rest of the site.
+                  </>
+                ) : (
+                  <>
+                    Your family needs a verified OHS student to access Pixel
+                    Parents. Confirm your student&apos;s Stanford email below to
+                    unlock the rest of the site.
+                  </>
+                )}
               </p>
             </div>
           )}
-          <StudentVerify signupId={signup.id} initial={state} />
+          <StudentVerify signupId={signup.id} initial={state} studentNames={studentNames} />
           {status === "approved" && (
             <div className="mt-6 flex flex-wrap gap-3">
               <Link

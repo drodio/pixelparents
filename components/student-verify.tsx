@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { requestStudentCode, confirmStudentCode, type VerifyState } from "@/app/signup/thanks/verify-actions";
 import { IconCircleCheck, IconGradCap } from "@/components/icons";
+import { formatNameList } from "@/lib/verify-copy";
 
 // Optional WhatsApp fallback: a wa.me link (set NEXT_PUBLIC_DRODIO_WHATSAPP_URL
 // in env — no phone number is committed to this public repo). Hidden when unset.
@@ -19,6 +20,7 @@ export function StudentVerify({
   initial,
   compact = false,
   allowAddMore = false,
+  studentNames = [],
 }: {
   signupId: string;
   initial: VerifyState;
@@ -27,6 +29,11 @@ export function StudentVerify({
   // button that re-opens the email step — a family can verify many students. Off
   // by default so existing terminal screens (thanks/verify) keep their behavior.
   allowAddMore?: boolean;
+  // The OHS-student first name(s) on this family's record. When provided, the
+  // prompt copy references the student(s) by name ("Have Maya check her Stanford
+  // email…") so it's unambiguous whose email we mean. Empty (the default) keeps
+  // the generic "your student" wording, so existing call sites are unaffected.
+  studentNames?: readonly string[];
 }) {
   // Resume mid-flow: approved → done; an outstanding code → code step; else email.
   const [step, setStep] = useState<Step>(
@@ -44,6 +51,13 @@ export function StudentVerify({
       : null,
   );
   const [pending, startTransition] = useTransition();
+
+  // Personalized references to the family's OHS student(s), e.g. "Maya" or
+  // "Maya or Ravi". Empty string when we have no names → fall back to generic
+  // "your student" copy. `nameList` uses "or" (the family verifies any one of
+  // them).
+  const nameList = formatNameList(studentNames, "or");
+  const hasNames = nameList.length > 0;
 
   function sendCode() {
     setError(null);
@@ -92,7 +106,14 @@ export function StudentVerify({
       <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.07] p-5 sm:p-6">
         <div className="flex items-center gap-2">
           <IconCircleCheck className="h-5 w-5 text-emerald-400" />
-          <h3 className="font-semibold text-white">Your OHS student is verified</h3>
+          <h3 className="font-semibold text-white">
+            {/* Personalize the success line only for a single student — with
+                several names "Maya or Ravi is verified" would wrongly imply all
+                were verified in one go (the family verifies one at a time). */}
+            {studentNames.length === 1
+              ? `${studentNames[0]} is verified`
+              : "Your OHS student is verified"}
+          </h3>
         </div>
         <p className="mt-1.5 text-sm text-white/65">
           {verifiedEmail ? `Verified with ${verifiedEmail}. ` : ""}
@@ -115,12 +136,24 @@ export function StudentVerify({
     <div className={box}>
       <div className="flex items-center gap-2">
         <IconGradCap className="h-5 w-5 text-amber-300" />
-        <h3 className="font-semibold text-white">Verify your OHS student</h3>
+        <h3 className="font-semibold text-white">
+          {hasNames ? `Verify via ${nameList}` : "Verify your OHS student"}
+        </h3>
       </div>
       <p className="mt-1.5 text-sm text-white/65">
-        Every Pixel Parents family is paired with an OHS student. Enter your
-        student&apos;s Stanford email and we&apos;ll send a code to confirm — this
-        unlocks the OHS family directory for you.
+        {hasNames ? (
+          <>
+            Have {nameList} check their Stanford email and enter the code.
+            Pop in the stanford.edu address and we&apos;ll send a 6-digit code to
+            confirm — this unlocks the OHS family directory for you.
+          </>
+        ) : (
+          <>
+            Every Pixel Parents family is paired with an OHS student. Enter your
+            student&apos;s Stanford email and we&apos;ll send a code to confirm —
+            this unlocks the OHS family directory for you.
+          </>
+        )}
       </p>
 
       {step === "email" && (
