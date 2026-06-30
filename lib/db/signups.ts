@@ -1,11 +1,15 @@
 import { eq, desc, sql } from "drizzle-orm";
 import { getDb, getSql } from "@/lib/db";
 import { signups, children, type SignupRow, type ChildRow } from "@/lib/db/schema/signups";
+import { ensureFamiliesSchema } from "@/lib/db/ensure";
 
 // Map a signed-in user's email to their most recent signup (for /account).
 // Emails are stored as typed (not normalized), so match case-insensitively —
 // matching the lowercasing convention used throughout lib/admin.ts.
 export async function getSignupByEmail(email: string): Promise<SignupRow | null> {
+  // Self-heal the signups schema before a SELECT * — the Drizzle schema includes
+  // columns (e.g. country) that may not yet exist on a prod DB without a migration.
+  await ensureFamiliesSchema();
   const [row] = await getDb()
     .select()
     .from(signups)
@@ -64,6 +68,7 @@ export async function getBuilderCounts(): Promise<{ technical: number; curious: 
 export async function getSignupForEdit(
   signupId: string,
 ): Promise<{ signup: SignupRow; kids: ChildRow[] } | null> {
+  await ensureFamiliesSchema();
   const [signup] = await getDb()
     .select()
     .from(signups)
@@ -87,6 +92,7 @@ export async function getSignupForEdit(
 export type SharedProfile = { signup: SignupRow; kids: ChildRow[] };
 
 export async function getSharedProfileByToken(token: string): Promise<SharedProfile | null> {
+  await ensureFamiliesSchema();
   const [signup] = await getDb()
     .select()
     .from(signups)
