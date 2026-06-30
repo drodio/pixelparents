@@ -6,6 +6,7 @@ import {
   TIME_COMMITMENT,
   GRADES,
   BUILDER_INTEREST,
+  COUNTRIES,
 } from "@/lib/options";
 
 // Machine-readable OpenAPI 3.1 description of the public v1 API, served at
@@ -20,6 +21,7 @@ const countMap = {
 
 const filterParams = [
   ["state", "US state (full name or USPS abbreviation, e.g. CA)"],
+  ["country", "Country", COUNTRIES],
   ["affiliation", "OHS affiliation", OHS_AFFILIATIONS],
   ["tech_depth", "Self-described technical depth", TECHNICAL_DEPTH],
   ["time_commitment", "Weekly time commitment", TIME_COMMITMENT],
@@ -86,6 +88,7 @@ export function openapiSpec() {
           type: "object",
           properties: {
             signups_by_state: countMap,
+            signups_by_country: countMap,
             signups_by_affiliation: countMap,
             signups_by_tech_depth: countMap,
             signups_by_time_commitment: countMap,

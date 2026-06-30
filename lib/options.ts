@@ -68,6 +68,23 @@ export const US_STATES = [
   "Washington", "West Virginia", "Wisconsin", "Wyoming",
 ] as const;
 
+// Optional country for the signup (OHS is a global online school). "United
+// States" leads (the default + most common); the rest are a sane set of major
+// countries, alphabetical. Every entry here has a centroid in
+// lib/community-map.ts COUNTRY_CENTROIDS — keep the two lists in lockstep.
+export const COUNTRIES = [
+  "United States",
+  "Argentina", "Australia", "Austria", "Bangladesh", "Belgium", "Brazil",
+  "Canada", "Chile", "China", "Colombia", "Czech Republic", "Denmark", "Egypt",
+  "Finland", "France", "Germany", "Greece", "Hong Kong", "Hungary", "India",
+  "Indonesia", "Ireland", "Israel", "Italy", "Japan", "Kenya", "Malaysia",
+  "Mexico", "Netherlands", "New Zealand", "Nigeria", "Norway", "Pakistan",
+  "Peru", "Philippines", "Poland", "Portugal", "Qatar", "Romania", "Russia",
+  "Saudi Arabia", "Singapore", "South Africa", "South Korea", "Spain", "Sweden",
+  "Switzerland", "Taiwan", "Thailand", "Turkey", "Ukraine",
+  "United Arab Emirates", "United Kingdom", "Vietnam",
+] as const;
+
 // Full state name -> USPS two-letter abbreviation (for compact display).
 export const STATE_ABBR: Record<string, string> = {
   Alabama: "AL", Alaska: "AK", Arizona: "AZ", Arkansas: "AR", California: "CA",
@@ -97,6 +114,7 @@ export const OPTIONS = {
   time_commitment: TIME_COMMITMENT,
   grades: GRADES,
   builder_interest: BUILDER_INTEREST,
+  countries: COUNTRIES,
 } as const;
 
 export type OhsAffiliation = (typeof OHS_AFFILIATIONS)[number];
@@ -104,3 +122,4 @@ export type TechnicalDepth = (typeof TECHNICAL_DEPTH)[number];
 export type Skillset = (typeof SKILLSETS)[number];
 export type TimeCommitment = (typeof TIME_COMMITMENT)[number];
 export type Grade = (typeof GRADES)[number];
+export type Country = (typeof COUNTRIES)[number];

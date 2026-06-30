@@ -11,6 +11,7 @@ import {
   SKILLSETS,
   TIME_COMMITMENT,
   US_STATES,
+  COUNTRIES,
   BUILDER_INTEREST,
 } from "@/lib/options";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
@@ -112,6 +113,7 @@ export type SignupPatch = Partial<{
   timeCommitment: string;
   city: string;
   state: string;
+  country: string;
   parentInterests: string[];
   photos: Photo[];
   builderInterest: string;
@@ -135,6 +137,7 @@ export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok:
   if ("linkedinHandle" in patch) set.linkedinUrl = linkedinUrlFromHandle(patch.linkedinHandle);
   if ("city" in patch) set.city = text(patch.city, 120) || null;
   if ("state" in patch) set.state = oneOf(US_STATES, patch.state);
+  if ("country" in patch) set.country = oneOf(COUNTRIES, patch.country);
   if ("skillsets" in patch) {
     const s = (patch.skillsets ?? []).filter((x) => SKILLSETS.includes(x as never));
     set.skillsets = s.length ? s : null;

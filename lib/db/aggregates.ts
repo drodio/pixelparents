@@ -31,6 +31,7 @@ async function tableExists(name: string): Promise<boolean> {
 
 export type Filters = {
   state?: string;
+  country?: string;
   affiliation?: string;
   tech_depth?: string;
   time_commitment?: string;
@@ -54,6 +55,7 @@ function signupConds(f: Filters): { conds: string[]; params: unknown[] } {
     conds.push(frag(params.length));
   };
   if (f.state) add((i) => `state = $${i}`, f.state);
+  if (f.country) add((i) => `country = $${i}`, f.country);
   if (f.affiliation) add((i) => `ohs_affiliation = $${i}`, f.affiliation);
   if (f.tech_depth) add((i) => `technical_depth = $${i}`, f.tech_depth);
   if (f.time_commitment) add((i) => `time_commitment = $${i}`, f.time_commitment);
@@ -177,6 +179,7 @@ export async function getStats(filters: Filters = {}): Promise<Stats> {
 
 export type Breakdowns = {
   signups_by_state: CountMap;
+  signups_by_country: CountMap;
   signups_by_affiliation: CountMap;
   signups_by_tech_depth: CountMap;
   signups_by_time_commitment: CountMap;
@@ -196,6 +199,7 @@ export async function getBreakdowns(filters: Filters = {}): Promise<Breakdowns> 
   const filtered = hasFilters(filters);
   const empty: Breakdowns = {
     signups_by_state: {},
+    signups_by_country: {},
     signups_by_affiliation: {},
     signups_by_tech_depth: {},
     signups_by_time_commitment: {},
@@ -226,6 +230,7 @@ export async function getBreakdowns(filters: Filters = {}): Promise<Breakdowns> 
 
   const [
     signups_by_state,
+    signups_by_country,
     signups_by_affiliation,
     signups_by_tech_depth,
     signups_by_time_commitment,
@@ -233,6 +238,7 @@ export async function getBreakdowns(filters: Filters = {}): Promise<Breakdowns> 
     signups_by_builder_interest,
   ] = await Promise.all([
     countMap(["state IS NOT NULL"], "state"),
+    countMap(["country IS NOT NULL"], "country"),
     countMap(["ohs_affiliation IS NOT NULL"], "ohs_affiliation"),
     countMap(["technical_depth IS NOT NULL"], "technical_depth"),
     countMap(["time_commitment IS NOT NULL"], "time_commitment"),
@@ -302,6 +308,7 @@ export async function getBreakdowns(filters: Filters = {}): Promise<Breakdowns> 
 
   return {
     signups_by_state,
+    signups_by_country,
     signups_by_affiliation,
     signups_by_tech_depth,
     signups_by_time_commitment,
