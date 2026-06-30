@@ -24,6 +24,8 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import { UnverifiedNotice } from "@/components/unverified-notice";
 import { ShowcaseClient } from "./showcase-client";
+import { ShowcaseSkeleton } from "./showcase-skeleton";
+import { StatStrip } from "./stat-strip";
 
 export const dynamic = "force-dynamic";
 
@@ -77,18 +79,6 @@ function PageHeader() {
         Stanford OHS parents and students, building together.
       </p>
     </header>
-  );
-}
-
-// A compact stat chip for the condensed stats strip beside the map.
-function StatChip({ label, value }: { label: string; value: number }) {
-  return (
-    <div className="flex items-baseline gap-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3">
-      <span className="text-xl font-semibold tracking-tight text-amber-400">
-        {value.toLocaleString()}
-      </span>
-      <span className="text-sm text-white/55">{label}</span>
-    </div>
   );
 }
 
@@ -288,12 +278,12 @@ export default async function CommunityPage() {
               <WorldMap markers={markers} accent={AMBER} />
             </div>
             <div className="flex flex-col justify-center gap-3">
-              <div className="grid grid-cols-2 gap-3">
-                <StatChip label="Families" value={stats.total_families ?? 0} />
-                <StatChip label="Parents" value={stats.total_signups ?? 0} />
-                <StatChip label="Kids at OHS" value={stats.total_children ?? 0} />
-                <StatChip label="Here to build" value={builders} />
-              </div>
+              <StatStrip
+                families={stats.total_families ?? 0}
+                parents={stats.total_signups ?? 0}
+                kids={stats.total_children ?? 0}
+                builders={builders}
+              />
               <p className="px-1 text-xs text-white/40">
                 {countriesCount
                   ? `${countriesCount} countr${countriesCount === 1 ? "y" : "ies"}`
@@ -322,7 +312,7 @@ export default async function CommunityPage() {
             // ShowcaseClient calls useSearchParams() to restore shareable filters
             // from the URL; a Suspense boundary is required so the build doesn't
             // bail out of prerendering the surrounding tree (App Router rule).
-            <Suspense fallback={null}>
+            <Suspense fallback={<ShowcaseSkeleton />}>
               <ShowcaseClient cards={heroCards} />
             </Suspense>
           ) : (

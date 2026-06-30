@@ -3,8 +3,17 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
+import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
+import { gridContainer, gridItem, staticContainer, staticItem } from "./motion";
 import { iconForInterest } from "@/lib/interest-icons";
-import { IconX, IconCode, IconGradCap, IconLinkedin, IconGithub } from "@/components/icons";
+import {
+  IconX,
+  IconCode,
+  IconGradCap,
+  IconLinkedin,
+  IconGithub,
+  IconArrowRight,
+} from "@/components/icons";
 import { TagList } from "@/components/tag-list";
 import {
   familyMatchesAgeRange,
@@ -103,7 +112,9 @@ function StudentBadge() {
   );
 }
 
-function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
+const MotionLink = motion.create(Link);
+
+function Card({ card, wide, reduce }: { card: DirectoryCard; wide: boolean; reduce: boolean }) {
   const thumbs = card.thumbUrls.slice(0, 4);
   const childNames = card.children.map((c) => c.name).filter(Boolean);
   // Interests + skillsets + (shared) enrichment expertise share one chip strip;
@@ -233,18 +244,36 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
 
   // Clicking a member opens their profile IN-TAB at /directory/<token> — a nested
   // route rendered inside DashboardShell, NOT a jump to /p (which exits the shell).
+  // Wrapped in a motion item so it staggers in on mount and animates in/out when
+  // filters change (AnimatePresence in the grid below). Hover lifts the card with
+  // a soft shadow; the chevron slides in — both no-ops under reduced motion.
   return (
-    <Link
+    <MotionLink
+      layout={!reduce}
+      variants={reduce ? staticItem : gridItem}
+      whileHover={reduce ? undefined : { y: -4 }}
+      transition={reduce ? { duration: 0 } : { type: "spring", stiffness: 420, damping: 32 }}
       href={`/directory/${card.token}`}
       className={
         wide
-          ? "group flex gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-amber-400/40 hover:bg-white/[0.04]"
-          : "group flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] transition-colors hover:border-amber-400/40 hover:bg-white/[0.04]"
+          ? "group relative flex gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-[border-color,background-color,box-shadow] hover:border-amber-400/40 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-amber-400/5"
+          : "group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] transition-[border-color,background-color,box-shadow] hover:border-amber-400/40 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-amber-400/5"
       }
     >
       {hero}
       {body}
-    </Link>
+      {/* Chevron that slides in on hover — mirrors the LinkCard affordance. */}
+      <span
+        aria-hidden
+        className={
+          wide
+            ? "pointer-events-none absolute right-4 top-1/2 -translate-y-1/2 translate-x-1 text-amber-300/0 transition-all duration-200 group-hover:translate-x-0 group-hover:text-amber-300/80"
+            : "pointer-events-none absolute right-3 top-3 translate-x-1 text-amber-300/0 transition-all duration-200 group-hover:translate-x-0 group-hover:text-amber-300/80"
+        }
+      >
+        <IconArrowRight className="h-4 w-4" />
+      </span>
+    </MotionLink>
   );
 }
 
@@ -320,6 +349,7 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const reduce = useReducedMotion();
 
   // The set of interest keys that actually exist on the current cards. Used to
   // validate interests coming in from a shared URL (unknown ones are dropped).
@@ -536,8 +566,24 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
     coordsByToken,
   ]);
 
+  // A signature of the active filters. When it changes, the motion grid remounts
+  // (keyed on it) so the staggered reveal replays — the cards cascade back in
+  // when you change what you're filtering by, reinforcing that the set updated.
+  const gridKey = useMemo(
+    () =>
+      [
+        debouncedQuery,
+        Array.from(selected).sort().join(","),
+        sortKey,
+        sortDir,
+        ageActive ? `${ageLower}-${ageUpper}` : "all",
+        radiusOn && origin ? `r${radiusMiles}` : "noradius",
+      ].join("|"),
+    [debouncedQuery, selected, sortKey, sortDir, ageActive, ageLower, ageUpper, radiusOn, origin, radiusMiles],
+  );
+
   const controlCls =
-    "rounded-md border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none focus:border-amber-400/50";
+    "rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-amber-400/50";
 
   return (
     <div className="flex flex-col gap-6">
@@ -755,14 +801,26 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
           No members match your filters.
         </div>
       ) : (
-        <div
+        // Staggered grid: cards reveal in sequence on mount and — because each
+        // Card is keyed by token inside AnimatePresence — animate in/out when the
+        // search / sort / filters change instead of hard-cutting. The container
+        // re-runs its stagger whenever the visible set's identity changes (keyed
+        // on the active filter signature). Under reduced motion the variants are
+        // present/absent only, so nothing moves.
+        <motion.div
+          key={reduce ? undefined : gridKey}
+          variants={reduce ? staticContainer : gridContainer}
+          initial="hidden"
+          animate="show"
           className="grid gap-4"
           style={{ gridTemplateColumns: `repeat(${effectiveCols}, minmax(0, 1fr))` }}
         >
-          {visible.map((c) => (
-            <Card key={c.token} card={c} wide={effectiveCols === 1} />
-          ))}
-        </div>
+          <AnimatePresence mode="popLayout" initial={false}>
+            {visible.map((c) => (
+              <Card key={c.token} card={c} wide={effectiveCols === 1} reduce={!!reduce} />
+            ))}
+          </AnimatePresence>
+        </motion.div>
       )}
     </div>
   );
