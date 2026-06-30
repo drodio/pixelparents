@@ -1,3 +1,31 @@
+## Progress Update as of [June 30, 2026 — 7:34 AM Pacific]
+
+### Summary of changes since last update
+Second commit: Community board + Events calendar made phone-friendly, same
+filter-sheet pattern as the directory, plus the Events month grid no longer
+overflows on phones. Responsive-only; no logic changes; md+ untouched.
+
+### Detail of changes made:
+- **Community** (`app/(authed)/community/exchange-board-client.tsx`): the Asks /
+  Offers / All kind tabs stay inline; the secondary controls (status, sort,
+  show-expired, my-posts, expertise-tag chips) move into a `MobileSheet` behind a
+  Filters button (active-count badge). Single source of state (one
+  `secondaryControls` element, desktop inline OR mobile sheet, gated on a
+  `matchMedia(max-width:767px)` watcher). Sheet footer: Clear-all + "Show N posts".
+- **Events** (`app/(authed)/events/events-calendar-client.tsx`): place +
+  OHS-calendar filters move into a `MobileSheet` (calendar/list toggle stays
+  inline). The 7-col month grid is now wrapped in `overflow-x-auto` with a
+  `min-w-[560px] sm:min-w-0` inner track, so on phones it scrolls horizontally
+  with usable cells instead of crushing to ~50px columns; fits with no scroll at
+  sm+. Cell min-height trimmed to 80px on phones (92px at sm+).
+
+### Potential concerns to address:
+- Turbopack `next build` cannot run in this worktree because node_modules is a
+  cross-filesystem symlink ("Symlink ... points out of the filesystem root").
+  Verified the build by copying changed files into the main checkout
+  (/Users/main/stanfordohs/pixelparents) and running `next build` there, then
+  restoring main pristine. tsc/lint/test pass in-worktree.
+
 ## Progress Update as of [June 30, 2026 — 7:21 AM Pacific]
 
 ### Summary of changes since last update

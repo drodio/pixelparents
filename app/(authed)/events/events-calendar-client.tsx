@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   buildMonthGrid,
@@ -15,7 +15,9 @@ import {
   IconCalendar,
   IconSparkles,
   IconPlus,
+  IconFilter,
 } from "@/components/icons";
+import { MobileSheet } from "@/components/mobile-sheet";
 import { AddToCalendar } from "./add-to-calendar";
 import { RsvpControl, PlaceBadge, formatEventWhen } from "./event-bits";
 
@@ -62,6 +64,19 @@ export function EventsCalendarClient({ events }: { events: CalendarEvent[] }) {
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
 
+  // On phones the place/OHS filters move into a bottom sheet behind a Filters
+  // button; the calendar/list toggle stays inline.
+  const [isMobile, setIsMobile] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  const activeFilterCount = (place !== "all" ? 1 : 0) + (!showOhs ? 1 : 0);
+
   // Apply the online/in-person + OHS filters once.
   const filtered = useMemo(
     () =>
@@ -93,6 +108,43 @@ export function EventsCalendarClient({ events }: { events: CalendarEvent[] }) {
     setAnchor(new Date(now.getFullYear(), now.getMonth(), 1));
   };
 
+  // Place + OHS-calendar filters. Rendered inline on desktop and in the mobile
+  // sheet — one place at a time, sharing the same state.
+  const filterControls = (
+    <>
+      <div className="inline-flex overflow-hidden rounded-full border border-white/15 text-xs">
+        {([
+          ["all", "All"],
+          ["online", "Online"],
+          ["inperson", "In person"],
+        ] as [PlaceFilter, string][]).map(([val, label]) => (
+          <button
+            key={val}
+            type="button"
+            onClick={() => setPlace(val)}
+            className={`px-3 py-1.5 font-medium transition ${
+              place === val ? "bg-white/15 text-white" : "text-white/55 hover:bg-white/10"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => setShowOhs((v) => !v)}
+        aria-pressed={showOhs}
+        className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+          showOhs
+            ? "border-violet-400/50 bg-violet-400/15 text-violet-200"
+            : "border-white/15 bg-white/[0.04] text-white/50 hover:bg-white/10"
+        }`}
+      >
+        <span className="h-2 w-2 rounded-full bg-violet-400" /> OHS calendar
+      </button>
+    </>
+  );
+
   return (
     <div className="flex flex-col gap-5">
       {/* "Happening this week" highlight strip. */}
@@ -120,7 +172,8 @@ export function EventsCalendarClient({ events }: { events: CalendarEvent[] }) {
         </section>
       )}
 
-      {/* Toolbar: view toggle + filters. */}
+      {/* Toolbar: view toggle + filters. On phones the filters collapse into a
+          bottom sheet behind a Filters button; the view toggle stays inline. */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="inline-flex overflow-hidden rounded-full border border-white/15">
           {(["calendar", "list"] as ViewMode[]).map((m) => (
@@ -137,39 +190,56 @@ export function EventsCalendarClient({ events }: { events: CalendarEvent[] }) {
           ))}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex overflow-hidden rounded-full border border-white/15 text-xs">
-            {([
-              ["all", "All"],
-              ["online", "Online"],
-              ["inperson", "In person"],
-            ] as [PlaceFilter, string][]).map(([val, label]) => (
-              <button
-                key={val}
-                type="button"
-                onClick={() => setPlace(val)}
-                className={`px-3 py-1.5 font-medium transition ${
-                  place === val ? "bg-white/15 text-white" : "text-white/55 hover:bg-white/10"
-                }`}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-          <button
-            type="button"
-            onClick={() => setShowOhs((v) => !v)}
-            aria-pressed={showOhs}
-            className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-              showOhs
-                ? "border-violet-400/50 bg-violet-400/15 text-violet-200"
-                : "border-white/15 bg-white/[0.04] text-white/50 hover:bg-white/10"
-            }`}
-          >
-            <span className="h-2 w-2 rounded-full bg-violet-400" /> OHS calendar
-          </button>
-        </div>
+        {/* Desktop filters inline. */}
+        <div className="hidden flex-wrap items-center gap-2 md:flex">{filterControls}</div>
+
+        {/* Mobile Filters trigger. */}
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 md:hidden"
+          aria-haspopup="dialog"
+        >
+          <IconFilter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
       </div>
+
+      {isMobile && (
+        <MobileSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="Filter events"
+          footer={
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setPlace("all");
+                  setShowOhs(true);
+                }}
+                className="text-sm text-white/55 hover:text-white"
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(false)}
+                className="rounded-full bg-amber-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300"
+              >
+                Done
+              </button>
+            </div>
+          }
+        >
+          <div className="flex flex-col gap-4">{filterControls}</div>
+        </MobileSheet>
+      )}
 
       {view === "calendar" ? (
         <CalendarGrid
@@ -261,57 +331,64 @@ function CalendarGrid({
         </div>
       </div>
 
-      <div className="grid grid-cols-7 border-b border-white/10 text-center text-[11px] font-medium uppercase tracking-wide text-white/40">
-        {WEEKDAYS.map((d) => (
-          <div key={d} className="py-2">
-            {d}
-          </div>
-        ))}
-      </div>
-
-      <div className="grid grid-cols-7">
-        {grid.map((cell) => {
-          const key = localDayKey(cell.date);
-          const extra = cell.events.length - 3;
-          return (
-            <button
-              type="button"
-              key={key}
-              onClick={() => onPickDay(key)}
-              className={`relative flex min-h-[92px] flex-col gap-1 border-b border-r border-white/[0.06] p-1.5 text-left align-top transition hover:bg-white/[0.03] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/50 ${
-                cell.isToday
-                  ? "bg-amber-400/[0.06] ring-1 ring-inset ring-amber-400/30"
-                  : cell.inMonth
-                    ? ""
-                    : "bg-black/20"
-              }`}
-            >
-              <span
-                className={`grid h-6 w-6 place-items-center self-start rounded-full text-xs ${
-                  cell.isToday
-                    ? "bg-amber-400 font-semibold text-black"
-                    : cell.inMonth
-                      ? "text-white/75"
-                      : "text-white/30"
-                }`}
-              >
-                {cell.date.getDate()}
-              </span>
-              <div className="flex flex-col gap-0.5">
-                {cell.events.slice(0, 3).map((ev) => (
-                  <DayEventPill
-                    key={ev.id + key}
-                    ev={ev}
-                    onClick={() => onPickEvent(ev.id)}
-                  />
-                ))}
-                {extra > 0 && (
-                  <span className="px-1.5 text-[11px] text-white/45">+{extra} more</span>
-                )}
+      {/* On phones a 7-col month grid would crush each cell to ~50px. We let the
+          grid keep a usable minimum width and scroll horizontally instead; on
+          sm+ it fits the container with no scroll. */}
+      <div className="overflow-x-auto">
+        <div className="min-w-[560px] sm:min-w-0">
+          <div className="grid grid-cols-7 border-b border-white/10 text-center text-[11px] font-medium uppercase tracking-wide text-white/40">
+            {WEEKDAYS.map((d) => (
+              <div key={d} className="py-2">
+                {d}
               </div>
-            </button>
-          );
-        })}
+            ))}
+          </div>
+
+          <div className="grid grid-cols-7">
+            {grid.map((cell) => {
+              const key = localDayKey(cell.date);
+              const extra = cell.events.length - 3;
+              return (
+                <button
+                  type="button"
+                  key={key}
+                  onClick={() => onPickDay(key)}
+                  className={`relative flex min-h-[80px] flex-col gap-1 border-b border-r border-white/[0.06] p-1.5 text-left align-top transition hover:bg-white/[0.03] focus-visible:z-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/50 sm:min-h-[92px] ${
+                    cell.isToday
+                      ? "bg-amber-400/[0.06] ring-1 ring-inset ring-amber-400/30"
+                      : cell.inMonth
+                        ? ""
+                        : "bg-black/20"
+                  }`}
+                >
+                  <span
+                    className={`grid h-6 w-6 place-items-center self-start rounded-full text-xs ${
+                      cell.isToday
+                        ? "bg-amber-400 font-semibold text-black"
+                        : cell.inMonth
+                          ? "text-white/75"
+                          : "text-white/30"
+                    }`}
+                  >
+                    {cell.date.getDate()}
+                  </span>
+                  <div className="flex flex-col gap-0.5">
+                    {cell.events.slice(0, 3).map((ev) => (
+                      <DayEventPill
+                        key={ev.id + key}
+                        ev={ev}
+                        onClick={() => onPickEvent(ev.id)}
+                      />
+                    ))}
+                    {extra > 0 && (
+                      <span className="px-1.5 text-[11px] text-white/45">+{extra} more</span>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
       </div>
     </section>
   );

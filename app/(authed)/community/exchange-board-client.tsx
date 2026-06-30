@@ -1,12 +1,13 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { gridContainer, gridItem, staticContainer, staticItem } from "../directory/motion";
 import { iconForInterest } from "@/lib/interest-icons";
-import { IconX, IconClock, IconCircleCheck } from "@/components/icons";
+import { IconX, IconClock, IconCircleCheck, IconFilter } from "@/components/icons";
 import { TagList } from "@/components/tag-list";
+import { MobileSheet } from "@/components/mobile-sheet";
 import {
   distinctTags,
   filterAndSortPosts,
@@ -111,6 +112,27 @@ export function ExchangeBoardClient({
   const [showExpired, setShowExpired] = useState(false);
   const [mineOnly, setMineOnly] = useState(false);
 
+  // On phones the secondary controls (status, sort, expiry, my-posts, tag chips)
+  // move into a bottom sheet behind a Filters button; the Asks/Offers kind tabs
+  // stay inline. Track viewport so the controls render in exactly one place.
+  const [isMobile, setIsMobile] = useState(false);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 767px)");
+    const onChange = () => setIsMobile(mq.matches);
+    onChange();
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+
+  // Count of active secondary filters for the mobile Filters badge.
+  const activeFilterCount =
+    selectedTags.size +
+    (statusFilter !== "open" ? 1 : 0) +
+    (sortKey !== "recency" || sortDir !== "asc" ? 1 : 0) +
+    (showExpired ? 1 : 0) +
+    (mineOnly ? 1 : 0);
+
   const myIds = useMemo(() => new Set(myPostIds), [myPostIds]);
   const allTags = useMemo(() => distinctTags(posts), [posts]);
 
@@ -164,18 +186,10 @@ export function ExchangeBoardClient({
         ? "Most urgent first"
         : "Least urgent first";
 
-  return (
-    <div className="flex flex-col gap-5">
-      {/* Kind split (segmented) */}
-      <div className="inline-flex w-fit overflow-hidden rounded-full border border-white/15">
-        {KIND_TABS.map((t) => (
-          <button key={t.value} type="button" onClick={() => setKind(t.value)} className={segCls(kind === t.value)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {/* Controls row: status, sort, expiry, my posts */}
+  // Secondary controls (status, sort, expiry, my-posts, tag chips). Rendered
+  // inline on desktop and inside the mobile filter sheet — one place at a time.
+  const secondaryControls = (
+    <div className="flex flex-col gap-4">
       <div className="flex flex-wrap items-center gap-3">
         <div className="inline-flex overflow-hidden rounded-full border border-white/15">
           {STATUS_TABS.map((t) => (
@@ -265,6 +279,74 @@ export function ExchangeBoardClient({
             </button>
           )}
         </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Primary row: kind split (always inline) + a mobile-only Filters button. */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex w-fit overflow-hidden rounded-full border border-white/15">
+          {KIND_TABS.map((t) => (
+            <button key={t.value} type="button" onClick={() => setKind(t.value)} className={segCls(kind === t.value)}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <button
+          type="button"
+          onClick={() => setSheetOpen(true)}
+          className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10 md:hidden"
+          aria-haspopup="dialog"
+        >
+          <IconFilter className="h-4 w-4" />
+          Filters
+          {activeFilterCount > 0 && (
+            <span className="grid h-5 min-w-5 place-items-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+              {activeFilterCount}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* Desktop: secondary controls inline. */}
+      <div className="hidden md:block">{secondaryControls}</div>
+
+      {/* Mobile: secondary controls in a bottom sheet. */}
+      {isMobile && (
+        <MobileSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="Filters & sort"
+          footer={
+            <div className="flex items-center justify-between gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setStatusFilter("open");
+                  setSelectedTags(new Set());
+                  setSortKey("recency");
+                  setSortDir("asc");
+                  setShowExpired(false);
+                  setMineOnly(false);
+                }}
+                className="text-sm text-white/55 hover:text-white"
+              >
+                Clear all
+              </button>
+              <button
+                type="button"
+                onClick={() => setSheetOpen(false)}
+                className="rounded-full bg-amber-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300"
+              >
+                Show {visible.length} {visible.length === 1 ? "post" : "posts"}
+              </button>
+            </div>
+          }
+        >
+          {secondaryControls}
+        </MobileSheet>
       )}
 
       <p className="text-sm text-white/45">
