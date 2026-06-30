@@ -9,7 +9,6 @@ import {
   IconGrid,
   IconHome,
   IconUsers,
-  IconGlobe,
   IconCode,
   IconSettings,
 } from "@/components/icons";
@@ -26,8 +25,10 @@ type NavItem = {
 const NAV: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", Icon: IconGrid },
   { href: "/family", label: "Family", Icon: IconHome },
-  { href: "/directory", label: "Directory", Icon: IconUsers },
-  { href: "/community", label: "Community", Icon: IconGlobe },
+  // The old "Directory" tab was merged into Community: one consolidated showcase
+  // (member grid + map + stats) with in-tab profile views. /directory now
+  // redirects here, so a single nav item covers both.
+  { href: "/community", label: "Community", Icon: IconUsers },
   { href: "/developers", label: "Developers", Icon: IconCode, external: true },
 ];
 

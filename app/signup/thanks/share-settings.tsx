@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState, useTransition } from "react";
 import { SHARE_FIELDS, type ShareFieldKey, type ShareVisibility } from "@/lib/share";
 import { setShareFields } from "@/lib/share-actions";
@@ -74,12 +75,12 @@ export function ShareSettings({
         {initialVisibility === "ohs" && (
           <p className="text-sm text-white/70">
             Your family profile is now listed in our{" "}
-            <a
-              href="/directory"
+            <Link
+              href="/community"
               className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
             >
-              OHS family directory
-            </a>
+              OHS community showcase
+            </Link>
             . You can also share this direct link with them:
           </p>
         )}
@@ -100,7 +101,7 @@ export function ShareSettings({
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">
-            Choose what&apos;s visible in the OHS directory:
+            Choose what&apos;s visible in the OHS community showcase:
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {SHARE_FIELDS.map((f) => (

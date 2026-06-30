@@ -1,7 +1,15 @@
 import { canViewProfile, coerceShareVisibility, shareFieldsOrDefault } from "@/lib/share";
 import { childAge } from "@/lib/directory-filters";
 import { builderStatusOf } from "@/lib/builder";
+import { isStudentAccount } from "@/lib/family-display";
 import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
+
+// Build a public GitHub profile URL from a stored handle. Returns null for a
+// blank/whitespace handle so the showcase can fall back to "no link".
+function githubUrlFromUsername(handle: string | null | undefined): string | null {
+  const h = handle?.trim();
+  return h ? `https://github.com/${h}` : null;
+}
 
 // Re-export the pure, client-safe filter helpers so server code and tests can
 // keep importing them from "@/lib/directory". The client imports them straight
@@ -9,9 +17,10 @@ import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
 // into the browser bundle.
 export { childAge, haversineMiles, geocodeLocation } from "@/lib/directory-filters";
 
-// One card's worth of data for the OHS directory. Every field present here is one
-// the parent opted into sharing — phone/email are NEVER included (detail-only on
-// /p). Plain/serializable so a server component can hand it to the client.
+// One card's worth of data for the OHS directory / community showcase. Every
+// field present here is one the member opted into sharing — phone/email are NEVER
+// included (detail-only on /p). Plain/serializable so a server component can hand
+// it to the client.
 export type DirectoryCard = {
   token: string;
   name: string;
@@ -24,6 +33,9 @@ export type DirectoryCard = {
   // Deduped parent + child interests the parent chose to share — drives the
   // chips and the interest filter. Empty when neither field was shared.
   interests: string[];
+  // Self-reported technical skillsets (recruitment profile). Shown as chips on
+  // the showcase card; non-PII, gated behind the "interests" share field.
+  skillsets: string[];
   heroUrl: string | null;
   thumbUrls: string[];
   // "Builder" status, derived from the parent's extra (builderStatusOf): true if
@@ -32,6 +44,16 @@ export type DirectoryCard = {
   // behind a share field — it's a community-recognition badge, not PII.
   isBuilder: boolean;
   contributions: number;
+  // True for a STUDENT account (extra.accountType === "student"). Drives the
+  // minor-privacy coarsening: a student card never exposes precise location
+  // (no city — region/country at most) and never shows children.
+  isStudent: boolean;
+  // Opt-in professional links, gated behind a NEW, default-OFF "links" share
+  // field so they never appear unless the member explicitly enables them.
+  // linkedinUrl is the stored profile URL; githubUrl is derived from the public
+  // GitHub username. Null when not shared / not provided.
+  linkedinUrl: string | null;
+  githubUrl: string | null;
 };
 
 // Families that signed up BEFORE this cutoff are grandfathered into the directory
@@ -98,28 +120,46 @@ export function buildDirectoryCard(
   currentYear: number,
 ): DirectoryCard {
   const fields = new Set(shareFieldsOrDefault(row.shareFields));
+  // A STUDENT account is a minor — coarsen their card regardless of what they
+  // opted to share: never a precise city, never the children list. (They still
+  // only appear at all when isDirectoryVisible passes the same opt-in gate.)
+  const isStudent = isStudentAccount(row);
 
+  // Location: parents may show "City, State". Students are coarsened to the
+  // region/country only — at most the state (or country), never the city.
   const location = fields.has("location")
-    ? [row.city, row.state].filter(Boolean).join(", ") || null
+    ? isStudent
+      ? row.state || row.country || null
+      : [row.city, row.state].filter(Boolean).join(", ") || null
     : null;
 
   const parentInterests = fields.has("interests") ? row.parentInterests ?? [] : [];
 
-  const sharedChildren = fields.has("children")
-    ? familyKids.map((k) => ({
-        firstName: k.firstName,
-        grade: k.grade ?? null,
-        interests: k.interests ?? [],
-        age: childAge(k, currentYear),
-      }))
+  // Skillsets ride along with the "interests" opt-in (both are self-reported,
+  // non-PII profile facets). Empty when interests weren't shared.
+  const skillsets = fields.has("interests")
+    ? (row.skillsets ?? []).map((s) => s?.trim()).filter((s): s is string => Boolean(s))
     : [];
+
+  // Students never expose the children list (a minor isn't a "parent of").
+  const sharedChildren =
+    fields.has("children") && !isStudent
+      ? familyKids.map((k) => ({
+          firstName: k.firstName,
+          grade: k.grade ?? null,
+          interests: k.interests ?? [],
+          age: childAge(k, currentYear),
+        }))
+      : [];
 
   // Combined interest set for chips + filtering: parent + child interests, but
   // only those whose source field was shared. Deduped case-insensitively,
-  // keeping the first-seen display label.
-  const childInterests = fields.has("children")
-    ? familyKids.flatMap((k) => k.interests ?? [])
-    : [];
+  // keeping the first-seen display label. (Student cards hide children, so no
+  // child interests are mixed in for them.)
+  const childInterests =
+    fields.has("children") && !isStudent
+      ? familyKids.flatMap((k) => k.interests ?? [])
+      : [];
   const interestByKey = new Map<string, string>();
   for (const i of [...parentInterests, ...childInterests]) {
     const t = i?.trim();
@@ -136,16 +176,34 @@ export function buildDirectoryCard(
     (row.extra ?? {}) as Record<string, unknown>,
   );
 
+  // Professional links are NEW fields, default-OFF: only surface them behind an
+  // explicit "links" opt-in (added to SHARE_FIELDS, absent from
+  // DEFAULT_SHARE_FIELDS). Coarsening doesn't apply — a LinkedIn/GitHub link is
+  // a deliberate professional share, not location PII.
+  const showLinks = fields.has("links");
+  const linkedinUrl = showLinks ? row.linkedinUrl?.trim() || null : null;
+  const githubUrl = showLinks ? githubUrlFromUsername(row.githubUsername) : null;
+
+  // For students, surname is omitted from the displayed name (first name only —
+  // a minor-privacy measure). Parents keep their full name.
+  const name = isStudent
+    ? row.firstName
+    : [row.firstName, row.lastName].filter(Boolean).join(" ");
+
   return {
     token: row.shareToken!,
-    name: [row.firstName, row.lastName].filter(Boolean).join(" "),
+    name,
     firstName: row.firstName,
     location,
     children: sharedChildren,
     interests: Array.from(interestByKey.values()),
+    skillsets,
     heroUrl: photoUrls[0] ?? null,
     thumbUrls: photoUrls.slice(1, 1 + maxThumbs),
     isBuilder,
     contributions,
+    isStudent,
+    linkedinUrl,
+    githubUrl,
   };
 }

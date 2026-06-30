@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { iconForInterest } from "@/lib/interest-icons";
-import { IconX, IconCode } from "@/components/icons";
+import { IconX, IconCode, IconGradCap, IconLinkedin, IconGithub } from "@/components/icons";
 import {
   familyMatchesAgeRange,
   familyWithinRadius,
@@ -43,9 +43,7 @@ function radiusLabel(miles: number): string {
 
 function ageLabel(lower: number, upper: number): string {
   const hi = upper >= AGE_MAX ? `${AGE_MAX}+` : `${upper}`;
-  return lower === upper && upper < AGE_MAX
-    ? `Age ${lower}`
-    : `Ages ${lower}–${hi}`;
+  return lower === upper && upper < AGE_MAX ? `Age ${lower}` : `Ages ${lower}–${hi}`;
 }
 
 // Cap the user's chosen column count so cards stay readable on smaller screens.
@@ -70,7 +68,7 @@ function useViewportWidth(): number {
   return width;
 }
 
-// "Builder" recognition badge — a parent who has shipped commits to Pixel
+// "Builder" recognition badge — a member who has shipped commits to Pixel
 // Parents (or was manually marked). Shows the contribution count when known.
 function BuilderBadge({ contributions }: { contributions: number }) {
   return (
@@ -93,9 +91,27 @@ function BuilderBadge({ contributions }: { contributions: number }) {
   );
 }
 
+// "OHS student" badge — a minor account. Coarse-only fields are shown on these
+// cards (see lib/directory buildDirectoryCard).
+function StudentBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border border-white/15 bg-white/[0.05] px-2 py-0.5 text-[11px] font-medium text-white/75">
+      <IconGradCap className="h-3.5 w-3.5" strokeWidth={2} />
+      OHS student
+    </span>
+  );
+}
+
 function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
   const thumbs = card.thumbUrls.slice(0, 4);
   const childNames = card.children.map((c) => c.firstName).filter(Boolean);
+  // Interests + skillsets share one chip strip; deduped case-insensitively.
+  const tagByKey = new Map<string, string>();
+  for (const t of [...card.interests, ...card.skillsets]) {
+    const k = t.toLowerCase();
+    if (!tagByKey.has(k)) tagByKey.set(k, t);
+  }
+  const tags = Array.from(tagByKey.values());
 
   const hero = (
     <div
@@ -128,20 +144,19 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="truncate text-base font-semibold text-white">{card.name}</h3>
       </div>
-      {card.isBuilder && (
-        <div>
-          <BuilderBadge contributions={card.contributions} />
+      {(card.isBuilder || card.isStudent) && (
+        <div className="flex flex-wrap gap-1.5">
+          {card.isStudent && <StudentBadge />}
+          {card.isBuilder && <BuilderBadge contributions={card.contributions} />}
         </div>
       )}
       {card.location && <p className="text-sm text-white/55">{card.location}</p>}
       {childNames.length > 0 && (
-        <p className="text-sm text-amber-400/90">
-          {childNames.join(", ")}
-        </p>
+        <p className="text-sm text-amber-400/90">{childNames.join(", ")}</p>
       )}
-      {card.interests.length > 0 && (
+      {tags.length > 0 && (
         <div className="mt-1 flex flex-wrap gap-1.5">
-          {card.interests.slice(0, wide ? 12 : 6).map((t) => {
+          {tags.slice(0, wide ? 12 : 6).map((t) => {
             const Icon = iconForInterest(t);
             return (
               <span
@@ -153,10 +168,40 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
               </span>
             );
           })}
-          {card.interests.length > (wide ? 12 : 6) && (
+          {tags.length > (wide ? 12 : 6) && (
             <span className="self-center text-xs text-white/40">
-              +{card.interests.length - (wide ? 12 : 6)}
+              +{tags.length - (wide ? 12 : 6)}
             </span>
+          )}
+        </div>
+      )}
+      {(card.linkedinUrl || card.githubUrl) && (
+        <div className="flex flex-wrap gap-2 pt-0.5 text-white/45">
+          {card.linkedinUrl && (
+            <a
+              href={card.linkedinUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="LinkedIn"
+              aria-label="LinkedIn profile"
+              className="transition-colors hover:text-amber-300"
+            >
+              <IconLinkedin className="h-4 w-4" />
+            </a>
+          )}
+          {card.githubUrl && (
+            <a
+              href={card.githubUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              title="GitHub"
+              aria-label="GitHub profile"
+              className="transition-colors hover:text-amber-300"
+            >
+              <IconGithub className="h-4 w-4" />
+            </a>
           )}
         </div>
       )}
@@ -177,9 +222,11 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
     </div>
   );
 
+  // Clicking a member opens their profile IN-TAB at /community/<token> — a nested
+  // route rendered inside DashboardShell, NOT a jump to /p (which exits the shell).
   return (
     <Link
-      href={`/p/${card.token}`}
+      href={`/community/${card.token}`}
       className={
         wide
           ? "group flex gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-amber-400/40 hover:bg-white/[0.04]"
@@ -256,33 +303,35 @@ function DualRange({
   );
 }
 
-export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
+// The consolidated community member grid: parents AND students who opted in. A
+// fork of the old directory client — same URL-persisted filters (search, age,
+// near-me, interests, sort, per-row) — but cards open IN-TAB at /community/<token>
+// and surface the student badge, skillsets, and opt-in LinkedIn/GitHub links.
+export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
   // The set of interest keys that actually exist on the current cards. Used to
-  // validate interests coming in from a shared URL (unknown ones are dropped) —
-  // derived straight from `cards` so it's available inside the state
-  // initializers below without depending on a later useMemo.
+  // validate interests coming in from a shared URL (unknown ones are dropped).
   const validInterestKeys = useMemo(() => {
     const keys = new Set<string>();
-    for (const c of cards) for (const i of c.interests) keys.add(i.toLowerCase());
+    for (const c of cards) {
+      for (const i of c.interests) keys.add(i.toLowerCase());
+      for (const s of c.skillsets) keys.add(s.toLowerCase());
+    }
     return keys;
   }, [cards]);
 
   // Restore filter state from the URL on first render (so a shared/bookmarked
-  // link reproduces the view). Read once via a lazy initializer — subsequent URL
-  // writes are driven BY this component, so we don't want to re-derive from the
-  // URL on every render. "Near me" is intentionally absent (never URL-persisted).
+  // link reproduces the view). Read once via a lazy initializer. "Near me" is
+  // intentionally absent (never URL-persisted).
   const [initialState] = useState(() =>
     parseUrlState(new URLSearchParams(searchParams.toString()), validInterestKeys),
   );
 
   const [query, setQuery] = useState(initialState.query);
-  const [selected, setSelected] = useState<Set<string>>(
-    () => new Set(initialState.interests),
-  );
+  const [selected, setSelected] = useState<Set<string>>(() => new Set(initialState.interests));
   const [sortKey, setSortKey] = useState<SortKey>(initialState.sortKey);
   const [sortDir, setSortDir] = useState<SortDir>(initialState.sortDir);
   const [density, setDensity] = useState(initialState.perRow);
@@ -292,21 +341,17 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
   const [ageUpper, setAgeUpper] = useState(initialState.ageUpper);
   const ageActive = ageLower > AGE_MIN || ageUpper < AGE_MAX;
 
-  // Debounce ONLY the search text before it reaches the URL, so fast typing
-  // doesn't fire a router.replace per keystroke. Non-text controls (chips, sort,
-  // age, per-row) write through immediately. The filtering itself uses the live
-  // `query` — this debounced copy is for the URL write alone.
+  // Debounce ONLY the search text before it reaches the URL.
   const [debouncedQuery, setDebouncedQuery] = useState(initialState.query);
   useEffect(() => {
     const t = setTimeout(() => setDebouncedQuery(query), SEARCH_URL_DEBOUNCE_MS);
     return () => clearTimeout(t);
   }, [query]);
 
-  // Mirror the persisted filter state into the URL (replace, NOT push — typing
-  // and toggling shouldn't spam browser history). The "Near me" radius/origin is
-  // deliberately excluded: a user's location must never land in a shareable URL.
-  // We skip the very first run so a shared link's params aren't immediately
-  // rewritten (and so the canonical no-filter URL stays clean on load).
+  // Mirror the persisted filter state into the URL (replace, NOT push). The
+  // "Near me" radius/origin is deliberately excluded so a user's location never
+  // lands in a shareable URL. Skip the first run so a shared link's params aren't
+  // immediately rewritten.
   const didMountUrlSync = useRef(false);
   useEffect(() => {
     if (!didMountUrlSync.current) {
@@ -322,7 +367,6 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
       ageUpper,
       perRow: density,
     }).toString();
-    // Avoid a redundant navigation when nothing actually changed.
     if (next === searchParams.toString()) return;
     router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
   }, [
@@ -345,12 +389,9 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
   const [origin, setOrigin] = useState<[number, number] | null>(null);
   const [originLabel, setOriginLabel] = useState<string>("");
   const [locInput, setLocInput] = useState("");
-  const [geoStatus, setGeoStatus] = useState<
-    "idle" | "locating" | "denied" | "notfound"
-  >("idle");
+  const [geoStatus, setGeoStatus] = useState<"idle" | "locating" | "denied" | "notfound">("idle");
 
-  // Geocode each card's location ONCE (locations never change), so the radius
-  // filter doesn't re-parse the whole list on every keystroke / filter change.
+  // Geocode each card's location ONCE (locations never change).
   const coordsByToken = useMemo(() => {
     const m = new Map<string, LatLng | null>();
     for (const c of cards) m.set(c.token, geocodeLocation(c.location));
@@ -377,7 +418,6 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
   const toggleRadius = () => {
     setRadiusOn((on) => {
       const next = !on;
-      // Ask for the browser location the first time it's switched on.
       if (next && !origin) requestGeolocation();
       return next;
     });
@@ -390,25 +430,20 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
       setOriginLabel(locInput.trim());
       setGeoStatus("idle");
     } else {
-      // Distinct from a browser "denied" so the message can speak to the typed
-      // value rather than geolocation permission.
       setGeoStatus("notfound");
     }
   };
 
   const viewportWidth = useViewportWidth();
   const maxCols = maxColsForWidth(viewportWidth);
-  // What the grid actually renders — the user's choice clamped to what fits the
-  // viewport. The "Per row" select shows THIS (not the raw stored density) so the
-  // control never claims more columns than are drawn.
   const effectiveCols = Math.min(density, maxCols);
 
-  // Distinct interests across all visible cards, deduped case-insensitively but
-  // keeping the first-seen display label.
+  // Distinct interests + skillsets across all visible cards, deduped
+  // case-insensitively but keeping the first-seen display label.
   const allInterests = useMemo(() => {
     const byKey = new Map<string, string>();
     for (const c of cards) {
-      for (const i of c.interests) {
+      for (const i of [...c.interests, ...c.skillsets]) {
         const k = i.toLowerCase();
         if (!byKey.has(k)) byKey.set(k, i);
       }
@@ -429,9 +464,10 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = cards.filter((c) => {
-      // Interest filter: OR — match any selected interest.
+      const cardTags = [...c.interests, ...c.skillsets];
+      // Interest/skill filter: OR — match any selected tag.
       if (selected.size > 0) {
-        const cardKeys = new Set(c.interests.map((i) => i.toLowerCase()));
+        const cardKeys = new Set(cardTags.map((i) => i.toLowerCase()));
         let any = false;
         for (const s of selected) {
           if (cardKeys.has(s)) {
@@ -441,31 +477,22 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
         }
         if (!any) return false;
       }
-      // Search: parent name, any child name, or any interest (substring).
+      // Search: name, any child name, or any interest/skill (substring).
       if (q) {
-        const haystack = [
-          c.name,
-          ...c.children.map((k) => k.firstName),
-          ...c.interests,
-        ]
+        const haystack = [c.name, ...c.children.map((k) => k.firstName), ...cardTags]
           .join(" ")
           .toLowerCase();
         if (!haystack.includes(q)) return false;
       }
-      // Age range: any shown child's derived age within [lower, upper] (upper at
-      // AGE_MAX means "18+"). Families with no age-derivable children don't match.
+      // Age range: any shown child's derived age within [lower, upper]. Families
+      // with no age-derivable children don't match. (Students have no children.)
       if (
         ageActive &&
-        !familyMatchesAgeRange(
-          c.children.map((k) => k.age),
-          ageLower,
-          ageUpper,
-          AGE_MAX,
-        )
+        !familyMatchesAgeRange(c.children.map((k) => k.age), ageLower, ageUpper, AGE_MAX)
       ) {
         return false;
       }
-      // Radius: ungeocodable / location-not-shared families are excluded when a
+      // Radius: ungeocodable / location-not-shared members are excluded when a
       // finite radius is active (Worldwide keeps everyone).
       if (
         radiusOn &&
@@ -480,10 +507,8 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
 
     const dir = sortDir === "asc" ? 1 : -1;
     const sorted = [...filtered].sort((a, b) => {
-      const av =
-        sortKey === "name" ? a.name : a.children[0]?.firstName ?? "";
-      const bv =
-        sortKey === "name" ? b.name : b.children[0]?.firstName ?? "";
+      const av = sortKey === "name" ? a.name : a.children[0]?.firstName ?? "";
+      const bv = sortKey === "name" ? b.name : b.children[0]?.firstName ?? "";
       return av.localeCompare(bv) * dir;
     });
     return sorted;
@@ -513,7 +538,7 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, child, or interest…"
+            placeholder="Search by name, child, interest, or skill…"
             className={`${controlCls} min-w-[14rem] flex-1`}
           />
           <label className="flex items-center gap-2 text-sm text-white/60">
@@ -523,7 +548,7 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
               onChange={(e) => setSortKey(e.target.value as SortKey)}
               className={controlCls}
             >
-              <option value="name">Parent name</option>
+              <option value="name">Name</option>
               <option value="child">Child name</option>
             </select>
           </label>
@@ -583,9 +608,7 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
               </button>
             )}
             {ageActive && (
-              <span className="text-xs text-white/35">
-                (only families who shared child ages)
-              </span>
+              <span className="text-xs text-white/35">(only members who shared child ages)</span>
             )}
           </div>
 
@@ -627,9 +650,7 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
                   </span>
                 ) : (
                   <span className="text-xs text-white/45">
-                    {geoStatus === "locating"
-                      ? "locating…"
-                      : "set an origin →"}
+                    {geoStatus === "locating" ? "locating…" : "set an origin →"}
                   </span>
                 )}
                 <span className="flex items-center gap-1">
@@ -668,7 +689,7 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
           </div>
         </div>
 
-        {/* Interest filter chips */}
+        {/* Interest / skill filter chips */}
         {allInterests.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
             {allInterests.map((label) => {
@@ -704,18 +725,18 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
       </div>
 
       <p className="text-sm text-white/45">
-        {visible.length} {visible.length === 1 ? "family" : "families"}
+        {visible.length} {visible.length === 1 ? "member" : "members"}
         {selected.size > 0 ||
         query.trim() ||
         ageActive ||
         (radiusOn && origin && radiusMiles !== Infinity)
           ? " match your filters"
-          : " shared with OHS families"}
+          : " sharing with the community"}
       </p>
 
       {visible.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-white/50">
-          No families match your filters.
+          No members match your filters.
         </div>
       ) : (
         <div

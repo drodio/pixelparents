@@ -225,6 +225,136 @@ describe("buildDirectoryCard (per-field redaction)", () => {
     );
     expect(card.interests).toEqual(["chess"]);
   });
+
+  it("exposes skillsets behind the 'interests' share field, trimmed + non-empty", () => {
+    const shown = buildDirectoryCard(
+      signup({ skillsets: ["React", "  Rust  ", "", null as unknown as string] }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(shown.skillsets).toEqual(["React", "Rust"]);
+    // Not shared when "interests" is off.
+    const hidden = buildDirectoryCard(
+      signup({ shareFields: ["location"], skillsets: ["React"] }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(hidden.skillsets).toEqual([]);
+  });
+
+  it("exposes LinkedIn/GitHub links ONLY when the 'links' field is opted in", () => {
+    // Default share fields do NOT include "links" → no links leak.
+    const off = buildDirectoryCard(
+      signup({ linkedinUrl: "https://linkedin.com/in/ada", githubUsername: "ada" }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(off.linkedinUrl).toBeNull();
+    expect(off.githubUrl).toBeNull();
+    // Opted in → both surface (GitHub built from the public username).
+    const on = buildDirectoryCard(
+      signup({
+        shareFields: ["links"],
+        linkedinUrl: "https://linkedin.com/in/ada",
+        githubUsername: "ada",
+      }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(on.linkedinUrl).toBe("https://linkedin.com/in/ada");
+    expect(on.githubUrl).toBe("https://github.com/ada");
+  });
+
+  it("defaults to a non-student card for a parent account", () => {
+    const card = buildDirectoryCard(signup(), kids, noUrls, 4, YEAR);
+    expect(card.isStudent).toBe(false);
+    expect(card.name).toBe("Ada Lovelace"); // full name for parents
+  });
+});
+
+describe("buildDirectoryCard — student coarsening (minor privacy)", () => {
+  const kids = [child()];
+  const noUrls = new Map<string, string>();
+  // A student ACCOUNT is detected via extra.accountType === "student".
+  const studentExtra = { approvalStatus: "approved", accountType: "student" };
+
+  it("shows first name only — never the surname", () => {
+    const card = buildDirectoryCard(
+      signup({ extra: studentExtra }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(card.isStudent).toBe(true);
+    expect(card.name).toBe("Ada");
+    expect(JSON.stringify(card)).not.toContain("Lovelace");
+  });
+
+  it("coarsens location to the region — never the precise city", () => {
+    const card = buildDirectoryCard(
+      signup({ extra: studentExtra, city: "Palo Alto", state: "CA" }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(card.location).toBe("CA");
+    expect(card.location).not.toContain("Palo Alto");
+  });
+
+  it("falls back to country when no state is shared", () => {
+    const card = buildDirectoryCard(
+      signup({ extra: studentExtra, city: "Toronto", state: null, country: "Canada" }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(card.location).toBe("Canada");
+  });
+
+  it("never lists children (or mixes in their interests)", () => {
+    const card = buildDirectoryCard(
+      signup({ extra: studentExtra, parentInterests: ["AI"] }),
+      [child({ firstName: "Byron", interests: ["Robotics"] })],
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(card.children).toEqual([]);
+    expect(card.interests).toEqual(["AI"]); // no "Robotics" from a child
+    expect(JSON.stringify(card)).not.toContain("Byron");
+  });
+
+  it("still shows opt-in skills, builder badge, and links", () => {
+    const card = buildDirectoryCard(
+      signup({
+        extra: { ...studentExtra, builder: true, githubContributions: 3 },
+        shareFields: ["interests", "links"],
+        skillsets: ["Python"],
+        linkedinUrl: "https://linkedin.com/in/ada",
+        githubUsername: "ada",
+      }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(card.skillsets).toEqual(["Python"]);
+    expect(card.isBuilder).toBe(true);
+    expect(card.contributions).toBe(3);
+    expect(card.linkedinUrl).toBe("https://linkedin.com/in/ada");
+    expect(card.githubUrl).toBe("https://github.com/ada");
+  });
 });
 
 describe("directoryPhotoPaths + photo projection", () => {

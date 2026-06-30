@@ -10,7 +10,6 @@ import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
 import { DashboardShell } from "@/components/dashboard-shell";
 import {
   IconUsers,
-  IconGlobe,
   IconCode,
   IconCircleCheck,
   IconGradCap,
@@ -169,16 +168,10 @@ export default async function DashboardPage() {
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <LinkCard
-              href="/directory"
-              title="Family directory"
-              desc="Browse OHS families who are sharing their profiles."
-              Icon={IconUsers}
-            />
-            <LinkCard
               href="/community"
               title="Community"
-              desc="A bird's-eye view of where we're building, worldwide."
-              Icon={IconGlobe}
+              desc="Browse OHS families and students who are sharing, plus a map of where we're building."
+              Icon={IconUsers}
             />
             <LinkCard
               href="/developers"

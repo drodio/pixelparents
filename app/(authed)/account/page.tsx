@@ -183,7 +183,7 @@ export default async function AccountPage() {
             </ul>
           ) : (
             <p className="text-sm text-white/45">
-              No students verified yet. Add one below to unlock the OHS family directory.
+              No students verified yet. Add one below to unlock the OHS community showcase.
             </p>
           )}
           <StudentVerify signupId={signup.id} initial={verifyState} allowAddMore />

@@ -9,6 +9,9 @@ export const SHARE_FIELDS = [
   { key: "children", label: "Children (name, grade, interests, notes)" },
   { key: "phone", label: "Phone number" },
   { key: "email", label: "Email address" },
+  // Professional links (LinkedIn + GitHub). NEW field — intentionally absent
+  // from DEFAULT_SHARE_FIELDS below so it is OFF by default; a member must opt in.
+  { key: "links", label: "LinkedIn & GitHub links" },
 ] as const;
 
 export type ShareFieldKey = (typeof SHARE_FIELDS)[number]["key"];
@@ -46,7 +49,9 @@ export function canViewProfile(
 
 const VALID_KEYS = new Set<string>(SHARE_FIELDS.map((f) => f.key));
 
-// Default when a parent first enables sharing: everything selected.
+// Default when a parent first enables sharing: every PRE-EXISTING field selected.
+// New fields (e.g. "links") are deliberately left OUT so they stay OFF by
+// default — an existing member's links never appear until they opt in.
 export const DEFAULT_SHARE_FIELDS: ShareFieldKey[] = [
   "location",
   "interests",

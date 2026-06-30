@@ -26,7 +26,9 @@ export async function approve(formData: FormData): Promise<void> {
     await notifyApiDecision({ to: row.email, name: row.name, approved: true });
   }
   revalidatePath("/admin/api-requests");
-  revalidatePath("/directory");
+  // The directory merged into the community showcase; revalidate that route so a
+  // newly verified family shows up there. (/directory only redirects now.)
+  revalidatePath("/community");
 }
 
 export async function reject(formData: FormData): Promise<void> {
