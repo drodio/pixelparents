@@ -47,7 +47,199 @@ export default async function BuildersPage() {
       <div className="relative z-10 mx-auto flex w-full max-w-3xl flex-col gap-10">
         <header className="flex flex-col items-center gap-6 text-center">
           <PixelMascot widthClass="w-24" href="/" />
+          <div className="flex flex-col gap-4">
+            <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
+              Anyone can be a builder
+            </h1>
+            <p className="mx-auto max-w-xl text-lg leading-relaxed text-white/70">
+              Pixel Parents is a warm, low-pressure place for OHS parents and
+              students to learn to build software together — even if you have
+              never written a line of code. If you are curious, you already
+              belong here.
+            </p>
+          </div>
         </header>
+
+        {/* Welcoming on-ramp — speaks to the curious-but-tentative first, before
+            the formal builder guidelines below. This block is intentionally JSX
+            (not builders.md) so the guidelines doc stays a clean, ratified policy
+            artifact while the page can carry the warmer, evolving on-ramp. */}
+        <section
+          id="start-here"
+          className="flex scroll-mt-24 flex-col gap-6 rounded-2xl border border-amber-400/30 bg-amber-400/[0.06] p-6 sm:p-8"
+        >
+          <div className="flex flex-col gap-2">
+            <span className="text-sm font-semibold uppercase tracking-wide text-amber-400">
+              New to building? Start here
+            </span>
+            <h2 className="text-2xl font-bold">
+              You don&apos;t have to be a &ldquo;builder&rdquo; to build
+            </h2>
+          </div>
+
+          <p className="text-base leading-relaxed text-white/70">
+            If the word &ldquo;builder&rdquo; feels like it belongs to someone
+            else — engineers, computer-science people, your kid — read this part
+            first. The truth is that building software has quietly become
+            something you can do by describing what you want in plain English.
+            That&apos;s what people mean by <em className="text-white/50">vibe
+            coding</em>: you talk to an AI assistant, it writes and runs the
+            code, and you steer. The barrier that kept most people out is gone.
+          </p>
+
+          <p className="text-base leading-relaxed text-white/70">
+            So this is a safe place to be a beginner. You can lurk, ask
+            &ldquo;obvious&rdquo; questions, break things, and learn out loud.
+            Nobody here expects you to already know how — that&apos;s the whole
+            point of doing it together.
+          </p>
+
+          <div className="flex flex-col gap-3">
+            <h3 className="font-semibold text-white">
+              Your zero-to-first-change path
+            </h3>
+            <ol className="flex flex-col gap-3">
+              {[
+                [
+                  "Get the tools",
+                  <>
+                    Install{" "}
+                    <a href="https://claude.ai/download" className={linkClass}>
+                      the Claude desktop app
+                    </a>{" "}
+                    (or{" "}
+                    <a
+                      href="https://www.anthropic.com/claude-code"
+                      className={linkClass}
+                    >
+                      Claude Code
+                    </a>{" "}
+                    in a terminal). This is the AI assistant that will do the
+                    typing while you describe what you want.
+                  </>,
+                ],
+                [
+                  "Open this project",
+                  <>
+                    Everything we build is open source. Point Claude at{" "}
+                    <a href={REPO_URL} className={linkClass}>
+                      our repo
+                    </a>{" "}
+                    and ask it to explain what the project does — there&apos;s a
+                    copy-paste starter prompt in{" "}
+                    <a href="#getting-started" className={linkClass}>
+                      Getting started
+                    </a>{" "}
+                    below.
+                  </>,
+                ],
+                [
+                  "Make one small change",
+                  <>
+                    Fix a typo, tweak some wording, adjust a color. Ask the
+                    assistant to make the change and show you the result. That
+                    first small win is the moment building stops feeling
+                    mysterious.
+                  </>,
+                ],
+                [
+                  "Open your first pull request",
+                  <>
+                    A pull request (PR) is just &ldquo;here&apos;s a change I
+                    made, please consider it.&rdquo; Ask Claude to open one for
+                    you and walk you through it. We review PRs kindly — a first
+                    PR is a milestone, not a test.
+                  </>,
+                ],
+              ].map(([title, body], i) => (
+                <li
+                  key={i}
+                  className="flex gap-4 rounded-xl border border-white/10 bg-black/30 p-4"
+                >
+                  <span className="flex h-7 w-7 flex-none items-center justify-center rounded-full border border-amber-400/40 text-sm font-semibold text-amber-400">
+                    {i + 1}
+                  </span>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-semibold text-white">{title}</span>
+                    <span className="text-base leading-relaxed text-white/70">
+                      {body}
+                    </span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </div>
+
+          <p className="text-sm text-white/50">
+            Stuck at any step? That&apos;s expected. Bring it to the WhatsApp
+            group or ask the AI assistant itself — &ldquo;explain this to me like
+            I&apos;ve never done it before&rdquo; is a perfectly good prompt.
+          </p>
+        </section>
+
+        {/* Why learning to build matters now — the AI shift. */}
+        <section id="why-now" className="flex scroll-mt-24 flex-col gap-5">
+          <h2 className="text-2xl font-bold">Why this matters now</h2>
+          <p className="text-base leading-relaxed text-white/70">
+            The way we work is changing fast. AI has turned building software
+            from a specialist skill into something anyone curious can pick up —
+            and that shift is reshaping nearly every job our kids will graduate
+            into. Learning to build today isn&apos;t about becoming a software
+            engineer. It&apos;s about becoming fluent in the tools that are
+            quickly becoming the baseline for how things get made.
+          </p>
+          <p className="text-base leading-relaxed text-white/70">
+            For parents, that fluency is the best way to understand the world
+            our children are heading into — and to guide them through it well.
+            For students, it&apos;s a head start on a way of working that will be
+            second nature by the time they leave OHS. We build together so we can
+            all be power users of these tools, not bystanders to them.
+          </p>
+        </section>
+
+        {/* Two clear tracks: parents mentor, students start. */}
+        <section id="two-ways-in" className="flex scroll-mt-24 flex-col gap-5">
+          <h2 className="text-2xl font-bold">Two ways in</h2>
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-5">
+              <h3 className="font-semibold text-white">Parents: start &amp; mentor</h3>
+              <p className="text-base leading-relaxed text-white/70">
+                Join as a builder yourself, at any experience level — most of us
+                are learning as we go. Once you&apos;re comfortable, the most
+                valuable thing you can do is mentor a student: every student
+                builder needs at least one parent building alongside them. You
+                don&apos;t need to be the expert in the room; you need to be the
+                steady adult who&apos;s learning together with them.
+              </p>
+              <p className="text-sm text-white/50">
+                <a href="#how-to-get-involved-as-a-pixel-parent-builder" className={linkClass}>
+                  How to get involved →
+                </a>
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-5">
+              <h3 className="font-semibold text-white">Students: start building</h3>
+              <p className="text-base leading-relaxed text-white/70">
+                If you&apos;re an OHS student who wants to build, you&apos;re
+                exactly who we hope to see. Pick something real, build it, ship
+                it, and learn from what breaks — with a parent mentor alongside
+                you. AI-assisted coding does the heavy lifting, so curiosity and
+                a willingness to iterate are all you need to start.
+              </p>
+              <p className="text-sm text-white/50">
+                <a href="#student-builders" className={linkClass}>
+                  Student builders →
+                </a>
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <div className="border-t border-white/10" />
+
+        <p className="text-sm uppercase tracking-wide text-white/40">
+          The fine print — how we work together
+        </p>
 
         <article className="flex flex-col gap-6">
           <Markdown content={source} />
@@ -193,12 +385,20 @@ claude -p "Read CLAUDE.md and AGENTS.md and treat them as binding instructions f
             </a>{" "}
             repo — propose changes there.
           </p>
-          <Link
-            href="/developers"
-            className="text-inherit underline decoration-dotted decoration-amber-400 underline-offset-2 transition-colors hover:decoration-amber-300"
-          >
-            Explore the Pixel Parents API →
-          </Link>
+          <div className="flex flex-col items-center gap-1.5">
+            <Link
+              href="/developers"
+              className="text-inherit underline decoration-dotted decoration-amber-400 underline-offset-2 transition-colors hover:decoration-amber-300"
+            >
+              Explore the Pixel Parents API →
+            </Link>
+            <Link
+              href="/docs"
+              className="text-inherit underline decoration-dotted decoration-amber-400 underline-offset-2 transition-colors hover:decoration-amber-300"
+            >
+              Read the developer docs →
+            </Link>
+          </div>
         </footer>
       </div>
     </div>
