@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { IconCheck } from "@/components/icons";
 
 export function ChangelogSubscribe() {
   const [open, setOpen] = useState(false);
@@ -28,7 +29,9 @@ export function ChangelogSubscribe() {
 
   if (status === "done") {
     return (
-      <p className="text-sm text-emerald-300">✓ Subscribed — we&apos;ll email you new updates.</p>
+      <p className="inline-flex items-center gap-1.5 text-sm text-emerald-300">
+        <IconCheck className="h-4 w-4" /> Subscribed — we&apos;ll email you new updates.
+      </p>
     );
   }
 

@@ -3,6 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import InterestTiles from "./signup/interest-tiles";
 import { PixelMascot } from "@/components/pixel-mascot";
 import { IrlTooltip } from "@/components/irl-tooltip";
+import { IconHeart } from "@/components/icons";
 import { isAdminEmail } from "@/lib/admin";
 import {
   getSignupCount,
@@ -100,9 +101,7 @@ export default async function Home() {
 
       <footer className="relative z-10 mt-8 text-center text-sm text-white/50">
         Created with{" "}
-        <span aria-label="love" role="img">
-          ❤️
-        </span>{" "}
+        <IconHeart className="inline-block h-4 w-4 -translate-y-px text-red-400" title="love" />{" "}
         by <span className="text-amber-400">{builders.technical.toLocaleString()}</span>{" "}
         technical parents and{" "}
         <span className="text-amber-400">{builders.curious.toLocaleString()}</span>{" "}

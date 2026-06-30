@@ -12,6 +12,7 @@ import {
 } from "@/lib/options";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
+import { IconWarning } from "@/components/icons";
 import {
   createDraftSignup,
   createCoParentDraft,
@@ -719,7 +720,7 @@ export default function SignupForm({
               onClick={() => void flush()}
               className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
             >
-              ⚠ Couldn&apos;t save — click to retry
+              <IconWarning className="h-4 w-4" /> Couldn&apos;t save — click to retry
             </button>
           ) : (
             <SaveStatus status={status} />

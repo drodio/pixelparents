@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { regenerateKey, revealKey } from "./actions";
+import { IconSparkles } from "@/components/icons";
 
 export function KeyPanel({ hasKey, prefix }: { hasKey: boolean; prefix: string | null }) {
   const [raw, setRaw] = useState<string | null>(null);
@@ -38,7 +39,9 @@ export function KeyPanel({ hasKey, prefix }: { hasKey: boolean; prefix: string |
   if (raw) {
     return (
       <div className="flex flex-col gap-3 rounded-lg border border-emerald-500/40 bg-emerald-500/5 p-5">
-        <p className="font-semibold text-emerald-300">Here&apos;s your API key 🎉</p>
+        <p className="flex items-center gap-1.5 font-semibold text-emerald-300">
+          Here&apos;s your API key <IconSparkles className="h-4 w-4" />
+        </p>
         <p className="text-sm text-white/70">
           Save it now — it won&apos;t be shown again. If you lose it, use Regenerate.
         </p>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { MentionCaptionInput, type MentionCandidate } from "@/components/mention-caption-input";
 import { MentionText } from "@/components/mention-text";
+import { IconX } from "@/components/icons";
 
 export type GalleryPhoto = {
   url: string;
@@ -170,9 +171,9 @@ export function PhotoGallery({
             type="button"
             onClick={() => setIdx(null)}
             aria-label="Close"
-            className="absolute right-4 top-4 text-3xl leading-none text-white/70 hover:text-white"
+            className="absolute right-4 top-4 leading-none text-white/70 hover:text-white"
           >
-            ✕
+            <IconX className="h-7 w-7" />
           </button>
 
           {n > 1 && (

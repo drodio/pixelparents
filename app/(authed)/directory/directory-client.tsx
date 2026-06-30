@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { iconForInterest } from "@/lib/interest-icons";
+import { IconX } from "@/components/icons";
 import {
   familyMatchesAgeRange,
   familyWithinRadius,
@@ -466,10 +467,10 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
                   setAgeLower(AGE_MIN);
                   setAgeUpper(AGE_MAX);
                 }}
-                className="text-xs text-white/45 hover:text-white/80"
+                className="text-white/45 hover:text-white/80"
                 aria-label="Reset age filter"
               >
-                ✕
+                <IconX className="h-3.5 w-3.5" />
               </button>
             )}
             {ageActive && (
@@ -584,9 +585,9 @@ export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
               <button
                 type="button"
                 onClick={() => setSelected(new Set())}
-                className="px-2 text-xs text-white/45 hover:text-white/80"
+                className="inline-flex items-center gap-1 px-2 text-xs text-white/45 hover:text-white/80"
               >
-                Clear filters ✕
+                Clear filters <IconX className="h-3 w-3" />
               </button>
             )}
           </div>

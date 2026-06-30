@@ -7,6 +7,7 @@ import { getSharedProfileByToken, getSignupByEmail } from "@/lib/db/signups";
 import { shareFieldsOrDefault, coerceShareVisibility, canViewProfile } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
 import { renderCaption } from "@/lib/mentions";
+import { IconPhone, IconMail } from "@/components/icons";
 import { PhotoCarousel, type CaptionPart } from "./photo-carousel";
 import { VisibilityControl } from "@/components/visibility-control";
 
@@ -253,16 +254,16 @@ export default async function SharedProfilePage({
             <Label>Contact</Label>
             <div className="flex flex-wrap gap-x-6 gap-y-2 text-[15px] text-white/85">
               {visible.has("phone") && signup.phone && (
-                <span>
-                  📱{" "}
+                <span className="inline-flex items-center gap-1.5">
+                  <IconPhone className="h-4 w-4 text-white/50" />
                   <a href={`tel:${signup.phone}`} className="text-amber-400 hover:underline">
                     {signup.phone}
                   </a>
                 </span>
               )}
               {visible.has("email") && signup.email && (
-                <span>
-                  ✉️{" "}
+                <span className="inline-flex items-center gap-1.5">
+                  <IconMail className="h-4 w-4 text-white/50" />
                   <a href={`mailto:${signup.email}`} className="text-amber-400 hover:underline">
                     {signup.email}
                   </a>

@@ -10,6 +10,7 @@ import { MentionCaptionInput, type MentionCandidate } from "@/components/mention
 import { iconForInterest } from "@/lib/interest-icons";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
+import { IconX } from "@/components/icons";
 import { addChild, patchChild, removeChild, type ChildPatch } from "./actions";
 
 const MAX_PHOTOS = 200;
@@ -85,7 +86,7 @@ export function TagPicker({
                 className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1 text-sm font-medium text-black"
               >
                 <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                {t} ✕
+                {t} <IconX className="h-3 w-3" />
               </button>
             );
           })}
@@ -262,9 +263,10 @@ export function PhotoUploader({
                 <button
                   type="button"
                   onClick={() => mutate(photosRef.current.filter((x) => x.pathname !== p.pathname))}
-                  className="absolute right-1 top-1 rounded-full bg-black/70 px-2 text-xs text-white"
+                  className="absolute right-1 top-1 grid h-6 w-6 place-items-center rounded-full bg-black/70 text-white"
+                  aria-label="Remove photo"
                 >
-                  ✕
+                  <IconX className="h-3.5 w-3.5" />
                 </button>
                 {photos.length > 1 && (
                   <div className="absolute inset-x-1 bottom-1 flex justify-between">
@@ -323,9 +325,9 @@ export function PhotoUploader({
             type="button"
             onClick={() => setLightbox(null)}
             aria-label="Close"
-            className="absolute right-4 top-4 text-3xl leading-none text-white/70 hover:text-white"
+            className="absolute right-4 top-4 leading-none text-white/70 hover:text-white"
           >
-            ✕
+            <IconX className="h-7 w-7" />
           </button>
         </div>
       )}

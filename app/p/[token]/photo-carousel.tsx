@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { IconX } from "@/components/icons";
 
 // A caption is a list of parts so @-mentioned names can render as links that
 // jump to that child's section (href is null when that child isn't shown).
@@ -166,7 +167,7 @@ export function PhotoCarousel({ photos }: { photos: CarouselPhoto[] }) {
             className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-white/10 text-white hover:bg-white/20"
             aria-label="Close"
           >
-            ✕
+            <IconX className="h-5 w-5" />
           </button>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img

@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { ApprovalStatus } from "@/lib/approval";
+import { IconBan, IconGradCap } from "@/components/icons";
 
 // Non-breaking banner shown to families who haven't verified their OHS student
 // yet. It informs + links to /verify; it never blocks access (the 18 families who
@@ -11,7 +12,11 @@ export function UnverifiedNotice({ status }: { status: ApprovalStatus }) {
   const denied = status === "denied";
   return (
     <div className="mb-6 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-2xl border border-amber-400/30 bg-amber-400/[0.07] px-5 py-4">
-      <span aria-hidden className="text-lg">{denied ? "🚫" : "🎓"}</span>
+      {denied ? (
+        <IconBan className="h-5 w-5 shrink-0 text-amber-300" />
+      ) : (
+        <IconGradCap className="h-5 w-5 shrink-0 text-amber-300" />
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-sm font-semibold text-white">
           {denied ? "Your family's access was declined" : "Your OHS student isn't verified yet"}

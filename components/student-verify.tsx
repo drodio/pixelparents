@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { requestStudentCode, confirmStudentCode, type VerifyState } from "@/app/signup/thanks/verify-actions";
+import { IconCircleCheck, IconGradCap } from "@/components/icons";
 
 type Step = "email" | "code" | "approved";
 
@@ -67,7 +68,7 @@ export function StudentVerify({
     return (
       <div className="rounded-2xl border border-emerald-400/30 bg-emerald-400/[0.07] p-5 sm:p-6">
         <div className="flex items-center gap-2">
-          <span aria-hidden className="text-lg">✅</span>
+          <IconCircleCheck className="h-5 w-5 text-emerald-400" />
           <h3 className="font-semibold text-white">Your OHS student is verified</h3>
         </div>
         <p className="mt-1.5 text-sm text-white/65">
@@ -83,7 +84,7 @@ export function StudentVerify({
   return (
     <div className={box}>
       <div className="flex items-center gap-2">
-        <span aria-hidden className="text-lg">🎓</span>
+        <IconGradCap className="h-5 w-5 text-amber-300" />
         <h3 className="font-semibold text-white">Verify your OHS student</h3>
       </div>
       <p className="mt-1.5 text-sm text-white/65">
