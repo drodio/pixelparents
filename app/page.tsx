@@ -4,6 +4,7 @@ import InterestTiles from "./signup/interest-tiles";
 import { PixelMascot } from "@/components/pixel-mascot";
 import { IrlTooltip } from "@/components/irl-tooltip";
 import { IconHeart, IconArrowRight } from "@/components/icons";
+import ReportDialog from "./report/report-dialog";
 import { isAdminEmail } from "@/lib/admin";
 import {
   getSignupCount,
@@ -144,6 +145,24 @@ export default async function Home() {
           Become a student builder
         </Link>
         .
+        {/* Legal + report row: tasteful, on-theme footer beneath the credits. */}
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-xs text-white/40">
+          <ReportDialog />
+          <span aria-hidden="true">·</span>
+          <Link
+            href="/privacy"
+            className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
+          >
+            Privacy Policy
+          </Link>
+          <span aria-hidden="true">·</span>
+          <Link
+            href="/terms"
+            className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
+          >
+            Terms of Service
+          </Link>
+        </div>
       </footer>
     </main>
   );
