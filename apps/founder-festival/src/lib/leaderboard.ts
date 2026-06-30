@@ -311,6 +311,18 @@ const getGlobalLeaderboardCounts = unstable_cache(
   { revalidate: COUNTS_REVALIDATE_SECONDS, tags: [LEADERBOARD_COUNTS_TAG] },
 );
 
+// CONNECT MODE — total head count for the Directory subtitle. Scores are all 0
+// in connect mode, so the founder/investor split (countByScore) would read
+// 0/0. This counts every Directory-visible person (baseWhere + active facets).
+export async function getDirectoryCount(filter?: LeaderboardFilter): Promise<number> {
+  const facetWhere = filter ? buildLeaderboardWhere(filter) : undefined;
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(evaluations)
+    .where(and(baseWhere, facetWhere));
+  return row?.n ?? 0;
+}
+
 export async function getLeaderboardCounts(
   filter?: LeaderboardFilter,
 ): Promise<{ founders: number; investors: number }> {
@@ -423,6 +435,56 @@ export async function getLeaderboard(filter: LeaderboardFilter): Promise<Leaderb
       asc_ ? asc(evaluations.id) : desc(evaluations.id),
     )
     .limit(filter.limit);
+
+  return decorateRows(rawRows);
+}
+
+// CONNECT MODE — Directory listing. A score-free sibling of getLeaderboard:
+// SAME base filter (no code entries / hidden / test handles) and the SAME facet
+// filters (industry/expertise/stage/etc — useful for discovery), but with NO
+// role gate (connect mode has no founder/investor roles) and NO score ordering.
+// Rows are sorted by display name (nulls last), id as the stable tiebreaker.
+//
+// Returns up to `limit` rows in one shot — connect-mode communities are small
+// and the Directory disables infinite-scroll, so we don't need the score-keyset
+// pagination machinery (which encodes a numeric score in its cursor). Reuses the
+// exact same decorateRows() pipeline so company/badges/image/href are identical.
+export async function getDirectory(
+  filter: LeaderboardFilter,
+  limit = 1000,
+): Promise<LeaderboardRow[]> {
+  const facetWhere = buildLeaderboardWhere(filter);
+  const where = and(baseWhere, facetWhere);
+
+  const rawRows = await db
+    .select({
+      id: evaluations.id,
+      linkedinUrl: evaluations.linkedinUrl,
+      fullName: evaluations.fullName,
+      founderScore: evaluations.founderScore,
+      investorScore: evaluations.investorScore,
+      combinedScore: evaluations.score,
+      createdAt: evaluations.createdAt,
+      profile: PROFILE_PROJECTION,
+      slug: evaluations.slug,
+      slugKind: evaluations.slugKind,
+      investorStageFocus: evaluations.investorStageFocus,
+      investorIndustryFocus: evaluations.investorIndustryFocus,
+      investorLeadsRounds: evaluations.investorLeadsRounds,
+      onNeo: evaluations.onNeo,
+      founderStatus: evaluations.founderStatus,
+      investorStatus: evaluations.investorStatus,
+      canonicalIndustries: evaluations.canonicalIndustries,
+    })
+    .from(evaluations)
+    .where(where)
+    // Name-ascending, NULL names last, id as the stable tiebreaker. No score
+    // ordering — the Directory is alphabetical, not ranked.
+    .orderBy(
+      sql`${evaluations.fullName} ASC NULLS LAST`,
+      asc(evaluations.id),
+    )
+    .limit(limit);
 
   return decorateRows(rawRows);
 }

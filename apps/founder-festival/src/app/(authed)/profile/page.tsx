@@ -13,6 +13,8 @@ import { deriveEvalStatus } from "@/lib/eval-pipeline";
 import { isOwningConfidence } from "@/lib/identity-match";
 import { ScoreTable } from "@/components/ScoreTable";
 import { EnrichmentSourcesSection } from "@/components/EnrichmentSourcesSection";
+import { isConnectMode } from "@/lib/config/connect-mode";
+import { ConnectExpertiseSection } from "@/components/ConnectExpertiseSection";
 import { ProfileWebsiteLink } from "@/components/ProfileWebsiteLink";
 import { CombinedScoreModal } from "@/components/CombinedScoreModal";
 import { ReScoreButton } from "@/components/ReScoreButton";
@@ -346,6 +348,12 @@ export default async function WelcomePage({ searchParams }: PageProps) {
   const matrixInvestor = showInvestorRadar ? buildMatrix("investor") : null;
   const hasMatrix = !!matrixFounder || !!matrixInvestor;
   const recs = (row.recommendations ?? null) as RecommendationsData | null;
+  // CONNECT MODE: hide all score numbers / rankings / founder-investor framing
+  // and present the profile as a warm info aggregator (identity header, bio,
+  // expertise tags, "areas of expertise / how they can help", the enrichment
+  // facts + Data sources roster, and the profile links). When OFF this is false
+  // and the profile renders exactly as today.
+  const connectMode = isConnectMode();
   // HN Tokenmaxxing standing (stored by the enricher) → gold badge next to the
   // leaderboard badge. null when the subject isn't a ranked tkmx member.
   const tkmxBadge = getTkmxBadge(row.profile);
@@ -776,7 +784,12 @@ export default async function WelcomePage({ searchParams }: PageProps) {
           {/* Wrapper: the three-score row, then the Leaderboard/Tokenmaxxer/
               Re-Score row spanning the FULL width beneath it (so its labels
               don't wrap onto two lines as they did when confined to the
-              narrower Combined column). */}
+              narrower Combined column).
+              CONNECT MODE: the entire scores + leaderboard-rank + dossier block
+              is hidden — no numeric score reads well in a parent↔student
+              context. The info body (bio, expertise, facts, data sources)
+              renders below instead. */}
+          {!connectMode && (
           <div className="flex flex-col items-center gap-3 mt-2">
           <div className="flex items-start justify-center gap-4 sm:gap-10">
             <div className="flex flex-col gap-4 text-right">
@@ -872,6 +885,7 @@ export default async function WelcomePage({ searchParams }: PageProps) {
           {/* Hide / Delete now live in the top-right admin pill
               (AdminProfileBox), alongside Scoring Log + Re-Score. */}
           </div>
+          )}
         </div>
         {/* Credibility title + badge groups. Left-justified block, centered on
             the page. The LLM-generated one-sentence title sits above the badges;
@@ -997,7 +1011,11 @@ export default async function WelcomePage({ searchParams }: PageProps) {
             />
           </>
         )}
-        {radars && (
+        {/* Score-framed sections (credibility radar, founder/investor matrix,
+            the points ScoreTable) are score/ranking UI — hidden in connect
+            mode. The warm info body (expertise + how-they-can-help) renders
+            instead, above the always-shown Data sources roster. */}
+        {!connectMode && radars && (
           <section className="w-full flex flex-col gap-3">
             <div className="flex flex-col gap-1">
               <h3 className="font-display text-xl font-bold text-zinc-100">Credibility</h3>
@@ -1009,26 +1027,38 @@ export default async function WelcomePage({ searchParams }: PageProps) {
             />
           </section>
         )}
-        {hasMatrix && (
+        {!connectMode && hasMatrix && (
           <FounderMatrix
             founder={matrixFounder}
             investor={matrixInvestor}
             defaultDimension={matrixDim}
           />
         )}
-        <ScoreTable
-          founder={scoreItemRows.founder}
-          investor={scoreItemRows.investor}
-          isCodeEntry={row.source === "code"}
-          evaluationId={row.id}
-          isOwner={isOwner}
-          isClaimedByAnyone={isClaimedByAnyone}
-          ownerNeedsSetup={ownerNeedsSetup}
-          fullName={fullName}
-          isAdminViewer={isAdminViewer}
-        />
+        {!connectMode && (
+          <ScoreTable
+            founder={scoreItemRows.founder}
+            investor={scoreItemRows.investor}
+            isCodeEntry={row.source === "code"}
+            evaluationId={row.id}
+            isOwner={isOwner}
+            isClaimedByAnyone={isClaimedByAnyone}
+            ownerNeedsSetup={ownerNeedsSetup}
+            fullName={fullName}
+            isAdminViewer={isAdminViewer}
+          />
+        )}
+        {/* Connect-mode info body: "Areas of expertise / how they can help"
+            (reused from the recommendations slot, reframed as the person's
+            offer). The bio already shows above via EditCredibilityTitle, so
+            bio is left null here to avoid duplication. */}
+        {connectMode && (
+          <ConnectExpertiseSection
+            bio={null}
+            items={(recs?.items ?? []).map((it) => ({ id: it.id, text: it.text, category: it.category }))}
+          />
+        )}
         <EnrichmentSourcesSection profile={row.profile} />
-        {recs && (
+        {!connectMode && recs && (
           <Recommendations
             evaluationId={row.id}
             summary={recs.summary}

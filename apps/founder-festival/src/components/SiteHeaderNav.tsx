@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { HeaderSearch } from "./HeaderSearch";
+import { CONNECT_MODE_CLIENT } from "@/lib/config/connect-mode";
 
 export type SiteHeaderNavPage = "profile" | "account" | "leaderboard" | "events" | "changelog" | "docs";
 
@@ -61,7 +62,9 @@ export function SiteHeaderNav({
         />
       )}
       <NavItem
-        label="Leaderboard"
+        // Connect mode renames the ranked Leaderboard tab to the score-free
+        // "Directory" (same /leaderboard route, which renders the Directory).
+        label={CONNECT_MODE_CLIENT ? "Directory" : "Leaderboard"}
         href="/leaderboard"
         isActive={currentPage === "leaderboard"}
       />

@@ -19,6 +19,8 @@ import {
   type MMHit,
 } from "./scoring";
 import { runEnrichments, renderEnrichmentsForPrompt, type EnrichmentResult, type EnrichmentStatusEntry } from "./enrichers";
+import { isConnectMode } from "./config/connect-mode";
+import { extractInfoProfile } from "./connect-info";
 import { maybeTriggerBdAsync } from "./bd-async";
 import { founderRows, investorRows } from "./breakdown-rows";
 import {
@@ -539,6 +541,38 @@ export async function scoreInputs(
   if (inputs.lowSignal) {
     return { type: "low-signal", grounding: inputs.grounding, exaUsage: inputs.exaUsage };
   }
+  // CONNECT MODE: skip the numeric scoring cascade entirely. Run a single,
+  // cheaper Claude info-extraction pass instead (identity + neutral bio +
+  // expertise tags + "how they can help"), producing a ScoringResult with all
+  // score fields zeroed. payloadToWriteFields then persists score=0 / empty
+  // breakdowns / null statuses while keeping identity, recommendations,
+  // industries, and the enrichment facts + statuses intact. When the flag is
+  // OFF this branch is never taken and scoring behaves exactly as today.
+  if (isConnectMode()) {
+    // A cheap, fixed model — info extraction needs no scoring judgment, and we
+    // skip the model cascade in this mode. `model` is ignored here on purpose.
+    const infoModel: ScoringModel = "haiku";
+    const { object: infoScoring, usage: infoUsage } = await extractInfoProfile({
+      linkedinUrl,
+      searchHighlights: inputs.searchHighlights,
+      linkedinPageText: inputs.linkedinPageText,
+      enrichmentBlock: inputs.enrichmentBlock,
+      gatewayModelId: MODEL_GATEWAY_ID[infoModel],
+      modelLabel: infoModel,
+    });
+    return {
+      type: "scored",
+      scoring: infoScoring,
+      scoringUsage: infoUsage,
+      mmHits: inputs.mmHits,
+      enrichments: inputs.enrichments,
+      enrichmentStatuses: inputs.enrichmentStatuses,
+      grounding: inputs.grounding,
+      exaUsage: inputs.exaUsage,
+      // Never escalate in connect mode — there is no cascade to escalate into.
+      escalate: false,
+    };
+  }
   const { object: scoring, usage: scoringUsage } = await scoreWithClaude(
     linkedinUrl,
     inputs.searchHighlights,
@@ -730,6 +764,9 @@ async function computeFreshScore(
 // reEvaluate keep us safe).
 async function fillMissingFounderInvestorStatus(payload: ScoredPayload): Promise<ScoredPayload> {
   if (payload.type !== "scored") return payload;
+  // Connect mode deliberately leaves founder/investor status null (no competitive
+  // markers). Skip the classifier backfill so we don't re-introduce them.
+  if (isConnectMode()) return payload;
   const s = payload.scoring;
   if (s.founderStatus != null && s.investorStatus != null) return payload;
   try {

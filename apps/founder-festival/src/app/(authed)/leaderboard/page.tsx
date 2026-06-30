@@ -1,8 +1,9 @@
-import { getLeaderboard, getLeaderboardCounts, getBadgeCounts, getIndustryCounts, parseLeaderboardFilter, buildLeaderboardWhere } from "@/lib/leaderboard";
+import { getLeaderboard, getDirectory, getLeaderboardCounts, getDirectoryCount, getBadgeCounts, getIndustryCounts, parseLeaderboardFilter, buildLeaderboardWhere } from "@/lib/leaderboard";
 import { encodeCursor } from "@/lib/leaderboard-cursor";
 import { LeaderboardClient } from "@/components/LeaderboardClient";
 import { SiteHeaderNav } from "@/components/SiteHeaderNav";
 import { getCurrentViewerContext } from "@/lib/current-viewer";
+import { isConnectMode } from "@/lib/config/connect-mode";
 
 type PageProps = {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
@@ -15,8 +16,16 @@ type PageProps = {
 // before they start scrolling.
 const INITIAL_PAGE_SIZE = 100;
 
+// Connect-mode Directory: rendered alphabetically in a single SSR shot (no
+// score-keyset infinite scroll). Communities here are small; cap generously.
+const DIRECTORY_PAGE_SIZE = 1000;
+
 export default async function LeaderboardPage({ searchParams }: PageProps) {
   const sp = await searchParams;
+  // CONNECT MODE: render a score-free, alphabetical Directory instead of the
+  // ranked leaderboard. Same facet FILTERS (industry/expertise/etc — useful for
+  // discovery), but no rank numbers, no score columns, and no score-based sort.
+  const connectMode = isConnectMode();
   // Normalize to URLSearchParams for the shared parser (first value wins for
   // any repeated key — facets are single comma-separated params).
   const usp = new URLSearchParams();
@@ -25,13 +34,15 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
     else if (Array.isArray(v) && typeof v[0] === "string") usp.set(k, v[0]);
   }
   // Server-render the first page; the client paginates with cursors after.
-  const filter = { ...parseLeaderboardFilter(usp), limit: INITIAL_PAGE_SIZE, cursor: null };
+  const pageSize = connectMode ? DIRECTORY_PAGE_SIZE : INITIAL_PAGE_SIZE;
+  const filter = { ...parseLeaderboardFilter(usp), limit: pageSize, cursor: null };
   const e = typeof sp.e === "string" ? sp.e : undefined;
 
-  const [rows, viewer, counts, badgeCounts, industryCounts] = await Promise.all([
-    getLeaderboard(filter),
+  const [rows, viewer, counts, directoryCount, badgeCounts, industryCounts] = await Promise.all([
+    connectMode ? getDirectory(filter, DIRECTORY_PAGE_SIZE) : getLeaderboard(filter),
     getCurrentViewerContext(),
     getLeaderboardCounts(filter),
+    connectMode ? getDirectoryCount(filter) : Promise.resolve(0),
     getBadgeCounts(),
     getIndustryCounts(),
   ]);
@@ -41,9 +52,11 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
   const filtersActive = buildLeaderboardWhere(filter) !== undefined;
 
   // A full page implies there are more — emit the keyset cursor so the
-  // client's IntersectionObserver can request the next page.
+  // client's IntersectionObserver can request the next page. Connect-mode
+  // Directory is rendered in one shot (alphabetical, no score cursor), so no
+  // next-page cursor is emitted.
   let nextCursor: string | null = null;
-  if (rows.length === INITIAL_PAGE_SIZE && rows.length > 0) {
+  if (!connectMode && rows.length === INITIAL_PAGE_SIZE && rows.length > 0) {
     const last = rows[rows.length - 1]!;
     const score =
       filter.sort === "founder" ? last.founderScore
@@ -59,6 +72,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
   // any such change, re-seeding it from the new server data. Excludes
   // limit/cursor (constant for SSR) and the row-highlight `e`.
   const clientKey = JSON.stringify([
+    connectMode,
     filter.role, filter.sort, filter.direction,
     filter.stages, filter.outcomes, filter.badges, filter.industries,
     filter.raisedMin, filter.raisedMax, filter.teamMin,
@@ -85,18 +99,28 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         />
       </header>
       <h1 className="font-display text-3xl sm:text-4xl font-bold tracking-tight text-center mb-2 max-w-4xl mx-auto w-full">
-        Festival Leaderboard
+        {connectMode ? "Directory" : "Festival Leaderboard"}
       </h1>
-      <p className="text-xl sm:text-2xl text-zinc-300 text-center mb-1 max-w-4xl mx-auto w-full">
-        <strong className="font-bold text-zinc-100">
-          {counts.founders.toLocaleString("en-US")}
-        </strong>{" "}
-        Founder and{" "}
-        <strong className="font-bold text-zinc-100">
-          {counts.investors.toLocaleString("en-US")}
-        </strong>{" "}
-        Investor Profiles{filtersActive ? " match your filters" : ""}
-      </p>
+      {connectMode ? (
+        <p className="text-xl sm:text-2xl text-zinc-300 text-center mb-1 max-w-4xl mx-auto w-full">
+          <strong className="font-bold text-zinc-100">
+            {directoryCount.toLocaleString("en-US")}
+          </strong>{" "}
+          {directoryCount === 1 ? "person" : "people"} in the
+          community{filtersActive ? " match your filters" : ""}
+        </p>
+      ) : (
+        <p className="text-xl sm:text-2xl text-zinc-300 text-center mb-1 max-w-4xl mx-auto w-full">
+          <strong className="font-bold text-zinc-100">
+            {counts.founders.toLocaleString("en-US")}
+          </strong>{" "}
+          Founder and{" "}
+          <strong className="font-bold text-zinc-100">
+            {counts.investors.toLocaleString("en-US")}
+          </strong>{" "}
+          Investor Profiles{filtersActive ? " match your filters" : ""}
+        </p>
+      )}
       <p className="text-sm italic text-zinc-500 text-center mb-8 sm:mb-10">
         Unclaimed profiles may have incorrect information.
       </p>
@@ -110,6 +134,7 @@ export default async function LeaderboardPage({ searchParams }: PageProps) {
         industryCounts={industryCounts}
         highlightEvalId={e ?? null}
         youEvalId={viewer.ownEvaluationId}
+        connectMode={connectMode}
       />
     </div>
   );

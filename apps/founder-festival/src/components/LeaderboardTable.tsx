@@ -28,6 +28,11 @@ type Props = {
   // True while a search is still in flight, so the empty state stays quiet
   // (the parent shows a "Searching…" count) rather than flashing a message.
   searchLoading?: boolean;
+  // CONNECT MODE: drop the rank (#) column, the Founder/Investor/Combined score
+  // columns, the sortable headers, and the founder/investor status markers.
+  // Keeps the name/company/badges Name cell + facet-driven filtering. Default
+  // false (full ranked leaderboard).
+  connectMode?: boolean;
 };
 
 // Sortable score-column header. Only the active column shows a ▼ (highest→lowest)
@@ -171,6 +176,7 @@ export function LeaderboardTable({
   youEvalId,
   searchQuery = "",
   searchLoading = false,
+  connectMode = false,
 }: Props) {
   // Two refs: the highlighted row exists in both the desktop table and the
   // mobile card list, but only one is visible at a time. The effect scrolls
@@ -213,7 +219,7 @@ export function LeaderboardTable({
     // Genuinely empty board (no active search).
     return (
       <p className="text-sm text-zinc-500 italic py-12 text-center">
-        No scored entries yet.
+        {connectMode ? "No one in the directory yet." : "No scored entries yet."}
       </p>
     );
   }
@@ -244,13 +250,16 @@ export function LeaderboardTable({
               }`}
             >
               <div className="flex items-start gap-2">
-                <span className="w-6 shrink-0 pt-0.5 font-mono text-sm text-zinc-500">
-                  {rank}
-                </span>
+                {!connectMode && (
+                  <span className="w-6 shrink-0 pt-0.5 font-mono text-sm text-zinc-500">
+                    {rank}
+                  </span>
+                )}
                 <div className="min-w-0 flex-1">
                   <NameCell row={row} isMe={isYou} onBadgeFilter={onBadgeFilter} filterableBadgeIds={filterableBadgeIds} />
                 </div>
               </div>
+              {!connectMode && (
               <div className="grid grid-cols-3 gap-2 border-t border-zinc-800 pt-2.5">
                 {scores.map(([col, label, val]) => {
                   const active = col === tab;
@@ -281,6 +290,7 @@ export function LeaderboardTable({
                   );
                 })}
               </div>
+              )}
             </div>
           );
         })}

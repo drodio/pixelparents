@@ -17,6 +17,10 @@ type Props = {
   industryCounts?: Record<string, number>;
   highlightEvalId: string | null;
   youEvalId: string | null;
+  // CONNECT MODE: render a score-free Directory — no rank numbers, no score
+  // columns, no score-based sort control, no infinite-scroll pagination (the
+  // page SSRs the full alphabetical list). Defaults false (leaderboard).
+  connectMode?: boolean;
 };
 
 function activeFacetCount(filter: LeaderboardFilter): number {
@@ -59,6 +63,7 @@ export function LeaderboardClient({
   industryCounts,
   highlightEvalId,
   youEvalId,
+  connectMode = false,
 }: Props) {
   const router = useRouter();
 
@@ -256,7 +261,7 @@ export function LeaderboardClient({
           </button>
 
           <label className="block flex-1 min-w-0">
-            <span className="sr-only">Search the leaderboard</span>
+            <span className="sr-only">{connectMode ? "Search the directory" : "Search the leaderboard"}</span>
             <input
               type="search"
               value={query}
@@ -264,7 +269,7 @@ export function LeaderboardClient({
               // Shorter placeholder fits at 390px next to the mobile Filters
               // pill; the sm: variant restores the full prompt on desktop.
               placeholder="Search name or company"
-              aria-label="Search the leaderboard"
+              aria-label={connectMode ? "Search the directory" : "Search the leaderboard"}
               className="w-full rounded-md border border-zinc-800 bg-zinc-900/60 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-500 focus:border-zinc-600 focus:outline-none focus:ring-1 focus:ring-zinc-600"
             />
           </label>
@@ -282,13 +287,16 @@ export function LeaderboardClient({
         )}
 
         {/* Mobile-only sort control. The card layout has no column headers, so
-            this segmented row drives the same onSort the desktop headers use. */}
-        <LeaderboardSortControl
-          sort={filter.sort}
-          direction={filter.direction}
-          onSort={onSort}
-          className="sm:hidden"
-        />
+            this segmented row drives the same onSort the desktop headers use.
+            Hidden in connect mode — the Directory has no score sort. */}
+        {!connectMode && (
+          <LeaderboardSortControl
+            sort={filter.sort}
+            direction={filter.direction}
+            onSort={onSort}
+            className="sm:hidden"
+          />
+        )}
 
         <LeaderboardTable
           rows={visibleRows}
@@ -303,6 +311,8 @@ export function LeaderboardClient({
           // Treat the pre-debounce/in-flight window as loading so the empty
           // state doesn't flash before the first results settle.
           searchLoading={searchLoading || (inSearch && searchRows === null)}
+          // Connect mode: drop rank numbers + score columns + sortable headers.
+          connectMode={connectMode}
         />
 
         {!inSearch && (
@@ -334,7 +344,7 @@ export function LeaderboardClient({
             )}
             {!nextCursor && pagedRows.length > 0 && (
               <div className="text-center text-xs text-zinc-600 py-4">
-                End of leaderboard
+                {connectMode ? "End of directory" : "End of leaderboard"}
               </div>
             )}
           </>
