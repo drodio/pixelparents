@@ -39,9 +39,11 @@ import {
   IconGithub,
 } from "@/components/icons";
 import { iconForInterest } from "@/lib/interest-icons";
+import { deriveConnectionParty, type ConnectionParty } from "@/lib/intro";
 import { OfferHelpForm } from "./offer-help-form";
 import { ResponseDecision } from "./response-decision";
 import { PostControls } from "./post-controls";
+import { ConnectedCard, type ConnectedCardData, type ConnectedMethod } from "./connected-card";
 
 export const dynamic = "force-dynamic";
 
@@ -75,6 +77,31 @@ function fmtDate(value: unknown): string {
   return Number.isFinite(d.getTime())
     ? d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
     : "";
+}
+
+// Project a server-derived ConnectionParty (lib/intro) into the client card's
+// serializable shape. The reveal/minor-routing decisions already happened in
+// deriveConnectionParty; this only flattens contact methods for the client.
+function toCardData(
+  party: ConnectionParty,
+  opts: { helpWith: string | null; youAreAuthor: boolean },
+): ConnectedCardData {
+  const methods: ConnectedMethod[] = party.methods.map((m) => ({
+    kind: m.kind,
+    // email/phone show the raw value; links show their short label.
+    label: m.kind === "email" || m.kind === "phone" ? m.value : m.value,
+    href: m.href,
+    copy: m.href.replace(/^(mailto:|tel:)/, ""),
+  }));
+  return {
+    name: party.name,
+    isStudent: party.isStudent,
+    viaParentName: party.viaParentName,
+    methods,
+    messageHint: party.messageHint,
+    helpWith: opts.helpWith,
+    youAreAuthor: opts.youAreAuthor,
+  };
 }
 
 export default async function ExchangePostPage({
@@ -190,15 +217,63 @@ export default async function ExchangePostPage({
   // Resolve display info (name + visibility-gated link) for every responder.
   const responderIds = Array.from(new Set(responses.map((r) => r.responderSignupId)));
   const displayById = new Map<string, MemberDisplay>();
+  const responderRowById = new Map<string, (typeof signups.$inferSelect)>();
   if (responderIds.length > 0) {
     const rows = await getDb().select().from(signups).where(inArray(signups.id, responderIds));
     for (const r of rows) {
+      responderRowById.set(r.id, r);
       displayById.set(r.id, {
         name: isStudentAccount(r)
           ? r.firstName
           : [r.firstName, r.lastName].filter(Boolean).join(" "),
         token: hasShareableProfile(r) ? r.shareToken : null,
       });
+    }
+  }
+
+  // For each ACCEPTED response, derive the reveal-safe ConnectionParty for BOTH
+  // sides (lib/intro honors the share model + routes minors through a parent), so
+  // the connected panel can show the OTHER person to whoever is viewing. We pull
+  // the family rows (by family_id) for the author + each accepted responder ONCE
+  // here — needed to route a minor's contact through a guardian. The viewer only
+  // ever sees a card when they're a party to that accept (enforced below).
+  const acceptedResponses = responses.filter((r) => r.status === "accepted");
+  const connectionByResponseId = new Map<
+    string,
+    { author: ConnectionParty; responder: ConnectionParty }
+  >();
+  if (acceptedResponses.length > 0 && authorRow) {
+    // Family_ids we need parents for: the author's + each accepted responder's.
+    const familyIds = new Set<string>([authorRow.familyId]);
+    for (const r of acceptedResponses) {
+      const row = responderRowById.get(r.responderSignupId);
+      if (row) familyIds.add(row.familyId);
+    }
+    const famRows =
+      familyIds.size > 0
+        ? await getDb()
+            .select()
+            .from(signups)
+            .where(inArray(signups.familyId, Array.from(familyIds)))
+        : [];
+    const parentsByFamily = new Map<string, (typeof signups.$inferSelect)[]>();
+    for (const row of famRows) {
+      const list = parentsByFamily.get(row.familyId) ?? [];
+      list.push(row);
+      parentsByFamily.set(row.familyId, list);
+    }
+    const authorParty = deriveConnectionParty(
+      authorRow,
+      parentsByFamily.get(authorRow.familyId) ?? [],
+    );
+    for (const r of acceptedResponses) {
+      const row = responderRowById.get(r.responderSignupId);
+      if (!row) continue;
+      const responderParty = deriveConnectionParty(
+        row,
+        parentsByFamily.get(row.familyId) ?? [],
+      );
+      connectionByResponseId.set(r.id, { author: authorParty, responder: responderParty });
     }
   }
 
@@ -366,26 +441,31 @@ export default async function ExchangePostPage({
                       {r.status === "declined" && (
                         <p className="mt-2 text-xs text-white/45">Declined</p>
                       )}
-                      {showIntro && (
-                        <div className="mt-3 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] px-3 py-2.5 text-sm text-emerald-100">
-                          {accepted && isAuthor && <p>You accepted this. </p>}
-                          {accepted && isOwnResponse && !isAuthor && <p>You were accepted. </p>}
-                          {display?.token ? (
-                            <Link
-                              href={`/directory/${display.token}`}
-                              className="mt-1 inline-flex items-center gap-1.5 font-medium text-emerald-200 underline-offset-2 hover:underline"
-                            >
-                              View {display.name}&apos;s profile to connect{" "}
-                              <IconArrowRight className="h-4 w-4" />
-                            </Link>
-                          ) : (
-                            <p className="mt-1 text-emerald-200/80">
-                              Reach out via the community — this member hasn&apos;t shared a public
-                              profile.
-                            </p>
-                          )}
-                        </div>
-                      )}
+                      {showIntro &&
+                        (() => {
+                          // The connected panel reveals the OTHER party to whoever
+                          // is viewing: the author sees the responder; the responder
+                          // sees the author. Parties are pre-derived (share-honored,
+                          // minor-routed). "Connecting over" = the post topic +
+                          // proposed format.
+                          const conn = connectionByResponseId.get(r.id);
+                          if (!conn) return null;
+                          const other = isAuthor ? conn.responder : conn.author;
+                          const helpWith = [
+                            ask.title,
+                            PROPOSE_LABEL[r.proposes as keyof typeof PROPOSE_LABEL],
+                          ]
+                            .filter(Boolean)
+                            .join(" · ");
+                          return (
+                            <ConnectedCard
+                              data={toCardData(other, {
+                                helpWith: helpWith || null,
+                                youAreAuthor: isAuthor,
+                              })}
+                            />
+                          );
+                        })()}
                     </div>
                   );
                 })}

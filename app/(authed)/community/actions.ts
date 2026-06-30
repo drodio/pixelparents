@@ -1,11 +1,17 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
+import { eq } from "drizzle-orm";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { isFamilyVerified } from "@/lib/directory";
-import type { SignupRow } from "@/lib/db/schema/signups";
+import { getDb } from "@/lib/db";
+import { signups, type SignupRow } from "@/lib/db/schema/signups";
+import { getBaseUrl } from "@/lib/url";
+import { deriveConnectionParty, buildIntroEmail } from "@/lib/intro";
+import { sendConnectionIntro } from "@/lib/email";
 import {
   createAsk,
   createResponse,
@@ -13,6 +19,7 @@ import {
   decideResponse,
   deleteAsk,
   getAskById,
+  getResponseById,
   hasResponded,
   setAskResolved,
   updateAsk,
@@ -273,9 +280,87 @@ export async function decideResponseAction(input: {
     });
     if (!updated) return { ok: false, error: "You can only decide on responses to your own posts." };
     revalidatePath(`/community/${updated.askId}`);
+
+    // On ACCEPT, the mutual accept is consent to connect: fire the warm double
+    // intro email to both parties in the background (after() — never block or
+    // fail the accept on email). The reveal/derivation honors the share model +
+    // routes minors through a parent (lib/intro). Decline sends nothing.
+    if (input.decision === "accepted") {
+      after(async () => {
+        try {
+          await sendConnectionIntroForResponse(updated.id);
+        } catch (err) {
+          console.error("connection intro email failed:", err);
+        }
+      });
+    }
     return { ok: true };
   } catch (err) {
     console.error("decideResponseAction failed:", err);
     return { ok: false, error: "Couldn't record your decision. Please try again." };
   }
+}
+
+// Load both connected parties for an accepted response and send the warm double
+// intro email. Runs in the background (after()), so it loads its own data rather
+// than trusting anything client-supplied. Best-effort: a missing row / unshared
+// contact just narrows the email, it never throws. The asker is the post author;
+// the responder is the accepted helper/requester. Both must be verified families
+// (they already are — they used the board) but we re-derive their reveal-safe
+// contact from the DB here so the email can never leak more than the in-app card.
+async function sendConnectionIntroForResponse(responseId: string): Promise<void> {
+  const response = await getResponseById(responseId);
+  if (!response || response.status !== "accepted") return;
+  const ask = await getAskById(response.askId);
+  if (!ask) return;
+
+  const db = getDb();
+  const [askerRow] = await db
+    .select()
+    .from(signups)
+    .where(eq(signups.id, ask.authorSignupId))
+    .limit(1);
+  const [responderRow] = await db
+    .select()
+    .from(signups)
+    .where(eq(signups.id, response.responderSignupId))
+    .limit(1);
+  if (!askerRow || !responderRow) return;
+
+  // The PARENT/guardian signups in each person's family — needed to route a
+  // minor's connection through a parent (never the student's raw contact).
+  const [askerFamily, responderFamily] = await Promise.all([
+    familyParentsOf(askerRow),
+    familyParentsOf(responderRow),
+  ]);
+
+  const askerParty = deriveConnectionParty(askerRow, askerFamily);
+  const responderParty = deriveConnectionParty(responderRow, responderFamily);
+
+  const { subject, text } = buildIntroEmail({
+    asker: askerParty,
+    responder: responderParty,
+    isOffer: ask.kind === "offer",
+    topic: ask.title,
+    offerNote: response.offer,
+    postUrl: `${getBaseUrl()}/community/${ask.id}`,
+  });
+
+  // Deliver to each person's OWN account email (NOT the derived/shared contact —
+  // we notify them at the address they signed up with). For a minor with no
+  // email, their account row may still carry one; if blank it's skipped, and the
+  // intro still reaches the other party + the routed parent below.
+  const recipients = [askerRow.email, responderRow.email];
+  // Also CC the routed parent so a minor's guardian is looped in on the intro.
+  if (askerParty.viaParentName) recipients.push(...askerFamily.map((p) => p.email));
+  if (responderParty.viaParentName) recipients.push(...responderFamily.map((p) => p.email));
+
+  await sendConnectionIntro({ subject, text, recipients });
+}
+
+// All signups sharing a person's family_id (the caller + co-parents + linked
+// student accounts). lib/intro filters to non-student guardians when routing a
+// minor; we pass the whole family so it can pick a reachable parent.
+async function familyParentsOf(row: SignupRow): Promise<SignupRow[]> {
+  return getDb().select().from(signups).where(eq(signups.familyId, row.familyId));
 }

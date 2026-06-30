@@ -241,6 +241,30 @@ export async function notifyCoParentInvite(n: {
   });
 }
 
+// --- Community: warm double intro after a mutual accept ("you're connected") ---
+// Sends the SAME composed body to both connected parties (each may see the
+// other's shared contact). Best-effort like every other send. The body is built
+// by lib/intro.buildIntroEmail (which honors the share model + minor coarsening),
+// so this function only delivers — it never derives contact itself. Recipients
+// with a blank email are skipped individually (a minor with no email is fine —
+// their guardian still receives the intro). Returns how many sends succeeded.
+export async function sendConnectionIntro(n: {
+  subject: string;
+  text: string;
+  recipients: string[];
+}): Promise<number> {
+  let sent = 0;
+  // De-dupe + drop blanks so we never double-send or send to "".
+  const unique = Array.from(
+    new Set(n.recipients.map((r) => r?.trim()).filter((r): r is string => Boolean(r))),
+  );
+  for (const to of unique) {
+    const ok = await sendEmail({ to, subject: n.subject, text: n.text });
+    if (ok) sent += 1;
+  }
+  return sent;
+}
+
 // --- Developer API: notify DROdio of a new access request (no key yet) ---
 export async function notifyAdminNewApiRequest(notice: {
   name: string;
