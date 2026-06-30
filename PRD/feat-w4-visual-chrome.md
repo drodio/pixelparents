@@ -1,3 +1,22 @@
+## Progress Update as of [June 30, 2026 — 7:11 AM Pacific]
+
+### Summary of changes since last update
+Lint fix on `count-up.tsx`: the reduced-motion / zero-value branch was calling
+`setDisplay(value)` synchronously inside the effect, which trips the
+`react-hooks/set-state-in-effect` (cascading-render) rule. Reworked so state is
+seeded to the final value and the only state updates happen inside the rAF
+callback (async). Behavior is unchanged; `npm run lint` is clean.
+
+### Detail of changes made:
+- `app/(authed)/dashboard/count-up.tsx`: removed the synchronous in-effect
+  setState; the effect now returns early for reduced-motion/zero (display stays
+  at its seeded final value) and only the requestAnimationFrame callback sets
+  state (seeds to 0 then ticks up).
+
+### Potential concerns to address:
+- None new. Build/test/lint status carried from prior entries (only pre-existing
+  `jose`-missing failures remain, in lib/oauth/* — outside this branch's scope).
+
 ## Progress Update as of [June 30, 2026 — 7:09 AM Pacific]
 
 ### Summary of changes since last update
