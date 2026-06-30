@@ -108,3 +108,68 @@ export function ensureFamiliesSchema(): Promise<void> {
   }
   return familiesEnsured;
 }
+
+// Self-healing guard for the OHS asks → expertise-matching connector (same
+// rationale as the guards above: this app shares one Neon DB with features that
+// run their own partial `drizzle-kit push`, and there is NO migrate-on-deploy, so
+// a brand-new table won't exist until a human migrates — by which point every
+// asks read/write would throw). We create `asks` + `ask_responses` idempotently
+// on the first asks op per cold start so the surface works immediately. Every
+// read/write path in lib/db/asks.ts calls this first (the country-column P0
+// lesson: new tables MUST be self-healed AND read paths must invoke the ensure).
+//
+// Statements mirror lib/db/schema/asks.ts. CREATE handles a dropped table; the
+// ALTERs upgrade an older table in place. All idempotent, in ONE round-trip.
+let asksEnsured: Promise<void> | null = null;
+
+export function ensureAsksSchema(): Promise<void> {
+  if (!asksEnsured) {
+    asksEnsured = (async () => {
+      const sql = getSql();
+      await sql.transaction([
+        sql`
+        CREATE TABLE IF NOT EXISTS asks (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          author_signup_id uuid NOT NULL REFERENCES signups(id) ON DELETE CASCADE,
+          author_clerk_id text,
+          title text NOT NULL,
+          body text NOT NULL,
+          expertise_tags text[],
+          status text NOT NULL DEFAULT 'open'
+        )
+      `,
+        sql`
+        CREATE TABLE IF NOT EXISTS ask_responses (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at timestamptz NOT NULL DEFAULT now(),
+          ask_id uuid NOT NULL REFERENCES asks(id) ON DELETE CASCADE,
+          responder_signup_id uuid NOT NULL REFERENCES signups(id) ON DELETE CASCADE,
+          responder_clerk_id text,
+          offer text NOT NULL,
+          proposes text NOT NULL DEFAULT 'async',
+          status text NOT NULL DEFAULT 'offered',
+          decided_at timestamptz
+        )
+      `,
+        // Idempotent upgrades for an older `asks`/`ask_responses` shape.
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`,
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS author_clerk_id text`,
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS expertise_tags text[]`,
+        sql`ALTER TABLE asks ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'open'`,
+        sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS responder_clerk_id text`,
+        sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS proposes text NOT NULL DEFAULT 'async'`,
+        sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS status text NOT NULL DEFAULT 'offered'`,
+        sql`ALTER TABLE ask_responses ADD COLUMN IF NOT EXISTS decided_at timestamptz`,
+        // Helpful indexes for the board (newest open asks) + per-ask responses.
+        sql`CREATE INDEX IF NOT EXISTS asks_status_created_idx ON asks (status, created_at DESC)`,
+        sql`CREATE INDEX IF NOT EXISTS ask_responses_ask_idx ON ask_responses (ask_id)`,
+      ]);
+    })().catch((e) => {
+      asksEnsured = null;
+      throw e;
+    });
+  }
+  return asksEnsured;
+}
