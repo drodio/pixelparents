@@ -2,11 +2,17 @@
 
 import { headers } from "next/headers";
 import { Resend } from "resend";
+import { getAdminRecipients } from "@/lib/admin";
+import { createReport } from "@/lib/db/reports";
 
-// --- Report a bug or abuse: emails the admin via the same Resend setup the rest
-// of the app uses (RESEND_API_KEY / RESEND_FROM). No new DB table — a full
-// report → admin queue is a later Trust & Safety wave; email-to-admin is enough
-// now. All config is env-driven (PUBLIC repo — no personal contact hardcoded).
+// --- Report a bug or abuse / contact form.
+//
+// `hello@pixelparents.org` is NOT a real mailbox, so this no longer emails a dead
+// address. Reports are PERSISTED to the `reports` DB table (the source of truth)
+// and triaged from /admin/reports. As a best-effort courtesy we also email the
+// REAL admins (env superadmins + the `admins` table, via getAdminRecipients) that
+// a new report arrived — but we never send to hello@pixelparents.org. All config
+// is env-driven (PUBLIC repo — no personal contact hardcoded).
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -15,13 +21,10 @@ const resend = apiKey ? new Resend(apiKey) : null;
 // valid sender — a blank "from" makes Resend reject every send).
 const FROM = process.env.RESEND_FROM?.trim() || "Pixel Parents <noreply@pixelparents.org>";
 
-// Where reports go. Prefer a dedicated REPORT_TO, fall back to the shared
-// NOTIFY_TO admin inbox, then the project's own address as a safe default.
-// No personal email is ever committed here.
-const REPORT_TO =
-  process.env.REPORT_TO?.trim() ||
-  process.env.NOTIFY_TO?.trim() ||
-  "hello@pixelparents.org";
+// Absolute base URL for the admin link in the notification email (best-effort).
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://pixelparents.org")
+  .trim()
+  .replace(/\/$/, "");
 
 const CATEGORIES = ["bug", "abuse", "other"] as const;
 type Category = (typeof CATEGORIES)[number];
@@ -67,6 +70,51 @@ function looksLikeEmail(v: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
 }
 
+const LABELS: Record<Category, string> = {
+  bug: "Bug",
+  abuse: "Abuse",
+  other: "Other",
+};
+
+// Best-effort fan-out to real admins that a new report landed. Never throws into
+// the request path, and never targets hello@pixelparents.org — the DB row is the
+// source of truth; this is just a nudge to go look at /admin/reports.
+async function notifyAdmins(category: Category, contact: string, message: string): Promise<void> {
+  if (!resend) return;
+  let recipients: string[] = [];
+  try {
+    recipients = (await getAdminRecipients()).map((r) => r.email).filter(Boolean);
+  } catch (err) {
+    console.error("submitReport: admin lookup failed:", err);
+    return;
+  }
+  if (recipients.length === 0) return;
+
+  const text = [
+    `A new Pixel Parents report was submitted.`,
+    ``,
+    `Category: ${LABELS[category]}`,
+    `Contact:  ${contact || "(not provided)"}`,
+    ``,
+    `Message:`,
+    message,
+    ``,
+    `Triage it here: ${APP_URL}/admin/reports`,
+  ].join("\n");
+
+  try {
+    await resend.emails.send({
+      from: FROM,
+      to: recipients,
+      replyTo: contact && looksLikeEmail(contact) ? contact : undefined,
+      subject: `Pixel Parents report: ${LABELS[category]}`,
+      text,
+    });
+  } catch (err) {
+    console.error("submitReport: admin notification failed:", err);
+  }
+}
+
 export async function submitReport(
   _prev: ReportState,
   formData: FormData,
@@ -101,39 +149,25 @@ export async function submitReport(
     };
   }
 
-  if (!resend) {
-    console.warn("RESEND_API_KEY not set — skipping report email.");
-    // Don't expose config issues to the reporter; just thank them.
-    return { ok: true };
-  }
+  const sourcePath = h.get("referer") || null;
 
-  const labels: Record<Category, string> = {
-    bug: "Bug",
-    abuse: "Abuse",
-    other: "Other",
-  };
-  const text = [
-    `A new Pixel Parents report was submitted.`,
-    ``,
-    `Category: ${labels[category]}`,
-    `Contact:  ${contact || "(not provided)"}`,
-    ``,
-    `Message:`,
-    message,
-  ].join("\n");
-
+  // Persist to the DB — this is the source of truth admins triage.
   try {
-    await resend.emails.send({
-      from: FROM,
-      to: REPORT_TO,
-      // Let admins reply straight to the reporter when they left an email.
-      replyTo: contact && looksLikeEmail(contact) ? contact : undefined,
-      subject: `Pixel Parents report: ${labels[category]}`,
-      text,
+    await createReport({
+      category,
+      message,
+      contactEmail: contact || null,
+      sourcePath,
+      requestIp: ip === "unknown" ? null : ip,
     });
-    return { ok: true };
   } catch (err) {
-    console.error("submitReport: Resend send failed:", err);
-    return { ok: false, error: "Something went wrong sending your report. Please try again." };
+    console.error("submitReport: createReport failed:", err);
+    return { ok: false, error: "Something went wrong saving your report. Please try again." };
   }
+
+  // Best-effort: nudge real admins to go triage. Failures here don't fail the
+  // submission — the report is already safely stored.
+  await notifyAdmins(category, contact, message);
+
+  return { ok: true };
 }
