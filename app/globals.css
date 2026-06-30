@@ -83,6 +83,27 @@ samp {
 }
 
 /* ---------------------------------------------------------------------------
+   Safe-area helpers (iOS notch / home-indicator insets). Active only because
+   the root viewport sets viewport-fit=cover. On platforms with no insets the
+   env() values resolve to 0, so these are no-ops on desktop and Android.
+   --------------------------------------------------------------------------- */
+
+/* Bottom padding that clears the iOS home indicator — for the mobile tab bar. */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+/* Adds the bottom safe-area inset on top of an existing height (used to grow the
+   fixed bottom nav so its tap targets sit above the home indicator). */
+.h-safe-nav {
+  height: calc(3.5rem + env(safe-area-inset-bottom));
+}
+/* Reserve scroll room at the bottom of the content area equal to the mobile tab
+   bar height + the safe inset, so the last row is never hidden behind the bar. */
+.pb-mobile-nav {
+  padding-bottom: calc(4rem + env(safe-area-inset-bottom));
+}
+
+/* ---------------------------------------------------------------------------
    Status-screen animations (loading / 404 / error / global-error).
    Prefixed `pp-` so they never collide with Tailwind utilities. All are
    disabled under prefers-reduced-motion (see the bottom of this block).

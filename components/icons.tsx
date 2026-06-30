@@ -337,3 +337,23 @@ export function IconGithub(props: IconProps) {
     </Icon>
   );
 }
+
+// Hamburger / menu — three stacked bars. Used for the mobile nav drawer trigger.
+export function IconMenu(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 6h16M4 12h16M4 18h16" />
+    </Icon>
+  );
+}
+
+// Sliders / filter control — used for the mobile "Filters" sheet trigger.
+export function IconFilter(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 6h16" />
+      <path d="M7 12h10" />
+      <path d="M10 18h4" />
+    </Icon>
+  );
+}

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 
@@ -29,6 +29,16 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "Pixel Parent Tech: Join our Builder Community",
   },
+};
+
+// viewport-fit=cover lets the app draw into the iOS safe-area insets so the
+// mobile bottom tab bar can pad itself above the home indicator (env(safe-area-*)
+// is only populated when cover is set). themeColor matches the dark app base so
+// the browser chrome blends in. Scaling is left at the platform default (users
+// can still pinch-zoom — we never disable it).
+export const viewport: Viewport = {
+  themeColor: "#09090b",
+  viewportFit: "cover",
 };
 
 export default function RootLayout({

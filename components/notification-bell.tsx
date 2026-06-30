@@ -13,7 +13,7 @@ import { formatUnreadBadge } from "@/lib/db/notifications";
 // have to thread a count prop through every page. Renders a link to the
 // notifications center with an unread-count badge. On-theme dark/amber; the badge
 // caps at 9+ so it never blows out the 16px icon rail.
-export function NotificationBell() {
+export function NotificationBell({ showLabel = false }: { showLabel?: boolean } = {}) {
   const pathname = usePathname();
   const [count, setCount] = useState<number>(0);
   const active = pathname === "/notifications" || (pathname?.startsWith("/notifications/") ?? false);
@@ -70,9 +70,15 @@ export function NotificationBell() {
           </span>
         )}
       </span>
-      <span className="hidden md:inline">Notifications</span>
+      {/* Label hidden on the desktop icon rail (shows at md+); the mobile drawer
+          passes showLabel so it reads "Notifications" there too. */}
+      <span className={showLabel ? "inline" : "hidden md:inline"}>Notifications</span>
       {count > 0 && (
-        <span className="ml-auto hidden rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300 md:inline">
+        <span
+          className={`ml-auto rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300 ${
+            showLabel ? "inline" : "hidden md:inline"
+          }`}
+        >
           {count > 99 ? "99+" : count}
         </span>
       )}

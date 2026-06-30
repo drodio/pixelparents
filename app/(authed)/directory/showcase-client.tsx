@@ -13,8 +13,10 @@ import {
   IconLinkedin,
   IconGithub,
   IconArrowRight,
+  IconFilter,
 } from "@/components/icons";
 import { TagList } from "@/components/tag-list";
+import { MobileSheet } from "@/components/mobile-sheet";
 import {
   familyMatchesAgeRange,
   familyWithinRadius,
@@ -136,7 +138,9 @@ function Card({ card, wide, reduce }: { card: DirectoryCard; wide: boolean; redu
     <div
       className={
         wide
-          ? "relative h-40 w-56 shrink-0 overflow-hidden rounded-xl sm:h-44 sm:w-64"
+          ? // Wide (1-col) card: stack the hero on top on phones (full-width,
+            // 16:10) and switch to the side-by-side thumbnail at sm+.
+            "relative aspect-[16/10] w-full shrink-0 overflow-hidden rounded-t-xl sm:aspect-auto sm:h-44 sm:w-64 sm:rounded-xl"
           : "relative aspect-[16/10] w-full overflow-hidden rounded-t-2xl"
       }
     >
@@ -256,7 +260,7 @@ function Card({ card, wide, reduce }: { card: DirectoryCard; wide: boolean; redu
       href={`/directory/${card.token}`}
       className={
         wide
-          ? "group relative flex gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-[border-color,background-color,box-shadow] hover:border-amber-400/40 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-amber-400/5"
+          ? "group relative flex flex-col gap-4 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-3 transition-[border-color,background-color,box-shadow] hover:border-amber-400/40 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-amber-400/5 sm:flex-row sm:p-4"
           : "group relative flex flex-col overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] transition-[border-color,background-color,box-shadow] hover:border-amber-400/40 hover:bg-white/[0.04] hover:shadow-lg hover:shadow-amber-400/5"
       }
     >
@@ -477,6 +481,20 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
   const maxCols = maxColsForWidth(viewportWidth);
   const effectiveCols = Math.min(density, maxCols);
 
+  // On phones the dense filter row (sort + dir + per-row + age + radius + chips)
+  // is collapsed into a bottom sheet behind a "Filters" button, leaving only the
+  // search box inline. md (768px) is the breakpoint; the sheet itself is md:hidden.
+  const isMobile = viewportWidth < 768;
+  const [sheetOpen, setSheetOpen] = useState(false);
+
+  // Count of active secondary filters, shown as a badge on the mobile Filters
+  // button so it's clear filtering is in effect without opening the sheet.
+  const activeFilterCount =
+    selected.size +
+    (ageActive ? 1 : 0) +
+    (radiusOn && origin && radiusMiles !== Infinity ? 1 : 0) +
+    (sortKey !== "name" || sortDir !== "asc" ? 1 : 0);
+
   // Distinct interests + skillsets across all visible cards, deduped
   // case-insensitively but keeping the first-seen display label.
   const allInterests = useMemo(() => {
@@ -585,206 +603,275 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
   const controlCls =
     "rounded-xl border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none transition-colors focus:border-amber-400/50";
 
+  // The dense secondary filters (sort, direction, per-row, age, radius, interest
+  // chips). Rendered inline on desktop and inside the mobile filter sheet — same
+  // element, same state, so there's only ever one of each control in the DOM.
+  const secondaryControls = (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <label className="flex items-center gap-2 text-sm text-white/60">
+          Sort
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className={controlCls}
+          >
+            <option value="name">Name</option>
+            <option value="child">Child name</option>
+          </select>
+        </label>
+        <button
+          type="button"
+          onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
+          className={`${controlCls} hover:bg-white/10`}
+          aria-label="Toggle sort direction"
+        >
+          {sortDir === "asc" ? "↑ A–Z" : "↓ Z–A"}
+        </button>
+        <label className="flex items-center gap-2 text-sm text-white/60">
+          Per row
+          <select
+            value={effectiveCols}
+            onChange={(e) => setDensity(Number(e.target.value))}
+            className={controlCls}
+          >
+            {Array.from({ length: maxCols }, (_, i) => i + 1).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {/* Age range + location radius filters */}
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
+        {/* Child age-range slider */}
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm text-white/60">Child age</span>
+          <DualRange
+            min={AGE_MIN}
+            max={AGE_MAX}
+            lower={ageLower}
+            upper={ageUpper}
+            onChange={(lo, hi) => {
+              setAgeLower(lo);
+              setAgeUpper(hi);
+            }}
+          />
+          <span className="min-w-[5.5rem] text-sm tabular-nums text-white/80">
+            {ageActive ? ageLabel(ageLower, ageUpper) : "All ages"}
+          </span>
+          {ageActive && (
+            <button
+              type="button"
+              onClick={() => {
+                setAgeLower(AGE_MIN);
+                setAgeUpper(AGE_MAX);
+              }}
+              className="text-white/45 hover:text-white/80"
+              aria-label="Reset age filter"
+            >
+              <IconX className="h-3.5 w-3.5" />
+            </button>
+          )}
+          {ageActive && (
+            <span className="text-xs text-white/35">(only members who shared child ages)</span>
+          )}
+        </div>
+
+        {/* Location radius filter (opt-in) */}
+        <div className="flex flex-wrap items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-white/60">
+            <input
+              type="checkbox"
+              checked={radiusOn}
+              onChange={toggleRadius}
+              className="h-4 w-4 accent-amber-400"
+            />
+            Near me
+          </label>
+          {radiusOn && (
+            <>
+              <input
+                type="range"
+                min={0}
+                max={RADIUS_STOPS.length - 1}
+                value={radiusIdx}
+                onChange={(e) => setRadiusIdx(Number(e.target.value))}
+                aria-label="Radius"
+                className="h-1 w-40 accent-amber-400"
+              />
+              <span className="min-w-[5rem] text-sm tabular-nums text-white/80">
+                {radiusLabel(radiusMiles)}
+              </span>
+              {origin ? (
+                <span className="text-xs text-white/45">
+                  from {originLabel}
+                  <button
+                    type="button"
+                    onClick={requestGeolocation}
+                    className="ml-2 text-amber-400/80 hover:text-amber-300"
+                  >
+                    use my location
+                  </button>
+                </span>
+              ) : (
+                <span className="text-xs text-white/45">
+                  {geoStatus === "locating" ? "locating…" : "set an origin →"}
+                </span>
+              )}
+              <span className="flex items-center gap-1">
+                <input
+                  value={locInput}
+                  onChange={(e) => setLocInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      applyTypedLocation();
+                    }
+                  }}
+                  placeholder="City, State or ZIP"
+                  className={`${controlCls} w-40`}
+                />
+                <button
+                  type="button"
+                  onClick={applyTypedLocation}
+                  className={`${controlCls} hover:bg-white/10`}
+                >
+                  Set
+                </button>
+              </span>
+              {geoStatus === "denied" && !origin && (
+                <span className="text-xs text-amber-400/80">
+                  Couldn&apos;t locate you — type a city/state or ZIP.
+                </span>
+              )}
+              {geoStatus === "notfound" && (
+                <span className="text-xs text-amber-400/80">
+                  Couldn&apos;t place that — try &ldquo;City, State&rdquo; or a ZIP.
+                </span>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Interest / skill filter chips. Collapsed to a handful with a
+          "+N more" toggle so the ~40-item facet doesn't dominate the page;
+          expanding reveals the rest, and every chip stays a clickable filter. */}
+      {allInterests.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2">
+          <TagList
+            tags={allInterests}
+            max={12}
+            className="flex flex-wrap items-center gap-2"
+            renderTag={(label) => {
+              const active = selected.has(label.toLowerCase());
+              const Icon = iconForInterest(label);
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => toggleInterest(label)}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                    active
+                      ? "border-amber-400 bg-amber-400 text-black"
+                      : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/10"
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+                  {label}
+                </button>
+              );
+            }}
+          />
+          {selected.size > 0 && (
+            <button
+              type="button"
+              onClick={() => setSelected(new Set())}
+              className="inline-flex items-center gap-1 px-2 text-xs text-white/45 hover:text-white/80"
+            >
+              Clear filters <IconX className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-6">
-      {/* Controls */}
+      {/* Controls. Search is always inline. On phones the secondary filters move
+          into a bottom sheet behind a "Filters" button; on md+ they sit inline. */}
       <div className="flex flex-col gap-4">
         <div className="flex flex-wrap items-center gap-3">
           <input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search by name, child, interest, or skill…"
-            className={`${controlCls} min-w-[14rem] flex-1`}
+            className={`${controlCls} w-full min-w-[12rem] flex-1 md:w-auto`}
           />
-          <label className="flex items-center gap-2 text-sm text-white/60">
-            Sort
-            <select
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-              className={controlCls}
-            >
-              <option value="name">Name</option>
-              <option value="child">Child name</option>
-            </select>
-          </label>
+          {/* Mobile-only Filters trigger (opens the sheet). */}
           <button
             type="button"
-            onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-            className={`${controlCls} hover:bg-white/10`}
-            aria-label="Toggle sort direction"
+            onClick={() => setSheetOpen(true)}
+            className={`${controlCls} inline-flex shrink-0 items-center gap-2 hover:bg-white/10 md:hidden`}
+            aria-haspopup="dialog"
           >
-            {sortDir === "asc" ? "↑ A–Z" : "↓ Z–A"}
+            <IconFilter className="h-4 w-4" />
+            Filters
+            {activeFilterCount > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+                {activeFilterCount}
+              </span>
+            )}
           </button>
-          <label className="flex items-center gap-2 text-sm text-white/60">
-            Per row
-            <select
-              value={effectiveCols}
-              onChange={(e) => setDensity(Number(e.target.value))}
-              className={controlCls}
-            >
-              {Array.from({ length: maxCols }, (_, i) => i + 1).map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
-          </label>
         </div>
 
-        {/* Age range + location radius filters */}
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-4">
-          {/* Child age-range slider */}
-          <div className="flex items-center gap-3">
-            <span className="text-sm text-white/60">Child age</span>
-            <DualRange
-              min={AGE_MIN}
-              max={AGE_MAX}
-              lower={ageLower}
-              upper={ageUpper}
-              onChange={(lo, hi) => {
-                setAgeLower(lo);
-                setAgeUpper(hi);
-              }}
-            />
-            <span className="min-w-[5.5rem] text-sm tabular-nums text-white/80">
-              {ageActive ? ageLabel(ageLower, ageUpper) : "All ages"}
-            </span>
-            {ageActive && (
+        {/* Desktop: secondary filters inline. Rendered only when NOT on a phone
+            (isMobile defaults to false so SSR/first paint matches), so the same
+            `secondaryControls` element never mounts twice. The md:hidden on the
+            wrapper additionally guards the brief pre-mount window. */}
+        {!isMobile && <div className="hidden md:block">{secondaryControls}</div>}
+      </div>
+
+      {/* Mobile: secondary filters in a bottom sheet. Rendered only when on a
+          phone so the controls (and their state) never duplicate in the DOM. */}
+      {isMobile && (
+        <MobileSheet
+          open={sheetOpen}
+          onClose={() => setSheetOpen(false)}
+          title="Filters & sort"
+          footer={
+            <div className="flex items-center justify-between gap-3">
               <button
                 type="button"
                 onClick={() => {
+                  setSelected(new Set());
                   setAgeLower(AGE_MIN);
                   setAgeUpper(AGE_MAX);
+                  setSortKey("name");
+                  setSortDir("asc");
+                  if (radiusOn) toggleRadius();
                 }}
-                className="text-white/45 hover:text-white/80"
-                aria-label="Reset age filter"
+                className="text-sm text-white/55 hover:text-white"
               >
-                <IconX className="h-3.5 w-3.5" />
+                Clear all
               </button>
-            )}
-            {ageActive && (
-              <span className="text-xs text-white/35">(only members who shared child ages)</span>
-            )}
-          </div>
-
-          {/* Location radius filter (opt-in) */}
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-2 text-sm text-white/60">
-              <input
-                type="checkbox"
-                checked={radiusOn}
-                onChange={toggleRadius}
-                className="h-4 w-4 accent-amber-400"
-              />
-              Near me
-            </label>
-            {radiusOn && (
-              <>
-                <input
-                  type="range"
-                  min={0}
-                  max={RADIUS_STOPS.length - 1}
-                  value={radiusIdx}
-                  onChange={(e) => setRadiusIdx(Number(e.target.value))}
-                  aria-label="Radius"
-                  className="h-1 w-40 accent-amber-400"
-                />
-                <span className="min-w-[5rem] text-sm tabular-nums text-white/80">
-                  {radiusLabel(radiusMiles)}
-                </span>
-                {origin ? (
-                  <span className="text-xs text-white/45">
-                    from {originLabel}
-                    <button
-                      type="button"
-                      onClick={requestGeolocation}
-                      className="ml-2 text-amber-400/80 hover:text-amber-300"
-                    >
-                      use my location
-                    </button>
-                  </span>
-                ) : (
-                  <span className="text-xs text-white/45">
-                    {geoStatus === "locating" ? "locating…" : "set an origin →"}
-                  </span>
-                )}
-                <span className="flex items-center gap-1">
-                  <input
-                    value={locInput}
-                    onChange={(e) => setLocInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        applyTypedLocation();
-                      }
-                    }}
-                    placeholder="City, State or ZIP"
-                    className={`${controlCls} w-40`}
-                  />
-                  <button
-                    type="button"
-                    onClick={applyTypedLocation}
-                    className={`${controlCls} hover:bg-white/10`}
-                  >
-                    Set
-                  </button>
-                </span>
-                {geoStatus === "denied" && !origin && (
-                  <span className="text-xs text-amber-400/80">
-                    Couldn&apos;t locate you — type a city/state or ZIP.
-                  </span>
-                )}
-                {geoStatus === "notfound" && (
-                  <span className="text-xs text-amber-400/80">
-                    Couldn&apos;t place that — try &ldquo;City, State&rdquo; or a ZIP.
-                  </span>
-                )}
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Interest / skill filter chips. Collapsed to a handful with a
-            "+N more" toggle so the ~40-item facet doesn't dominate the page;
-            expanding reveals the rest, and every chip stays a clickable filter. */}
-        {allInterests.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2">
-            <TagList
-              tags={allInterests}
-              max={12}
-              className="flex flex-wrap items-center gap-2"
-              renderTag={(label) => {
-                const active = selected.has(label.toLowerCase());
-                const Icon = iconForInterest(label);
-                return (
-                  <button
-                    key={label}
-                    type="button"
-                    onClick={() => toggleInterest(label)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                      active
-                        ? "border-amber-400 bg-amber-400 text-black"
-                        : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/10"
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                    {label}
-                  </button>
-                );
-              }}
-            />
-            {selected.size > 0 && (
               <button
                 type="button"
-                onClick={() => setSelected(new Set())}
-                className="inline-flex items-center gap-1 px-2 text-xs text-white/45 hover:text-white/80"
+                onClick={() => setSheetOpen(false)}
+                className="rounded-full bg-amber-400 px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300"
               >
-                Clear filters <IconX className="h-3 w-3" />
+                Show {visible.length} {visible.length === 1 ? "member" : "members"}
               </button>
-            )}
-          </div>
-        )}
-      </div>
+            </div>
+          }
+        >
+          {secondaryControls}
+        </MobileSheet>
+      )}
 
       <p className="text-sm text-white/45">
         {visible.length} {visible.length === 1 ? "member" : "members"}
