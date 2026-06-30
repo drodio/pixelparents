@@ -7,6 +7,7 @@ const items = [
   { href: "/admin", label: "Parents" },
   { href: "/admin/children", label: "Children" },
   { href: "/admin/api-requests", label: "API Requests" },
+  { href: "/admin/oauth-apps", label: "Sign-in Apps" },
   { href: "/admin/reports", label: "Reports" },
 ];
 

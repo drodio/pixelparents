@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeAll } from "vitest";
 import { generateKeyPairSync } from "node:crypto";
 import { jwtVerify, importSPKI } from "jose";
-import { mintIdToken, mintAccessToken } from "./tokens";
+import { mintIdToken, mintAccessToken, verifyAccessToken } from "./tokens";
 import { buildIdTokenClaims } from "./claims";
 import { generateClientSecret, verifyClientSecret } from "./secrets";
 
@@ -23,6 +23,7 @@ describe("ID token minting + verification (the ohs_verified assertion)", () => {
   it("mints a verifiable RS256 ID token carrying ohs_verified + nonce", async () => {
     const claims = buildIdTokenClaims({
       scopes: ["openid", "email", "ohs_verified"],
+      clientId: "ppc_live_abc",
       email: "parent@example.com",
       signup: { extra: { approvalStatus: "approved" }, createdAt: new Date("2026-09-01") } as never,
     });
@@ -59,6 +60,35 @@ describe("ID token minting + verification (the ohs_verified assertion)", () => {
     const parts = jwt.split(".");
     const tampered = `${parts[0]}.${parts[1]}.${"A".repeat(parts[2]!.length)}`;
     await expect(jwtVerify(tampered, pub)).rejects.toBeTruthy();
+  });
+});
+
+describe("access token verification (for /userinfo)", () => {
+  it("round-trips scope + private pp_email and rejects a non-access token", async () => {
+    const at = await mintAccessToken({
+      issuer: "https://pixelparents.app",
+      clientId: "ppc_live_abc",
+      subject: "ppu_pairwise123",
+      scope: "openid email ohs_verified",
+      email: "u@example.com",
+    });
+    const decoded = await verifyAccessToken(at);
+    expect(decoded).not.toBeNull();
+    expect(decoded!.sub).toBe("ppu_pairwise123");
+    expect(decoded!.aud).toBe("ppc_live_abc");
+    expect(decoded!.scope).toBe("openid email ohs_verified");
+    expect(decoded!.email).toBe("u@example.com");
+
+    // An ID token is not an access token (token_use differs) → rejected.
+    const id = await mintIdToken({
+      issuer: "https://pixelparents.app",
+      clientId: "ppc_live_abc",
+      subject: "ppu_pairwise123",
+      claims: {},
+    });
+    expect(await verifyAccessToken(id)).toBeNull();
+    // Garbage → null, not a throw.
+    expect(await verifyAccessToken("not.a.jwt")).toBeNull();
   });
 });
 

@@ -1,10 +1,25 @@
 import { NextResponse } from "next/server";
-import { getSignupByEmail } from "@/lib/db/signups";
-import { authenticateClient, redeemAuthCode } from "@/lib/oauth/store";
+import { getSignupByEmail, getFamilyForEmail } from "@/lib/db/signups";
+import { verifiedEmailsOf } from "@/lib/verify";
+import {
+  authenticateClient,
+  redeemAuthCode,
+  issueRefreshToken,
+  rotateRefreshToken,
+} from "@/lib/oauth/store";
+import { isClientLive } from "@/lib/oauth/gating";
+import { ownerApiAccessApproved } from "@/lib/oauth/owner-approval";
 import { verifyPkce } from "@/lib/oauth/pkce";
-import { buildIdTokenClaims } from "@/lib/oauth/claims";
+import { buildIdTokenClaims, candidateGradesForStudent, type SignupForClaims } from "@/lib/oauth/claims";
 import { mintIdToken, mintAccessToken } from "@/lib/oauth/tokens";
-import { issuerUrl, parseScopes, ID_TOKEN_TTL_SECONDS, ACCESS_TOKEN_TTL_SECONDS } from "@/lib/oauth/config";
+import { pairwiseSub } from "@/lib/oauth/secrets";
+import {
+  issuerUrl,
+  parseScopes,
+  ID_TOKEN_TTL_SECONDS,
+  ACCESS_TOKEN_TTL_SECONDS,
+  REFRESH_TOKEN_TTL_SECONDS,
+} from "@/lib/oauth/config";
 import { OAuthKeyError } from "@/lib/oauth/keys";
 
 export const runtime = "nodejs";
@@ -50,8 +65,9 @@ function readClientCreds(
   };
 }
 
-// POST /api/oauth/token — Authorization Code + PKCE exchange. Returns a signed
-// RS256 id_token (the identity assertion, incl. ohs_verified) + an access_token.
+// POST /api/oauth/token — Authorization Code + PKCE exchange OR refresh_token
+// rotation. Returns a signed RS256 id_token (the identity assertion, incl.
+// ohs_verified) + an access_token + a rotating refresh_token.
 export async function POST(req: Request) {
   let body: URLSearchParams;
   try {
@@ -68,81 +84,189 @@ export async function POST(req: Request) {
     return err("invalid_request", "Could not parse the request body.");
   }
 
-  if (body.get("grant_type") !== "authorization_code") {
-    return err("unsupported_grant_type", "Only grant_type=authorization_code is supported.");
-  }
-
-  const code = body.get("code");
-  const redirectUri = body.get("redirect_uri");
-  const codeVerifier = body.get("code_verifier");
+  const grantType = body.get("grant_type");
   const { clientId, clientSecret } = readClientCreds(req, body);
-
-  if (!code) return err("invalid_request", "code is required.");
-  if (!redirectUri) return err("invalid_request", "redirect_uri is required.");
-  if (!codeVerifier) return err("invalid_request", "code_verifier is required (PKCE).");
   if (!clientId || !clientSecret) {
     return err("invalid_client", "client_id and client_secret are required.", 401);
   }
 
-  // 1. Authenticate the confidential client (constant-time secret check).
+  // Authenticate the confidential client (constant-time secret check) — shared by
+  // both grant types.
   const client = await authenticateClient(clientId, clientSecret);
   if (!client) return err("invalid_client", "Client authentication failed.", 401);
 
-  // 2. Atomically redeem the code (single-use + not-expired enforced in SQL).
+  // APPROVAL GATE: a non-live (pending/rejected) app can't mint tokens even if it
+  // somehow holds a code or refresh token. Enforced here independently of
+  // /authorize.
+  const ownerApproved = await ownerApiAccessApproved(client.created_by);
+  if (!isClientLive(client, ownerApproved)) {
+    return err("invalid_client", "This app is not approved to issue tokens.", 403);
+  }
+
+  if (grantType === "refresh_token") {
+    return handleRefresh(body, client.client_id);
+  }
+  if (grantType === "authorization_code") {
+    return handleAuthCode(body, client.client_id);
+  }
+  return err(
+    "unsupported_grant_type",
+    "Only grant_type=authorization_code and refresh_token are supported.",
+  );
+}
+
+async function handleAuthCode(body: URLSearchParams, authedClientId: string) {
+  const code = body.get("code");
+  const redirectUri = body.get("redirect_uri");
+  const codeVerifier = body.get("code_verifier");
+
+  if (!code) return err("invalid_request", "code is required.");
+  if (!redirectUri) return err("invalid_request", "redirect_uri is required.");
+  if (!codeVerifier) return err("invalid_request", "code_verifier is required (PKCE).");
+
+  // Atomically redeem the code (single-use + not-expired enforced in SQL).
   const redeemed = await redeemAuthCode(code);
   if (!redeemed) {
     return err("invalid_grant", "The authorization code is invalid, expired, or already used.");
   }
 
-  // 3. The code must be bound to THIS client and THIS redirect_uri (exact match).
-  if (redeemed.client_id !== client.client_id) {
+  // The code must be bound to THIS client and THIS redirect_uri (exact match).
+  if (redeemed.client_id !== authedClientId) {
     return err("invalid_grant", "The code was not issued to this client.");
   }
   if (redeemed.redirect_uri !== redirectUri) {
     return err("invalid_grant", "redirect_uri does not match the authorization request.");
   }
 
-  // 4. PKCE: the presented verifier must hash to the stored challenge (S256).
+  // PKCE: the presented verifier must hash to the stored challenge (S256).
   if (!verifyPkce(codeVerifier, redeemed.code_challenge)) {
     return err("invalid_grant", "PKCE verification failed.");
   }
 
-  // 5. Resolve identity + build the consented claims (the ohs_verified product).
-  const scopes = parseScopes(redeemed.scope);
-  const email = redeemed.email ?? null;
-  // ohs_verified is computed from the SAME verification model the directory uses.
-  const signup = email ? await safeSignup(email) : null;
-  const claims = buildIdTokenClaims({ scopes, email, signup });
+  return issueTokenSet({
+    clientId: authedClientId,
+    clerkUserId: redeemed.clerk_user_id,
+    scope: redeemed.scope,
+    email: redeemed.email ?? null,
+    nonce: redeemed.nonce,
+    withRefresh: true,
+  });
+}
 
-  // 6. Mint the signed tokens. A missing/invalid signing key degrades loudly.
+async function handleRefresh(body: URLSearchParams, authedClientId: string) {
+  const refreshToken = body.get("refresh_token");
+  if (!refreshToken) return err("invalid_request", "refresh_token is required.");
+
+  // Rotate: validates the token, detects reuse (→ chain revoked), and on success
+  // returns a NEW refresh token + the grant's user/scope.
+  const result = await rotateRefreshToken(refreshToken, authedClientId);
+  if (!result.ok) {
+    if (result.reason === "reuse") {
+      // Reuse detected: the whole chain is now revoked. Tell the client the grant
+      // is dead so it re-authorizes.
+      return err("invalid_grant", "Refresh token reuse detected; the grant has been revoked.");
+    }
+    return err("invalid_grant", "The refresh token is invalid or expired.");
+  }
+
+  // The grant stores the user's email so scope-gated claims (email/ohs_verified/
+  // role/grade_band) stay CURRENT on refresh — e.g. ohs_verified flips to true once
+  // the family verifies, without re-authorizing. nonce is omitted on refresh (no
+  // fresh auth event). The rotated refresh token is returned as-is.
+  return issueTokenSet({
+    clientId: authedClientId,
+    clerkUserId: result.clerkUserId,
+    scope: result.scope,
+    email: result.email,
+    nonce: null,
+    withRefresh: false,
+    rotatedRefreshToken: result.refreshToken,
+  });
+}
+
+// Build claims for a user and mint the token set. `email` may be null on a refresh
+// (we then can't resolve the signup, so verified/role/grade claims fall back to
+// "unverified"/absent — acceptable: a relying app that needs fresh PII should use
+// /userinfo, and the ID token is primarily an auth event). When `email` is present
+// (auth-code path) we resolve the signup + family for the full claim set.
+async function issueTokenSet(args: {
+  clientId: string;
+  clerkUserId: string;
+  scope: string;
+  email: string | null;
+  nonce: string | null;
+  withRefresh: boolean;
+  rotatedRefreshToken?: string;
+}) {
+  const scopes = parseScopes(args.scope);
+
+  // Resolve identity for claims. ohs_verified/role/grade are computed from the
+  // SAME model the directory uses; a DB hiccup → null signup → no false positives.
+  let signup: SignupForClaims | null = null;
+  let childGrades: Array<string | null> = [];
+  if (args.email) {
+    signup = await safeSignup(args.email);
+    // For a student subject needing grade_band, resolve the family's children +
+    // their own verified emails so we band THEIR grade (never a sibling's, never
+    // an exact value).
+    if (signup && scopes.includes("grade_band")) {
+      try {
+        const fam = await getFamilyForEmail(args.email);
+        if (fam) {
+          const verified = verifiedEmailsOf((signup.extra ?? {}) as Record<string, unknown>);
+          childGrades = candidateGradesForStudent(
+            signup,
+            fam.kids.map((k) => ({ grade: k.grade, studentEmail: k.studentEmail })),
+            verified,
+          );
+        }
+      } catch {
+        /* best-effort; omit grade_band on a lookup failure */
+      }
+    }
+  }
+
+  const claims = buildIdTokenClaims({
+    scopes,
+    clientId: args.clientId,
+    email: args.email,
+    signup,
+    childGrades,
+  });
+
+  // Pairwise per-client subject: same user → different sub in different apps.
+  const subject = pairwiseSub(args.clientId, args.clerkUserId);
+
   try {
     const issuer = issuerUrl();
-    const [idToken, accessToken] = await Promise.all([
-      mintIdToken({
-        issuer,
-        clientId: client.client_id,
-        subject: redeemed.clerk_user_id,
-        nonce: redeemed.nonce,
-        claims,
-      }),
-      mintAccessToken({
-        issuer,
-        clientId: client.client_id,
-        subject: redeemed.clerk_user_id,
-        scope: redeemed.scope,
-      }),
+    const [idToken, accessToken, refreshToken] = await Promise.all([
+      mintIdToken({ issuer, clientId: args.clientId, subject, nonce: args.nonce, claims }),
+      mintAccessToken({ issuer, clientId: args.clientId, subject, scope: args.scope, email: args.email }),
+      args.withRefresh
+        ? issueRefreshToken({
+            clientId: args.clientId,
+            clerkUserId: args.clerkUserId,
+            email: args.email,
+            scope: args.scope,
+          })
+        : Promise.resolve(args.rotatedRefreshToken ?? null),
     ]);
-    return NextResponse.json(
-      {
-        access_token: accessToken,
-        id_token: idToken,
-        token_type: "Bearer",
-        expires_in: ACCESS_TOKEN_TTL_SECONDS,
-        id_token_expires_in: ID_TOKEN_TTL_SECONDS,
-        scope: redeemed.scope,
-      },
-      { headers: { ...CORS, "Cache-Control": "no-store", Pragma: "no-cache" } },
-    );
+
+    const payload: Record<string, unknown> = {
+      access_token: accessToken,
+      id_token: idToken,
+      token_type: "Bearer",
+      expires_in: ACCESS_TOKEN_TTL_SECONDS,
+      id_token_expires_in: ID_TOKEN_TTL_SECONDS,
+      scope: args.scope,
+    };
+    if (refreshToken) {
+      payload.refresh_token = refreshToken;
+      payload.refresh_token_expires_in = REFRESH_TOKEN_TTL_SECONDS;
+    }
+    return NextResponse.json(payload, {
+      headers: { ...CORS, "Cache-Control": "no-store", Pragma: "no-cache" },
+    });
   } catch (e) {
     if (e instanceof OAuthKeyError) {
       return err("provider_not_configured", e.message, 503);
@@ -157,7 +281,7 @@ export function OPTIONS() {
 
 // Tolerate a DB hiccup when resolving the signup: a failed lookup must NOT mint a
 // false-positive verified claim, so we treat it as "no signup" (→ not verified).
-async function safeSignup(email: string) {
+async function safeSignup(email: string): Promise<SignupForClaims | null> {
   try {
     return await getSignupByEmail(email);
   } catch {

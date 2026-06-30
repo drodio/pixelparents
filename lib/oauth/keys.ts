@@ -1,4 +1,4 @@
-import { importPKCS8, exportJWK, calculateJwkThumbprint, type JWK } from "jose";
+import { importPKCS8, importJWK, exportJWK, calculateJwkThumbprint, type JWK } from "jose";
 
 // RS256 signing key management for the OIDC provider.
 //
@@ -86,4 +86,21 @@ export function getSigningKey(): Promise<SigningKey> {
 export async function publicJwks(): Promise<{ keys: JWK[] }> {
   const { publicJwk } = await getSigningKey();
   return { keys: [publicJwk] };
+}
+
+// The PUBLIC verification key, derived from the published JWKS, for verifying
+// tokens we minted (e.g. the access token at /userinfo). The signing CryptoKey is
+// a PRIVATE key and can't verify; we import the public JWK instead. Cached.
+let cachedVerifyKey: Promise<CryptoKey> | null = null;
+export function getVerifyKey(): Promise<CryptoKey> {
+  if (!cachedVerifyKey) {
+    cachedVerifyKey = (async () => {
+      const { publicJwk } = await getSigningKey();
+      return (await importJWK(publicJwk, SIGNING_ALG)) as CryptoKey;
+    })().catch((e) => {
+      cachedVerifyKey = null;
+      throw e;
+    });
+  }
+  return cachedVerifyKey;
 }

@@ -19,6 +19,9 @@ const client: OAuthClientRow = {
   authorization_count: 0,
   last_used_at: null,
   revoked_at: null,
+  decided_at: null,
+  decided_by: null,
+  reject_reason: null,
 };
 
 function base(over: Partial<AuthorizeParams> = {}): AuthorizeParams {

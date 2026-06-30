@@ -8,8 +8,9 @@ import {
   registerClient,
   rotateClientSecret,
   listClientsByOwner,
-  type OAuthClientRow,
 } from "@/lib/oauth/store";
+import { developerFacingStatus, type DeveloperFacingStatus } from "@/lib/oauth/gating";
+import { ownerApiAccessApproved } from "@/lib/oauth/owner-approval";
 
 // Server actions backing the Developers-tab "Sign in with Pixel Parents" app
 // registration. Self-serve for MVP (any signed-in user can register an app);
@@ -95,12 +96,44 @@ export async function rotateOAuthSecret(
   }
 }
 
-// Read helper for the page (server component) — the caller's registered apps.
-export async function getMyOAuthApps(): Promise<OAuthClientRow[]> {
+// An app row shaped for the Developers-tab panel, with its developer-facing
+// approval status resolved (live / pending / rejected).
+export type MyOAuthApp = {
+  id: string;
+  name: string;
+  client_id: string;
+  redirect_uris: string[];
+  allowed_scopes: string[];
+  secret_prefix: string | null;
+  authorization_count: number;
+  created_at: string;
+  liveStatus: DeveloperFacingStatus;
+  reject_reason: string | null;
+};
+
+// Read helper for the page (server component) — the caller's registered apps,
+// each annotated with its live/pending/rejected status. The owner's API-access
+// approval is looked up ONCE (it's the same developer for all their apps).
+export async function getMyOAuthApps(): Promise<MyOAuthApp[]> {
   const user = await currentUser();
   if (!user) return [];
   try {
-    return await listClientsByOwner(user.id);
+    const [apps, ownerApproved] = await Promise.all([
+      listClientsByOwner(user.id),
+      ownerApiAccessApproved(user.id),
+    ]);
+    return apps.map((a) => ({
+      id: a.id,
+      name: a.name,
+      client_id: a.client_id,
+      redirect_uris: a.redirect_uris,
+      allowed_scopes: a.allowed_scopes,
+      secret_prefix: a.secret_prefix,
+      authorization_count: a.authorization_count,
+      created_at: a.created_at,
+      liveStatus: developerFacingStatus(a, ownerApproved),
+      reject_reason: a.reject_reason,
+    }));
   } catch (e) {
     console.error("getMyOAuthApps failed:", e);
     return [];

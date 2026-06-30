@@ -153,18 +153,7 @@ export default async function DashboardDevelopersPage() {
         {/* Sign in with Pixel Parents — register a connected app + reveal/rotate
             its client_id + one-time client_secret. Self-serve for MVP. */}
         <section className="border-t border-white/10 pt-8">
-          <OAuthAppsPanel
-            apps={oauthApps.map((a) => ({
-              id: a.id,
-              name: a.name,
-              client_id: a.client_id,
-              redirect_uris: a.redirect_uris,
-              allowed_scopes: a.allowed_scopes,
-              secret_prefix: a.secret_prefix,
-              authorization_count: a.authorization_count,
-              created_at: a.created_at,
-            }))}
-          />
+          <OAuthAppsPanel apps={oauthApps} ownerApiApproved={reqStatus === "approved"} />
         </section>
 
         {/* Docs summary — counts/taxonomies only, never PII. */}

@@ -19,6 +19,8 @@ import { IconClock, IconCode, IconGradCap } from "@/components/icons";
 import { KeyPanel } from "./key-panel";
 import { RequestForm } from "./request-form";
 import { AccountSettings } from "./account-settings";
+import { ConnectedAppsPanel } from "./connected-apps-panel";
+import { getConnectedApps } from "./connected-apps-actions";
 
 export const dynamic = "force-dynamic";
 
@@ -106,6 +108,10 @@ export default async function AccountPage() {
   // can verify many OHS students); the widget lets them add another.
   const verifyState = signup ? await getVerifyState(signup.id) : null;
 
+  // Connected apps: every "Sign in with Pixel Parents" app this user authorized
+  // (keyed to their Clerk user id, so no other-user data is read).
+  const connectedApps = await getConnectedApps();
+
   return (
     <DashboardShell firstName={firstName} email={email} status={approvalStatus} isAdmin={isAdmin}>
       <AccountHeader />
@@ -169,6 +175,20 @@ export default async function AccountPage() {
             <RequestForm />
           </>
         )}
+      </section>
+
+      <section
+        id="connected-apps"
+        className="mt-8 flex scroll-mt-8 flex-col gap-4 border-t border-white/10 pt-8"
+      >
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Connected apps</h2>
+          <p className="mt-1 text-sm text-white/55">
+            Apps you&apos;ve signed in to with Pixel Parents, and what each can see. Revoke
+            access anytime — they&apos;ll have to ask permission again next time.
+          </p>
+        </div>
+        <ConnectedAppsPanel apps={connectedApps} />
       </section>
 
       {signup && verifyState && (

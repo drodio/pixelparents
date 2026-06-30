@@ -33,19 +33,22 @@ describe("ohs_verified claim", () => {
   });
 });
 
+const CLIENT = "ppc_live_test";
+
 describe("buildIdTokenClaims — scope-gated emission", () => {
   it("emits ohs_verified only when the scope is consented", () => {
     const s = signup({ approvalStatus: "approved" });
-    const withScope = buildIdTokenClaims({ scopes: ["openid", "ohs_verified"], email: "a@b.com", signup: s });
+    const withScope = buildIdTokenClaims({ scopes: ["openid", "ohs_verified"], clientId: CLIENT, email: "a@b.com", signup: s });
     expect(withScope.ohs_verified).toBe(true);
 
-    const withoutScope = buildIdTokenClaims({ scopes: ["openid"], email: "a@b.com", signup: s });
+    const withoutScope = buildIdTokenClaims({ scopes: ["openid"], clientId: CLIENT, email: "a@b.com", signup: s });
     expect(withoutScope.ohs_verified).toBeUndefined();
   });
 
   it("emits a false ohs_verified for an unverified user (no false positives)", () => {
     const claims = buildIdTokenClaims({
       scopes: ["openid", "ohs_verified"],
+      clientId: CLIENT,
       email: "x@y.com",
       signup: signup({ approvalStatus: "pending" }),
     });
@@ -54,14 +57,14 @@ describe("buildIdTokenClaims — scope-gated emission", () => {
 
   it("emits email only when the email scope is consented and an email exists", () => {
     const s = signup({ approvalStatus: "approved" });
-    const withEmail = buildIdTokenClaims({ scopes: ["openid", "email"], email: "a@b.com", signup: s });
+    const withEmail = buildIdTokenClaims({ scopes: ["openid", "email"], clientId: CLIENT, email: "a@b.com", signup: s });
     expect(withEmail.email).toBe("a@b.com");
     expect(withEmail.email_verified).toBe(true);
 
-    const noScope = buildIdTokenClaims({ scopes: ["openid"], email: "a@b.com", signup: s });
+    const noScope = buildIdTokenClaims({ scopes: ["openid"], clientId: CLIENT, email: "a@b.com", signup: s });
     expect(noScope.email).toBeUndefined();
 
-    const noEmail = buildIdTokenClaims({ scopes: ["openid", "email"], email: null, signup: s });
+    const noEmail = buildIdTokenClaims({ scopes: ["openid", "email"], clientId: CLIENT, email: null, signup: s });
     expect(noEmail.email).toBeUndefined();
   });
 });

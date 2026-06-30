@@ -3,8 +3,10 @@
 import { redirect } from "next/navigation";
 import { auth, currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
-import { getClientByClientId, issueAuthCode } from "@/lib/oauth/store";
+import { getClientByClientId, issueAuthCode, recordConsent, touchConsent } from "@/lib/oauth/store";
 import { validateAuthorize, type AuthorizeParams } from "@/lib/oauth/authorize";
+import { isClientLive } from "@/lib/oauth/gating";
+import { ownerApiAccessApproved } from "@/lib/oauth/owner-approval";
 
 // Server action backing the consent screen's Allow/Deny buttons. The hidden form
 // fields carry the validated request parameters forward; we RE-VALIDATE them here
@@ -52,15 +54,64 @@ export async function decideConsent(formData: FormData): Promise<void> {
     redirect(`/oauth/authorize/error?reason=${encodeURIComponent(v.error)}`);
   }
 
+  // Re-enforce the approval gate (never trust that the page checked it): an app
+  // that isn't live can't be granted a code even if the form round-trips here.
+  const ownerApproved = await ownerApiAccessApproved(v.client.created_by);
+  if (!isClientLive(v.client, ownerApproved)) {
+    redirect(`/oauth/authorize/error?reason=invalid_client`);
+  }
+
   // Deny → redirect back with the standard access_denied error.
   if (decision !== "allow") {
     redirect(appendParams(v.redirectUri, { error: "access_denied", state: v.state }));
   }
 
-  // Allow → issue a single-use, short-lived code bound to this client + redirect
-  // + PKCE challenge + the authenticated user, then redirect back with code+state.
+  // Allow → remember the consent (so repeat logins skip this screen until revoked)
+  // then issue a single-use, short-lived code bound to this client + redirect +
+  // PKCE challenge + the authenticated user, and redirect back with code+state.
   const user = await currentUser();
   const email = primaryEmail(user);
+  const scope = v.scopes.join(" ");
+  await recordConsent(userId!, v.client.client_id, scope);
+  const code = await issueAuthCode({
+    clientId: v.client.client_id,
+    redirectUri: v.redirectUri,
+    codeChallenge: v.codeChallenge,
+    scope,
+    clerkUserId: userId!,
+    email,
+    nonce: v.nonce,
+  });
+  redirect(appendParams(v.redirectUri, { code, state: v.state }));
+}
+
+// Remembered-consent fast path: the page determined a live consent already covers
+// the requested scopes, so we skip the Allow/Deny screen and issue a code directly.
+// We STILL re-validate the request, re-check the session, and re-enforce the
+// approval gate here — the page's decision is a UX hint, not the security boundary.
+export async function issueCodeForRememberedConsent(raw: AuthorizeParams): Promise<void> {
+  const { userId } = await auth();
+  if (!userId) {
+    redirect(`/sign-in?redirect_url=${encodeURIComponent(buildAuthorizeUrl(raw))}`);
+  }
+
+  const client = raw.client_id ? await getClientByClientId(raw.client_id) : null;
+  const v = validateAuthorize(raw, client);
+  if (!v.ok) {
+    if (v.kind === "redirect") {
+      redirect(appendParams(v.redirectUri, { error: v.error, state: v.state }));
+    }
+    redirect(`/oauth/authorize/error?reason=${encodeURIComponent(v.error)}`);
+  }
+
+  const ownerApproved = await ownerApiAccessApproved(v.client.created_by);
+  if (!isClientLive(v.client, ownerApproved)) {
+    redirect(`/oauth/authorize/error?reason=invalid_client`);
+  }
+
+  const user = await currentUser();
+  const email = primaryEmail(user);
+  await touchConsent(userId!, v.client.client_id);
   const code = await issueAuthCode({
     clientId: v.client.client_id,
     redirectUri: v.redirectUri,

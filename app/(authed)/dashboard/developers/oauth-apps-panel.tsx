@@ -13,6 +13,8 @@ import { IconSparkles, IconCheck, IconCode } from "@/components/icons";
 // Register an app (name + redirect URIs + scopes) → reveal client_id + a one-time
 // client_secret. Lists the caller's apps with a per-app rotate-secret control.
 
+type LiveStatus = "live" | "pending" | "rejected";
+
 type AppRow = {
   id: string;
   name: string;
@@ -22,13 +24,33 @@ type AppRow = {
   secret_prefix: string | null;
   authorization_count: number;
   created_at: string;
+  liveStatus: LiveStatus;
+  reject_reason: string | null;
 };
 
-const SCOPES: { value: string; label: string; locked?: boolean }[] = [
+const SCOPES: { value: string; label: string; locked?: boolean; minor?: boolean }[] = [
   { value: "openid", label: "openid — sign-in (required)", locked: true },
   { value: "email", label: "email — the user's email address" },
-  { value: "ohs_verified", label: "ohs_verified — signed verified-OHS assertion" },
+  { value: "ohs_verified", label: "ohs_verified — signed verified-OHS assertion", minor: true },
+  { value: "role", label: "role — parent, student, or alumni", minor: true },
+  { value: "grade_band", label: "grade_band — middle/high (never the exact grade)", minor: true },
+  { value: "family", label: "family — an anonymous, app-specific family id" },
 ];
+
+function StatusBadge({ status }: { status: LiveStatus }) {
+  const cls =
+    status === "live"
+      ? "border-emerald-500/40 text-emerald-300"
+      : status === "rejected"
+        ? "border-red-500/40 text-red-300"
+        : "border-yellow-500/40 text-yellow-300";
+  const label = status === "live" ? "Live" : status === "rejected" ? "Rejected" : "Pending review";
+  return (
+    <span className={`shrink-0 rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase ${cls}`}>
+      {label}
+    </span>
+  );
+}
 
 function CopyableSecret({ label, value, tone }: { label: string; value: string; tone: "id" | "secret" }) {
   const [copied, setCopied] = useState(false);
@@ -123,8 +145,17 @@ function RegisterForm() {
               className="h-4 w-4 accent-amber-400"
             />
             <span className="font-mono text-xs">{s.label}</span>
+            {s.minor ? (
+              <span className="rounded-full border border-amber-400/30 px-1.5 py-0.5 text-[10px] font-semibold uppercase text-amber-300/80">
+                minor data
+              </span>
+            ) : null}
           </label>
         ))}
+        <p className="mt-1 text-xs text-white/40">
+          Apps that request scopes about OHS students (marked{" "}
+          <span className="text-amber-300/80">minor data</span>) get extra review.
+        </p>
       </fieldset>
 
       {state.error && <p className="text-sm text-red-400">{state.error}</p>}
@@ -151,10 +182,24 @@ function AppCard({ app }: { app: AppRow }) {
           </p>
           <code className="mt-1 block break-all font-mono text-xs text-white/55">{app.client_id}</code>
         </div>
-        <span className="shrink-0 rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/50">
-          {app.authorization_count} sign-in{app.authorization_count === 1 ? "" : "s"}
-        </span>
+        <div className="flex shrink-0 flex-col items-end gap-1.5">
+          <StatusBadge status={app.liveStatus} />
+          <span className="rounded-full bg-white/5 px-2 py-0.5 text-[11px] text-white/50">
+            {app.authorization_count} sign-in{app.authorization_count === 1 ? "" : "s"}
+          </span>
+        </div>
       </div>
+
+      {app.liveStatus === "pending" ? (
+        <p className="rounded-md border border-yellow-500/25 bg-yellow-500/5 px-3 py-2 text-xs text-yellow-200/90">
+          This app is pending approval — users can&apos;t sign in yet. It goes live
+          automatically once your API access is approved, or once an admin approves the app.
+        </p>
+      ) : app.liveStatus === "rejected" ? (
+        <p className="rounded-md border border-red-500/25 bg-red-500/5 px-3 py-2 text-xs text-red-200/90">
+          This app wasn&apos;t approved{app.reject_reason ? `: ${app.reject_reason}` : "."}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap gap-1.5">
         {app.allowed_scopes.map((s) => (
@@ -193,7 +238,13 @@ function AppCard({ app }: { app: AppRow }) {
   );
 }
 
-export function OAuthAppsPanel({ apps }: { apps: AppRow[] }) {
+export function OAuthAppsPanel({
+  apps,
+  ownerApiApproved,
+}: {
+  apps: AppRow[];
+  ownerApiApproved: boolean;
+}) {
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -205,6 +256,14 @@ export function OAuthAppsPanel({ apps }: { apps: AppRow[] }) {
           something Google, Apple, or GitHub can&apos;t provide.
         </p>
       </div>
+
+      {!ownerApiApproved && (
+        <p className="rounded-lg border border-yellow-500/25 bg-yellow-500/5 px-4 py-3 text-sm text-yellow-200/90">
+          New Sign-in apps stay <span className="font-semibold">pending</span> until your
+          API access is approved (or an admin approves the app individually). Request API
+          access above to activate your apps.
+        </p>
+      )}
 
       <RegisterForm />
 
