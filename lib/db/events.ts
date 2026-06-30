@@ -320,7 +320,12 @@ export async function upsertOhsEvents(rows: OhsUpsert[]): Promise<number> {
         authorLabel: "OHS (Automatically Added)",
       })
       .onConflictDoUpdate({
+        // The unique index on external_key is PARTIAL (only WHERE external_key IS
+        // NOT NULL, so user events with a null key stay unconstrained). Postgres
+        // can only infer a partial index as the ON CONFLICT arbiter when the same
+        // predicate is supplied here, so include targetWhere or it errors 42P10.
         target: events.externalKey,
+        targetWhere: sql`${events.externalKey} is not null`,
         set: {
           title: r.title,
           startsAt: r.startsAt,
