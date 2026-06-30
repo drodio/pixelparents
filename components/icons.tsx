@@ -357,3 +357,14 @@ export function IconFilter(props: IconProps) {
     </Icon>
   );
 }
+
+// An open book / library — the "Resources" living-library tab.
+export function IconBook(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 6.5C10.5 5.3 8.6 4.8 6 4.8c-1 0-1.8.1-2.5.3v13c.7-.2 1.5-.3 2.5-.3 2.6 0 4.5.5 6 1.7" />
+      <path d="M12 6.5c1.5-1.2 3.4-1.7 6-1.7 1 0 1.8.1 2.5.3v13c-.7-.2-1.5-.3-2.5-.3-2.6 0-4.5.5-6 1.7" />
+      <path d="M12 6.5V19.5" />
+    </Icon>
+  );
+}
