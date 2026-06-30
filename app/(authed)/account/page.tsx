@@ -18,6 +18,7 @@ import { StudentVerify } from "@/components/student-verify";
 import { IconClock, IconCode, IconGradCap } from "@/components/icons";
 import { KeyPanel } from "./key-panel";
 import { RequestForm } from "./request-form";
+import { AccountSettings } from "./account-settings";
 
 export const dynamic = "force-dynamic";
 
@@ -61,8 +62,11 @@ function AccountHeader() {
     <header className="mb-8 flex items-center justify-between gap-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Account</h1>
-        <p className="mt-1 text-sm text-white/55">Your API access and family profile.</p>
+        <p className="mt-1 text-sm text-white/55">
+          Your profile, API access, and family settings.
+        </p>
       </div>
+      {/* Kept for one-click Sign out; "Manage account" now lives inline below. */}
       <UserButton appearance={clerkAppearance} />
     </header>
   );
@@ -106,7 +110,17 @@ export default async function AccountPage() {
     <DashboardShell firstName={firstName} email={email} status={approvalStatus} isAdmin={isAdmin}>
       <AccountHeader />
 
-      <section className="flex flex-col gap-5">
+      <section id="settings" className="mb-8 flex scroll-mt-8 flex-col gap-4">
+        <div>
+          <h2 className="text-xl font-semibold tracking-tight">Account settings</h2>
+          <p className="mt-1 text-sm text-white/55">
+            Edit your profile, email addresses, password, and security settings.
+          </p>
+        </div>
+        <AccountSettings />
+      </section>
+
+      <section className="flex flex-col gap-5 border-t border-white/10 pt-8">
         <h2 className="text-xl font-semibold tracking-tight">Developer API</h2>
         {reqStatus === "approved" ? (
           <>
