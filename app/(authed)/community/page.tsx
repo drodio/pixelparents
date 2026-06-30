@@ -6,9 +6,10 @@ import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { getStats, getBreakdowns, getTrends } from "@/lib/db/aggregates";
 import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
+import { isAdminEmail } from "@/lib/admin";
 import { buildMarkers } from "@/lib/community-map";
 import { WorldMap } from "@/components/world-map";
-import { PixelMascot } from "@/components/pixel-mascot";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { UnverifiedNotice } from "@/components/unverified-notice";
 
 export const dynamic = "force-dynamic";
@@ -23,22 +24,14 @@ export const metadata: Metadata = {
 const AMBER = "#fbbf24";
 const AMBER_DEEP = "#d97706";
 
-function Shell({ children }: { children: React.ReactNode }) {
+function PageHeader() {
   return (
-    <main className="min-h-dvh bg-black text-white">
-      <div className="mx-auto w-full max-w-5xl px-6 py-10">
-        <header className="mb-8 flex items-center gap-4">
-          <PixelMascot widthClass="w-14" href="/" />
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Our community</h1>
-            <p className="mt-1 text-sm text-white/55">
-              Stanford OHS parents and kids, building together.
-            </p>
-          </div>
-        </header>
-        {children}
-      </div>
-    </main>
+    <header className="mb-8">
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Our community</h1>
+      <p className="mt-1 text-sm text-white/55">
+        Stanford OHS parents and kids, building together.
+      </p>
+    </header>
   );
 }
 
@@ -131,11 +124,26 @@ export default async function CommunityPage() {
   const viewer = await currentUser();
   if (!viewer) redirect("/sign-in");
   const email = primaryEmail(viewer);
-  const viewerSignup = email ? await getSignupByEmail(email) : null;
+  const [viewerSignup, isAdmin] = await Promise.all([
+    email ? getSignupByEmail(email) : Promise.resolve(null),
+    isAdminEmail(email),
+  ]);
   const isOhsFamily = Boolean(viewerSignup);
+  const firstName = viewerSignup?.firstName ?? viewer.firstName ?? null;
+  const status: ApprovalStatus | null = viewerSignup
+    ? readApprovalStatus((viewerSignup.extra ?? {}) as Record<string, unknown>)
+    : null;
+
+  const shell = (content: React.ReactNode) => (
+    <DashboardShell firstName={firstName} email={email} status={status} isAdmin={isAdmin}>
+      {content}
+    </DashboardShell>
+  );
+
   if (!isOhsFamily) {
-    return (
-      <Shell>
+    return shell(
+      <>
+        <PageHeader />
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
           <h2 className="text-lg font-semibold">This page is for OHS families</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
@@ -149,14 +157,9 @@ export default async function CommunityPage() {
             Join Pixel Parents
           </Link>
         </div>
-      </Shell>
+      </>,
     );
   }
-
-  // Non-breaking nudge for families who haven't verified their OHS student yet.
-  const viewerStatus: ApprovalStatus = readApprovalStatus(
-    (viewerSignup?.extra ?? {}) as Record<string, unknown>,
-  );
 
   const [stats, breakdowns, trends] = await Promise.all([
     getStats(),
@@ -165,12 +168,13 @@ export default async function CommunityPage() {
   ]);
 
   if (stats.database === "pending") {
-    return (
-      <Shell>
+    return shell(
+      <>
+        <PageHeader />
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-white/55">
           The community view isn&apos;t available yet — check back once families start joining.
         </div>
-      </Shell>
+      </>,
     );
   }
 
@@ -184,9 +188,10 @@ export default async function CommunityPage() {
     .slice(0, 12)
     .map((t) => [t.interest, t.count] as [string, number]);
 
-  return (
-    <Shell>
-      <UnverifiedNotice status={viewerStatus} />
+  return shell(
+    <>
+      <PageHeader />
+      <UnverifiedNotice status={status ?? "pending"} />
       <div className="flex flex-col gap-9">
         <section>
           <SectionLabel>Where we&apos;re building</SectionLabel>
@@ -232,6 +237,6 @@ export default async function CommunityPage() {
           </section>
         )}
       </div>
-    </Shell>
+    </>,
   );
 }

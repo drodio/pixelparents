@@ -15,8 +15,8 @@ import {
   type DirectoryCard,
 } from "@/lib/directory";
 import { signedPhotoUrls } from "@/lib/blob";
-import { readApprovalStatus } from "@/lib/approval";
-import { PixelMascot } from "@/components/pixel-mascot";
+import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
+import { DashboardShell } from "@/components/dashboard-shell";
 import { UnverifiedNotice } from "@/components/unverified-notice";
 import { DirectoryClient } from "./directory-client";
 
@@ -32,38 +32,12 @@ export const metadata: Metadata = {
 // How many photo thumbnails to entice a click with, per card.
 const MAX_THUMBS = 4;
 
-function Shell({
-  children,
-  isAdmin = false,
-}: {
-  children: React.ReactNode;
-  isAdmin?: boolean;
-}) {
+function PageHeader() {
   return (
-    <main className="min-h-dvh bg-black text-white">
-      <div className="mx-auto w-full max-w-7xl px-6 py-10">
-        <header className="mb-8 flex items-center gap-4">
-          <PixelMascot widthClass="w-14" href="/" />
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-              OHS Family Directory
-            </h1>
-            <p className="mt-1 text-sm text-white/55">
-              Families in the Pixel Parents community
-            </p>
-          </div>
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className="ml-auto shrink-0 rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black shadow-sm transition-colors hover:bg-amber-300"
-            >
-              Admin
-            </Link>
-          )}
-        </header>
-        {children}
-      </div>
-    </main>
+    <header className="mb-8">
+      <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">OHS family directory</h1>
+      <p className="mt-1 text-sm text-white/55">Families in the Pixel Parents community</p>
+    </header>
   );
 }
 
@@ -73,17 +47,30 @@ export default async function DirectoryPage() {
   if (!viewer) redirect("/sign-in");
 
   const viewerEmail = primaryEmail(viewer);
-  // Admins get a quick link back into the admin area from the directory header.
-  const isAdmin = await isAdminEmail(viewerEmail);
 
   // 2) OHS-family gate — IDENTICAL to /p/[token]: a signed-in viewer counts as an
   //    OHS family only if they themselves have a signup. A logged-in non-signup
   //    user sees NO directory data.
-  const viewerSignup = viewerEmail ? await getSignupByEmail(viewerEmail) : null;
+  const [viewerSignup, isAdmin] = await Promise.all([
+    viewerEmail ? getSignupByEmail(viewerEmail) : Promise.resolve(null),
+    isAdminEmail(viewerEmail),
+  ]);
   const isOhsFamily = Boolean(viewerSignup);
+  const firstName = viewerSignup?.firstName ?? viewer.firstName ?? null;
+  const status: ApprovalStatus | null = viewerSignup
+    ? readApprovalStatus((viewerSignup.extra ?? {}) as Record<string, unknown>)
+    : null;
+
+  const shell = (content: React.ReactNode) => (
+    <DashboardShell firstName={firstName} email={viewerEmail} status={status} isAdmin={isAdmin}>
+      {content}
+    </DashboardShell>
+  );
+
   if (!isOhsFamily) {
-    return (
-      <Shell isAdmin={isAdmin}>
+    return shell(
+      <>
+        <PageHeader />
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
           <h2 className="text-lg font-semibold">This directory is for OHS families</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
@@ -97,17 +84,18 @@ export default async function DirectoryPage() {
             Join Pixel Parents
           </Link>
         </div>
-      </Shell>
+      </>,
     );
   }
 
   if (!hasDatabase()) {
-    return (
-      <Shell isAdmin={isAdmin}>
+    return shell(
+      <>
+        <PageHeader />
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-6 text-sm text-white/60">
           The directory isn&apos;t available yet.
         </div>
-      </Shell>
+      </>,
     );
   }
 
@@ -148,10 +136,6 @@ export default async function DirectoryPage() {
     if (signed[i]) urlByPath.set(p, signed[i]);
   });
 
-  // Non-breaking nudge: unverified families still see the full directory, but get
-  // a banner inviting them to verify their OHS student.
-  const viewerStatus = readApprovalStatus((viewerSignup?.extra ?? {}) as Record<string, unknown>);
-
   const currentYear = new Date().getFullYear();
   const cards: DirectoryCard[] = included.map((row) =>
     buildDirectoryCard(
@@ -163,9 +147,10 @@ export default async function DirectoryPage() {
     ),
   );
 
-  return (
-    <Shell>
-      <UnverifiedNotice status={viewerStatus} />
+  return shell(
+    <>
+      <PageHeader />
+      <UnverifiedNotice status={status ?? "pending"} />
       {cards.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-white/55">
           No families are sharing with the OHS directory yet.
@@ -173,6 +158,6 @@ export default async function DirectoryPage() {
       ) : (
         <DirectoryClient cards={cards} />
       )}
-    </Shell>
+    </>,
   );
 }
