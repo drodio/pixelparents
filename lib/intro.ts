@@ -210,8 +210,13 @@ export function buildIntroEmail(input: {
   topic: string;
   offerNote: string;
   postUrl: string;
+  // Optional pre-formatted date/time options the responder proposed (1-3). When
+  // present, the email surfaces them as a "Proposed times" block so the two
+  // parties can pick one. Empty/omitted → no scheduling block.
+  proposedTimes?: string[];
 }): { subject: string; text: string } {
   const { asker, responder, isOffer, topic, offerNote, postUrl } = input;
+  const proposedTimes = (input.proposedTimes ?? []).filter((t) => t && t.trim());
   const subject = `Intro: ${asker.name} <> ${responder.name} — ${topic}`;
 
   // Who-helps-whom framing. On an Ask the responder is helping the author; on an
@@ -235,6 +240,10 @@ export function buildIntroEmail(input: {
     `${responder.name}:`,
     ...contactLinesFor(responder).map((l) => `  ${l}`),
     ``,
+    // Proposed scheduling options, when the responder offered any.
+    proposedTimes.length > 0 ? `Proposed times to meet:` : null,
+    ...proposedTimes.map((t) => `  - ${t}`),
+    proposedTimes.length > 0 ? `` : null,
     `You can also pick up the conversation right on the post:`,
     postUrl,
     ``,

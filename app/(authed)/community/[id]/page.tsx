@@ -45,6 +45,19 @@ import { OfferHelpForm } from "./offer-help-form";
 import { ResponseDecision } from "./response-decision";
 import { PostControls } from "./post-controls";
 import { ConnectedCard, type ConnectedCardData, type ConnectedMethod } from "./connected-card";
+import { EngagementBar } from "./engagement-bar";
+import { CommunityBody } from "../community-body";
+import { extractMentionIds } from "@/lib/mentions";
+import { resolveMentionables } from "@/lib/db/community-members";
+import { formatSlot } from "@/lib/community-schedule";
+import {
+  countUpvotes,
+  countAttachments,
+  hasUpvoted,
+  hasAttached,
+  listAttachmentMemberIds,
+  slotsByResponse,
+} from "@/lib/db/community-engage";
 
 export const dynamic = "force-dynamic";
 
@@ -165,11 +178,26 @@ export default async function ExchangePostPage({
   const soon = !expired && isExpiringSoon({ validUntil: ask.validUntil ? new Date(ask.validUntil).toISOString() : null });
   const resolved = ask.status === "resolved";
 
-  const [responses, suggestedRaw, alreadyResponded, authorRows] = await Promise.all([
+  const [
+    responses,
+    suggestedRaw,
+    alreadyResponded,
+    authorRows,
+    upvoteCount,
+    attachmentCount,
+    viewerUpvoted,
+    viewerAttached,
+    attachmentMemberIds,
+  ] = await Promise.all([
     listResponsesForAsk(id),
     getSuggestedHelpers(ask, 8),
     hasResponded(id, viewerSignup!.id),
     getDb().select().from(signups).where(eq(signups.id, ask.authorSignupId)).limit(1),
+    countUpvotes(id),
+    countAttachments(id),
+    hasUpvoted(id, viewerSignup!.id),
+    hasAttached(id, viewerSignup!.id),
+    listAttachmentMemberIds(id),
   ]);
 
   // AI-assisted semantic re-rank of the suggested helpers. getSuggestedHelpers
@@ -321,6 +349,44 @@ export default async function ExchangePostPage({
     }
   }
 
+  // Resolve @-mention links for the post body + every response. We gather every
+  // signup id referenced by a marker, resolve them ONCE (verified-only; a
+  // non-mentionable id resolves to no entry → renders as plain amber text, never
+  // a link to a private profile), and build an id→token map. A token is present
+  // only when that member shares a profile (hasShareableProfile inside
+  // resolveMentionables), so a mention links out exactly when the member opted in.
+  const mentionIds = new Set<string>(extractMentionIds(ask.body));
+  for (const r of responses) for (const mid of extractMentionIds(r.offer)) mentionIds.add(mid);
+  const mentionLinkById = new Map<string, string | null>();
+  if (mentionIds.size > 0) {
+    const resolved = await resolveMentionables(Array.from(mentionIds));
+    for (const [mid, m] of resolved) mentionLinkById.set(mid, m.token);
+  }
+
+  // Proposed scheduling slots per response (shown to the author + the responder).
+  const slotsForResponses = await slotsByResponse(responses.map((r) => r.id));
+
+  // Display cards for members who attached ("I'd join this too"). Coarsened name +
+  // a profile link only when they share one — same privacy gate as everywhere.
+  const joiners: { signupId: string; name: string; token: string | null; isStudent: boolean }[] =
+    [];
+  if (attachmentMemberIds.length > 0) {
+    const rows = await getDb().select().from(signups).where(inArray(signups.id, attachmentMemberIds));
+    const byId = new Map(rows.map((r) => [r.id, r]));
+    for (const mid of attachmentMemberIds) {
+      const r = byId.get(mid);
+      if (!r) continue;
+      joiners.push({
+        signupId: r.id,
+        name: isStudentAccount(r)
+          ? r.firstName
+          : [r.firstName, r.lastName].filter(Boolean).join(" "),
+        token: hasShareableProfile(r) ? r.shareToken : null,
+        isStudent: isStudentAccount(r),
+      });
+    }
+  }
+
   const responsesLabel = isOffer
     ? responses.length === 1
       ? "request"
@@ -385,7 +451,11 @@ export default async function ExchangePostPage({
             </div>
 
             <h1 className="mt-2 text-xl font-semibold tracking-tight sm:text-2xl">{ask.title}</h1>
-            <p className="mt-3 whitespace-pre-wrap text-sm text-white/75">{ask.body}</p>
+            <CommunityBody
+              body={ask.body}
+              linkById={mentionLinkById}
+              className="mt-3 whitespace-pre-wrap text-sm text-white/75"
+            />
 
             {ask.validUntil && (
               <p className="mt-3 text-xs text-white/45">
@@ -407,6 +477,47 @@ export default async function ExchangePostPage({
                     </span>
                   );
                 })}
+              </div>
+            )}
+
+            {/* Upvote + attach/join — any verified viewer (incl. the author). */}
+            <EngagementBar
+              askId={ask.id}
+              initialUpvotes={upvoteCount}
+              initialAttachments={attachmentCount}
+              initialUpvoted={viewerUpvoted}
+              initialAttached={viewerAttached}
+              canEngage={isVerified}
+            />
+
+            {/* Members who said they'd join. Coarsened names; link only if shared. */}
+            {joiners.length > 0 && (
+              <div className="mt-4 border-t border-white/10 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
+                  {joiners.length} {joiners.length === 1 ? "member" : "members"} would join
+                </p>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {joiners.map((j) => {
+                    const chip = (
+                      <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1 text-xs text-white/80">
+                        <span className="grid h-5 w-5 place-items-center rounded-full bg-amber-400/20 text-[10px] font-semibold text-amber-300">
+                          {j.name.charAt(0).toUpperCase()}
+                        </span>
+                        {j.name}
+                        {j.isStudent && <span className="text-white/40">· student</span>}
+                      </span>
+                    );
+                    return j.token ? (
+                      <Link key={j.signupId} href={`/directory/${j.token}`} className="hover:opacity-90">
+                        {chip}
+                      </Link>
+                    ) : (
+                      <li key={j.signupId} className="list-none">
+                        {chip}
+                      </li>
+                    );
+                  })}
+                </ul>
               </div>
             )}
 
@@ -475,7 +586,31 @@ export default async function ExchangePostPage({
                           {PROPOSE_LABEL[r.proposes as keyof typeof PROPOSE_LABEL] ?? "Connect"}
                         </span>
                       </div>
-                      <p className="mt-2 whitespace-pre-wrap text-sm text-white/75">{r.offer}</p>
+                      <CommunityBody
+                        body={r.offer}
+                        linkById={mentionLinkById}
+                        className="mt-2 whitespace-pre-wrap text-sm text-white/75"
+                      />
+
+                      {/* Proposed scheduling options on this response, if any. */}
+                      {(slotsForResponses.get(r.id)?.length ?? 0) > 0 && (
+                        <div className="mt-3 flex flex-col gap-1.5">
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40">
+                            Proposed times
+                          </p>
+                          <ul className="flex flex-wrap gap-1.5">
+                            {slotsForResponses.get(r.id)!.map((slot) => (
+                              <li
+                                key={slot.id}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs text-white/75"
+                              >
+                                <IconClock className="h-3 w-3 text-white/45" />
+                                {formatSlot(slot.startsAt)}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
 
                       {isAuthor && r.status === "offered" && (
                         <div className="mt-3">

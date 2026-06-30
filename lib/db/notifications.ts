@@ -24,6 +24,7 @@ import { getSql, getDb, hasDatabase } from "@/lib/db";
 export const NOTIFICATION_TYPES = [
   "community_response", // someone responded to your ask/offer
   "community_connected", // your response was accepted → you're connected
+  "community_mention", // you were @-mentioned in a post body or response
   "event_rsvp", // someone RSVP'd to an event you organize
 ] as const;
 

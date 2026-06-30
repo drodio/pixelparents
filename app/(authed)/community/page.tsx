@@ -10,6 +10,8 @@ import { isFamilyVerified } from "@/lib/directory";
 import { isStudentAccount } from "@/lib/family-display";
 import { hasDatabase, getDb } from "@/lib/db";
 import { listAllAsks } from "@/lib/db/asks";
+import { engagementCountsFor } from "@/lib/db/community-engage";
+import { mentionPlainText } from "@/lib/mentions";
 import { signups } from "@/lib/db/schema/signups";
 import { inArray } from "drizzle-orm";
 import { DashboardShell } from "@/components/dashboard-shell";
@@ -123,13 +125,19 @@ export default async function ExchangePage() {
     }
   }
 
+  // Upvote + attachment counts for every post, in two grouped queries (no N+1).
+  const { upvotes: upvoteCounts, attachments: attachmentCounts } = await engagementCountsFor(
+    rows.map((r) => r.id),
+  );
+
   const posts: ExchangePost[] = rows.map((r) => {
     const author = authorById.get(r.authorSignupId);
     return {
       id: r.id,
       kind: (r.kind as AskKind) ?? "ask",
       title: r.title,
-      body: r.body,
+      // Flatten @-mention markers to readable "@Name" for the card preview.
+      body: mentionPlainText(r.body),
       tags: r.expertiseTags ?? [],
       urgency: (r.urgency as AskUrgency) ?? "normal",
       status: r.status,
@@ -145,6 +153,8 @@ export default async function ExchangePage() {
         : null,
       authorName: author?.name ?? "A community member",
       isStudent: author?.isStudent ?? false,
+      upvotes: upvoteCounts.get(r.id) ?? 0,
+      attachments: attachmentCounts.get(r.id) ?? 0,
     };
   });
 

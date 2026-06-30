@@ -24,6 +24,7 @@ describe("isNotificationType", () => {
     expect(NOTIFICATION_TYPES).toEqual([
       "community_response",
       "community_connected",
+      "community_mention",
       "event_rsvp",
     ]);
   });

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { IconX } from "@/components/icons";
 import { ASK_BODY_MAX, ASK_TAGS_MAX, ASK_TITLE_MAX } from "@/lib/ask-validate";
 import { ASK_KINDS, ASK_URGENCIES, type AskKind, type AskUrgency } from "@/lib/db/asks";
+import { MentionInput } from "../mention-input";
 import { createAskAction, updateAskAction } from "../actions";
 
 const controlCls =
@@ -131,13 +132,12 @@ export function PostForm({
 
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-white/80">Details</span>
-        <textarea
+        <MentionInput
           value={body}
-          onChange={(e) => setBody(e.target.value)}
+          onChange={setBody}
           maxLength={ASK_BODY_MAX}
           rows={5}
           placeholder="Give the community enough context."
-          className={controlCls}
         />
       </label>
 

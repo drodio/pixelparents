@@ -20,6 +20,10 @@ export type ExchangePost = {
   validUntil: string | null; // ISO | null
   authorName: string;
   isStudent: boolean;
+  // Engagement counts (community-engage). Optional so callers that don't load
+  // them (or a DB-less env) default to 0 in the UI.
+  upvotes?: number;
+  attachments?: number;
 };
 
 export type KindFilter = "all" | AskKind;

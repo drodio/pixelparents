@@ -5,7 +5,7 @@ import Link from "next/link";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
 import { gridContainer, gridItem, staticContainer, staticItem } from "../directory/motion";
 import { iconForInterest } from "@/lib/interest-icons";
-import { IconX, IconClock, IconCircleCheck, IconFilter } from "@/components/icons";
+import { IconX, IconClock, IconCircleCheck, IconFilter, IconArrowRight, IconUsers } from "@/components/icons";
 import { TagList } from "@/components/tag-list";
 import { MobileSheet } from "@/components/mobile-sheet";
 import {
@@ -420,6 +420,18 @@ export function ExchangeBoardClient({
                     <span className="text-white/70">{p.authorName || "A community member"}</span>
                     <MemberTypeBadge isStudent={p.isStudent} />
                     {p.validUntil && !expired && <span>· valid until {fmtDate(p.validUntil)}</span>}
+                    {(p.upvotes ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-amber-200/80">
+                        <IconArrowRight className="h-3 w-3 -rotate-90" strokeWidth={2.5} />
+                        {p.upvotes}
+                      </span>
+                    )}
+                    {(p.attachments ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-emerald-200/80">
+                        <IconUsers className="h-3 w-3" strokeWidth={2} />
+                        {p.attachments}
+                      </span>
+                    )}
                   </div>
 
                   {p.tags.length > 0 && (
