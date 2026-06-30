@@ -1,5 +1,6 @@
 import { canViewProfile, coerceShareVisibility, shareFieldsOrDefault } from "@/lib/share";
 import { childAge } from "@/lib/directory-filters";
+import { builderStatusOf } from "@/lib/builder";
 import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
 
 // Re-export the pure, client-safe filter helpers so server code and tests can
@@ -25,6 +26,12 @@ export type DirectoryCard = {
   interests: string[];
   heroUrl: string | null;
   thumbUrls: string[];
+  // "Builder" status, derived from the parent's extra (builderStatusOf): true if
+  // a GitHub commit check found commits OR an admin/family set the manual flag.
+  // `contributions` is the last counted commit total (0 when unknown). NOT gated
+  // behind a share field — it's a community-recognition badge, not PII.
+  isBuilder: boolean;
+  contributions: number;
 };
 
 // Families that signed up BEFORE this cutoff are grandfathered into the directory
@@ -125,6 +132,10 @@ export function buildDirectoryCard(
     .map((path) => urlByPath.get(path))
     .filter((u): u is string => Boolean(u));
 
+  const { isBuilder, contributions } = builderStatusOf(
+    (row.extra ?? {}) as Record<string, unknown>,
+  );
+
   return {
     token: row.shareToken!,
     name: [row.firstName, row.lastName].filter(Boolean).join(" "),
@@ -134,5 +145,7 @@ export function buildDirectoryCard(
     interests: Array.from(interestByKey.values()),
     heroUrl: photoUrls[0] ?? null,
     thumbUrls: photoUrls.slice(1, 1 + maxThumbs),
+    isBuilder,
+    contributions,
   };
 }

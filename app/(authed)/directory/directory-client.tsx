@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { iconForInterest } from "@/lib/interest-icons";
-import { IconX } from "@/components/icons";
+import { IconX, IconCode } from "@/components/icons";
 import {
   familyMatchesAgeRange,
   familyWithinRadius,
@@ -70,6 +70,29 @@ function useViewportWidth(): number {
   return width;
 }
 
+// "Builder" recognition badge — a parent who has shipped commits to Pixel
+// Parents (or was manually marked). Shows the contribution count when known.
+function BuilderBadge({ contributions }: { contributions: number }) {
+  return (
+    <span
+      className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-medium text-amber-300"
+      title={
+        contributions > 0
+          ? `${contributions} contribution${contributions === 1 ? "" : "s"} to Pixel Parents`
+          : "A Pixel Parents builder"
+      }
+    >
+      <IconCode className="h-3.5 w-3.5" strokeWidth={2} />
+      Builder
+      {contributions > 0 && (
+        <span className="text-amber-300/70">
+          · {contributions} contribution{contributions === 1 ? "" : "s"}
+        </span>
+      )}
+    </span>
+  );
+}
+
 function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
   const thumbs = card.thumbUrls.slice(0, 4);
   const childNames = card.children.map((c) => c.firstName).filter(Boolean);
@@ -105,6 +128,11 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
       <div className="flex items-baseline justify-between gap-2">
         <h3 className="truncate text-base font-semibold text-white">{card.name}</h3>
       </div>
+      {card.isBuilder && (
+        <div>
+          <BuilderBadge contributions={card.contributions} />
+        </div>
+      )}
       {card.location && <p className="text-sm text-white/55">{card.location}</p>}
       {childNames.length > 0 && (
         <p className="text-sm text-amber-400/90">

@@ -76,3 +76,45 @@ export async function removeRepoCollaborator(
     return false;
   }
 }
+
+// Cap on how many pages of commits we'll walk (100 per page). Bounds the number
+// of outbound requests for a prolific contributor so the check stays cheap.
+const MAX_COMMIT_PAGES = 5;
+
+// Count commits authored by `username` in the Pixel Parents repo, driving the
+// auto "Builder" tag. Best-effort: returns 0 (never throws) on any failure —
+// missing token/username, a private/absent repo (404), rate-limit/permissions
+// (403), or a network error — so the caller can treat 0 as "no commits found".
+// Walks pages of up to 100 until a short page (or the page cap) is hit.
+export async function countUserCommits(
+  username: string | null | undefined,
+): Promise<number> {
+  const t = token();
+  if (!t || !validUsername(username)) return 0;
+
+  let total = 0;
+  try {
+    for (let page = 1; page <= MAX_COMMIT_PAGES; page += 1) {
+      const url = `${API}/repos/${REPO}/commits?author=${encodeURIComponent(
+        username,
+      )}&per_page=100&page=${page}`;
+      const res = await fetch(url, { headers: headers(t) });
+      if (!res.ok) {
+        // 404 = no such repo/user, 403/422 = rate-limited / bad author, etc. Any
+        // non-2xx means "couldn't determine" — fail soft with whatever we counted
+        // so far (0 on the first page).
+        console.error(`GitHub commit count for ${username} failed: ${res.status}`);
+        break;
+      }
+      const body = (await res.json()) as unknown;
+      if (!Array.isArray(body)) break;
+      total += body.length;
+      // A short page (< per_page) means we've reached the end.
+      if (body.length < 100) break;
+    }
+  } catch (err) {
+    console.error("GitHub commit count error:", err);
+    return total;
+  }
+  return total;
+}

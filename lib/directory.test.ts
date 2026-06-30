@@ -172,6 +172,36 @@ describe("buildDirectoryCard (per-field redaction)", () => {
     expect(card.interests).toEqual(["Robotics"]); // only child interests
   });
 
+  it("defaults to non-builder when extra carries no builder flags", () => {
+    const card = buildDirectoryCard(signup(), kids, noUrls, 4, YEAR);
+    expect(card.isBuilder).toBe(false);
+    expect(card.contributions).toBe(0);
+  });
+
+  it("reflects an auto builder flag + contribution count from extra", () => {
+    const card = buildDirectoryCard(
+      signup({ extra: { approvalStatus: "approved", builder: true, githubContributions: 5 } }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(card.isBuilder).toBe(true);
+    expect(card.contributions).toBe(5);
+  });
+
+  it("reflects a manual builder override (no commits counted)", () => {
+    const card = buildDirectoryCard(
+      signup({ extra: { approvalStatus: "approved", builderManual: true } }),
+      kids,
+      noUrls,
+      4,
+      YEAR,
+    );
+    expect(card.isBuilder).toBe(true);
+    expect(card.contributions).toBe(0);
+  });
+
   it("dedupes interests case-insensitively, keeping the first label", () => {
     const card = buildDirectoryCard(
       signup({ parentInterests: ["Chess", "chess"] }),

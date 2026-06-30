@@ -7,6 +7,8 @@ import { signups } from "@/lib/db/schema/signups";
 import { primaryEmail } from "@/lib/clerk";
 import { familyIdForEmail } from "@/lib/db/signups";
 import { sanitizeSignupPatch, type SignupPatch } from "@/app/signup/actions";
+import { countUserCommits } from "@/lib/github";
+import { builderStatusOf, type BuilderStatus } from "@/lib/builder";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -63,6 +65,107 @@ export async function patchFamilyMember(
     return { ok: updated.length > 0 };
   } catch (err) {
     console.error("patchFamilyMember failed:", err);
+    return { ok: false };
+  }
+}
+
+// Resolve the caller's session → family_id, then load a TARGET row that must
+// share that family. Returns the target's id + its `extra` so a builder action
+// can do a read-modify-write merge. The family-membership match IS the
+// authorization (mirrors patchFamilyMember) — a non-member target resolves null.
+async function authorizedTarget(
+  targetSignupId: string,
+): Promise<{ id: string; familyId: string; extra: Record<string, unknown> } | null> {
+  if (!UUID_RE.test(targetSignupId)) return null;
+
+  const user = await currentUser();
+  const email = user ? primaryEmail(user) : null;
+  if (!email) return null;
+
+  const callerFamilyId = await familyIdForEmail(email);
+  if (!callerFamilyId) return null;
+
+  const [row] = await getDb()
+    .select({
+      id: signups.id,
+      familyId: signups.familyId,
+      githubUsername: signups.githubUsername,
+      extra: signups.extra,
+    })
+    .from(signups)
+    .where(and(eq(signups.id, targetSignupId), eq(signups.familyId, callerFamilyId)))
+    .limit(1);
+  if (!row) return null;
+
+  return {
+    id: row.id,
+    familyId: row.familyId,
+    extra: (row.extra ?? {}) as Record<string, unknown>,
+  };
+}
+
+// Count the target member's commits on the Pixel Parents repo and, if any are
+// found, auto-set extra.builder=true + store the count + checkedAt. Authorized by
+// FAMILY MEMBERSHIP (caller derived from the session; target must share the
+// caller's family). Best-effort: the GitHub count never throws, and a 0 count
+// records the check timestamp/count WITHOUT setting the auto flag (so an existing
+// manual override is left intact). Returns the resulting effective status.
+export async function refreshBuilderStatus(
+  targetSignupId: string,
+): Promise<{ ok: boolean; status?: BuilderStatus }> {
+  const target = await authorizedTarget(targetSignupId);
+  if (!target) return { ok: false };
+
+  // Read the target's GitHub username off the authorized row.
+  const [row] = await getDb()
+    .select({ githubUsername: signups.githubUsername })
+    .from(signups)
+    .where(eq(signups.id, target.id))
+    .limit(1);
+  const username = row?.githubUsername ?? null;
+
+  const contributions = await countUserCommits(username);
+  const checkedAt = new Date().toISOString();
+
+  // Read-modify-write so we never clobber sibling extra keys (notified,
+  // approvalStatus, builderInterest, …). Only flip the auto flag ON when commits
+  // are found — a later 0 count must not silently revoke a real builder.
+  const nextExtra: Record<string, unknown> = {
+    ...target.extra,
+    githubContributions: contributions,
+    githubCheckedAt: checkedAt,
+  };
+  if (contributions > 0) nextExtra.builder = true;
+
+  try {
+    await getDb().update(signups).set({ extra: nextExtra }).where(eq(signups.id, target.id));
+    return { ok: true, status: builderStatusOf(nextExtra) };
+  } catch (err) {
+    console.error("refreshBuilderStatus failed:", err);
+    return { ok: false };
+  }
+}
+
+// Manually set (or clear) the builder override for a family member. Same
+// family-scoped authorization as refreshBuilderStatus. Read-modify-write merge so
+// other extra keys survive. Returns the resulting effective status.
+export async function setBuilderManual(
+  targetSignupId: string,
+  on: boolean,
+): Promise<{ ok: boolean; status?: BuilderStatus }> {
+  const target = await authorizedTarget(targetSignupId);
+  if (!target) return { ok: false };
+
+  const nextExtra: Record<string, unknown> = {
+    ...target.extra,
+    builderManual: on === true,
+  };
+
+  try {
+    await getDb().update(signups).set({ extra: nextExtra }).where(eq(signups.id, target.id));
+    return { ok: true, status: builderStatusOf(nextExtra) };
+  } catch (err) {
+    console.error("setBuilderManual failed:", err);
     return { ok: false };
   }
 }

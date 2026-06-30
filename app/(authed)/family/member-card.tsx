@@ -11,11 +11,138 @@ import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import { TagPicker } from "@/app/signup/thanks/family-form";
 import type { SignupPatch } from "@/app/signup/actions";
-import { patchFamilyMember } from "./actions";
+import { builderStatusOf } from "@/lib/builder";
+import { IconCode, IconSparkles } from "@/components/icons";
+import { patchFamilyMember, refreshBuilderStatus, setBuilderManual } from "./actions";
 
 const labelCls = "block text-sm font-medium text-white/80";
 const inputCls =
   "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40";
+
+// "Builder status" block. The GitHub username is edited in the field above; this
+// block lets a family member (a) run a commit check against the Pixel Parents
+// repo (auto-sets the Builder tag when commits are found) and (b) manually toggle
+// the Builder tag. Both calls are family-scoped server actions. State is local +
+// optimistic; the underlying truth lives in the member's `extra` jsonb.
+function BuilderStatusBlock({
+  memberId,
+  initialExtra,
+  hasGithub,
+}: {
+  memberId: string;
+  initialExtra: Record<string, unknown>;
+  hasGithub: boolean;
+}) {
+  const init = builderStatusOf(initialExtra);
+  const [isBuilder, setIsBuilder] = useState(init.isBuilder);
+  const [contributions, setContributions] = useState(init.contributions);
+  const [manual, setManual] = useState(initialExtra.builderManual === true);
+  const [checking, setChecking] = useState(false);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const onCheck = useCallback(async () => {
+    setChecking(true);
+    setMsg(null);
+    try {
+      const r = await refreshBuilderStatus(memberId);
+      if (r.ok && r.status) {
+        setIsBuilder(r.status.isBuilder);
+        setContributions(r.status.contributions);
+        setMsg(
+          r.status.contributions > 0
+            ? `Found ${r.status.contributions} contribution${
+                r.status.contributions === 1 ? "" : "s"
+              }.`
+            : "No contributions found yet.",
+        );
+      } else {
+        setMsg("Couldn’t check right now — try again.");
+      }
+    } catch {
+      setMsg("Couldn’t check right now — try again.");
+    } finally {
+      setChecking(false);
+    }
+  }, [memberId]);
+
+  const onToggleManual = useCallback(
+    async (next: boolean) => {
+      // Optimistic; revert on failure.
+      const prevManual = manual;
+      const prevBuilder = isBuilder;
+      setManual(next);
+      setIsBuilder(next || contributions > 0);
+      setMsg(null);
+      try {
+        const r = await setBuilderManual(memberId, next);
+        if (r.ok && r.status) {
+          setIsBuilder(r.status.isBuilder);
+          setContributions(r.status.contributions);
+        } else {
+          setManual(prevManual);
+          setIsBuilder(prevBuilder);
+          setMsg("Couldn’t save — try again.");
+        }
+      } catch {
+        setManual(prevManual);
+        setIsBuilder(prevBuilder);
+        setMsg("Couldn’t save — try again.");
+      }
+    },
+    [manual, isBuilder, contributions, memberId],
+  );
+
+  return (
+    <div className="rounded-xl border border-white/10 bg-white/[0.02] p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <IconCode className="h-4 w-4 text-amber-400" strokeWidth={2} />
+          <span className="text-sm font-medium text-white/80">Builder status</span>
+          {isBuilder && (
+            <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
+              <IconSparkles className="h-3 w-3" />
+              Builder
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={onCheck}
+          disabled={checking || !hasGithub}
+          className="rounded-lg border border-white/15 bg-white/5 px-3 py-1.5 text-sm text-white/80 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          {checking ? "Checking…" : "Check GitHub contributions"}
+        </button>
+      </div>
+
+      <p className="mt-2 text-sm text-white/55">
+        {contributions > 0
+          ? `${contributions} contribution${
+              contributions === 1 ? "" : "s"
+            } to Pixel Parents.`
+          : "No contributions counted yet."}
+      </p>
+
+      {!hasGithub && (
+        <p className="mt-1 text-xs text-white/40">
+          Add a GitHub username above to check contributions.
+        </p>
+      )}
+
+      <label className="mt-3 flex items-center gap-2 text-sm text-white/80">
+        <input
+          type="checkbox"
+          checked={manual}
+          onChange={(e) => onToggleManual(e.target.checked)}
+          className="h-4 w-4 accent-amber-500"
+        />
+        Mark as a Builder manually
+      </label>
+
+      {msg && <p className="mt-2 text-xs text-white/45" aria-live="polite">{msg}</p>}
+    </div>
+  );
+}
 
 // One family member's editable profile card. Used for the caller's own profile
 // AND for each other parent in the family — the SAME secure path either way:
@@ -142,6 +269,13 @@ export function MemberCard({
               className="w-full rounded-r-lg bg-transparent py-2 pr-3 text-white outline-none"
             />
           </div>
+        </div>
+        <div className="sm:col-span-2">
+          <BuilderStatusBlock
+            memberId={member.id}
+            initialExtra={(member.extra ?? {}) as Record<string, unknown>}
+            hasGithub={Boolean(v.githubUsername.trim())}
+          />
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>LinkedIn</label>

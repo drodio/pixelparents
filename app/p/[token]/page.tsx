@@ -7,7 +7,8 @@ import { getSharedProfileByToken, getSignupByEmail } from "@/lib/db/signups";
 import { shareFieldsOrDefault, coerceShareVisibility, canViewProfile } from "@/lib/share";
 import { signedPhotoUrls } from "@/lib/blob";
 import { renderCaption } from "@/lib/mentions";
-import { IconPhone, IconMail } from "@/components/icons";
+import { builderStatusOf } from "@/lib/builder";
+import { IconPhone, IconMail, IconCode } from "@/components/icons";
 import { PhotoCarousel, type CaptionPart } from "./photo-carousel";
 import { VisibilityControl } from "@/components/visibility-control";
 
@@ -110,6 +111,9 @@ export default async function SharedProfilePage({
   const location = [signup.city, signup.state].filter(Boolean).join(", ");
   const interests = signup.parentInterests ?? [];
   const showContact = visible.has("phone") || visible.has("email");
+  // Builder recognition (commit check or manual flag) — community badge, not PII,
+  // so it's shown to anyone who can view this profile regardless of share fields.
+  const builder = builderStatusOf((signup.extra ?? {}) as Record<string, unknown>);
 
   // Family photos + each child's photos, all in one gallery. Child photos are
   // labelled with the child's name only when "children" is also shared (privacy).
@@ -188,6 +192,30 @@ export default async function SharedProfilePage({
         </div>
         {visible.has("location") && location && (
           <p className="mt-1.5 text-white/55">{location}</p>
+        )}
+
+        {builder.isBuilder && (
+          <div className="mt-3">
+            <span
+              className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-sm font-medium text-amber-300"
+              title={
+                builder.contributions > 0
+                  ? `${builder.contributions} contribution${
+                      builder.contributions === 1 ? "" : "s"
+                    } to Pixel Parents`
+                  : "A Pixel Parents builder"
+              }
+            >
+              <IconCode className="h-4 w-4" strokeWidth={2} />
+              Builder
+              {builder.contributions > 0 && (
+                <span className="text-amber-300/70">
+                  · {builder.contributions} contribution
+                  {builder.contributions === 1 ? "" : "s"}
+                </span>
+              )}
+            </span>
+          </div>
         )}
 
         {visible.has("interests") && interests.length > 0 && (
