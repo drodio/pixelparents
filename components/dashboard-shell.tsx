@@ -16,6 +16,7 @@ import {
   IconLock,
   IconHeart,
   IconCalendar,
+  IconBook,
   IconMenu,
   IconX,
 } from "@/components/icons";
@@ -40,6 +41,11 @@ const NAV: NavItem[] = [
   // "Directory" is the consolidated member showcase (grid + map + stats) with
   // in-tab profile views, now served at /directory.
   { href: "/directory", label: "Directory", Icon: IconUsers },
+  // "Resources" is the community "living library": any verified member shares a
+  // link + note worth learning from, auto-labeled with topic tags and browsable
+  // filtered by tag. Placed right after Directory; the surface gates to verified
+  // OHS families (like Community/Directory/Events).
+  { href: "/resources", label: "Resources", Icon: IconBook },
   { href: "/family", label: "Family", Icon: IconHome },
   // Developers now lives INSIDE the shell (no more new-tab jump): signed-in users
   // get the in-dashboard developer hub at /dashboard/developers. The public
