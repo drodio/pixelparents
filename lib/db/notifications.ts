@@ -26,6 +26,7 @@ export const NOTIFICATION_TYPES = [
   "community_connected", // your response was accepted → you're connected
   "community_mention", // you were @-mentioned in a post body or response
   "event_rsvp", // someone RSVP'd to an event you organize
+  "board_contribution", // a new contribution landed on a resource board you follow
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];

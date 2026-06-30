@@ -41,10 +41,11 @@ const NAV: NavItem[] = [
   // "Directory" is the consolidated member showcase (grid + map + stats) with
   // in-tab profile views, now served at /directory.
   { href: "/directory", label: "Directory", Icon: IconUsers },
-  // "Resources" is the community "living library": any verified member shares a
-  // link + note worth learning from, auto-labeled with topic tags and browsable
-  // filtered by tag. Placed right after Directory; the surface gates to verified
-  // OHS families (like Community/Directory/Events).
+  // "Resources" is the community RESOURCE BOARDS: Reddit-like, OHS-only,
+  // permanent, community-curated boards. Any verified member can create a board
+  // and add link/file/text contributions; boards + contributions are upvotable
+  // and auto-labeled with topic tags. Placed right after Directory; the surface
+  // gates to verified OHS families (like Community/Directory/Events).
   { href: "/resources", label: "Resources", Icon: IconBook },
   { href: "/family", label: "Family", Icon: IconHome },
   // Developers now lives INSIDE the shell (no more new-tab jump): signed-in users

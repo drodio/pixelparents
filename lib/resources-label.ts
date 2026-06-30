@@ -24,6 +24,13 @@ export const RESOURCE_TAG_MAX_LEN = 40;
 // The AI is asked for AT LEAST this many, AT MOST RESOURCE_TAGS_MAX.
 export const RESOURCE_TAGS_MIN = 2;
 
+// Board + contribution field limits (the boards model — see lib/db/resources.ts).
+export const BOARD_TITLE_MAX = 120;
+export const BOARD_DESC_MAX = 600;
+// A text contribution's body (markdown-ish) is allowed to be longer than a note.
+export const CONTRIBUTION_TITLE_MAX = 160;
+export const CONTRIBUTION_BODY_MAX = 4000;
+
 export type Ok<T> = { ok: true; value: T };
 export type Err = { ok: false; error: string; field: string };
 export type Result<T> = Ok<T> | Err;
@@ -129,6 +136,126 @@ export function normalizeResourceTags(input: unknown): string[] {
     if (out.length >= RESOURCE_TAGS_MAX) break;
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Board + contribution validators (pure — shared by the server action + tests)
+// ---------------------------------------------------------------------------
+
+// A board needs a title; description is optional context for the board's theme.
+export function validateBoardTitle(input: unknown): Result<string> {
+  const v = cleanLine(input);
+  if (!v) return { ok: false, error: "Give your board a title.", field: "title" };
+  if (v.length > BOARD_TITLE_MAX)
+    return {
+      ok: false,
+      error: `Title must be ${BOARD_TITLE_MAX} characters or fewer.`,
+      field: "title",
+    };
+  return { ok: true, value: v };
+}
+
+export function validateBoardDescription(input: unknown): Result<string> {
+  const v = cleanMultiline(input);
+  if (v.length > BOARD_DESC_MAX)
+    return {
+      ok: false,
+      error: `Please keep the description under ${BOARD_DESC_MAX} characters.`,
+      field: "description",
+    };
+  return { ok: true, value: v };
+}
+
+// The three kinds of contribution a member can add to a board.
+export const CONTRIBUTION_KINDS = ["link", "file", "text"] as const;
+export type ContributionKind = (typeof CONTRIBUTION_KINDS)[number];
+
+export function isContributionKind(v: unknown): v is ContributionKind {
+  return typeof v === "string" && (CONTRIBUTION_KINDS as readonly string[]).includes(v);
+}
+
+export function validateContributionTitle(input: unknown): Result<string> {
+  const v = cleanLine(input);
+  if (!v) return { ok: false, error: "Add a title for this contribution.", field: "title" };
+  if (v.length > CONTRIBUTION_TITLE_MAX)
+    return {
+      ok: false,
+      error: `Title must be ${CONTRIBUTION_TITLE_MAX} characters or fewer.`,
+      field: "title",
+    };
+  return { ok: true, value: v };
+}
+
+// A text contribution's body. Required for kind 'text' (the caller enforces the
+// kind→required mapping); markdown is allowed and rendered safely client-side.
+export function validateContributionBody(input: unknown): Result<string> {
+  const v = cleanMultiline(input);
+  if (v.length > CONTRIBUTION_BODY_MAX)
+    return {
+      ok: false,
+      error: `Please keep this under ${CONTRIBUTION_BODY_MAX} characters.`,
+      field: "body",
+    };
+  return { ok: true, value: v };
+}
+
+// ---------------------------------------------------------------------------
+// Board ranking — Hot / Top / New (pure, deterministic, unit-tested)
+// ---------------------------------------------------------------------------
+
+export type BoardSort = "hot" | "top" | "new";
+
+export function isBoardSort(v: unknown): v is BoardSort {
+  return v === "hot" || v === "top" || v === "new";
+}
+
+// The minimum shape the ranker needs from a board (or any rankable item): an
+// upvote count and a creation time. Activity (contribution count + last activity)
+// optionally feeds the "hot" score so a busy board floats up.
+export type Rankable = {
+  upvotes: number;
+  createdAtMs: number;
+  // Optional signal: when the most recent contribution landed (defaults to
+  // createdAtMs). A board getting fresh contributions stays warm.
+  lastActivityMs?: number;
+  contributionCount?: number;
+};
+
+// A Reddit-style "hot" score: log-dampened vote weight MINUS an age-decay term,
+// so a highly-upvoted board doesn't sit at the top forever and a brand-new board
+// with a little traction can surface. Recency is measured against `nowMs` from
+// the item's last activity. Pure + deterministic given `nowMs`.
+//
+// score = log10(max(|votes|,1)) * sign(votes) - (ageHours / 12)
+//   where votes folds in a small per-contribution activity bonus, and ageHours
+//   is how long since the board's last activity (~one score-point lost per 12h).
+const HOT_DECAY_HOURS = 12;
+export function hotScore(item: Rankable, nowMs: number): number {
+  const votes = item.upvotes + (item.contributionCount ?? 0) * 0.5;
+  const order = Math.log10(Math.max(Math.abs(votes), 1));
+  const sign = votes > 0 ? 1 : votes < 0 ? -1 : 0;
+  const lastActivity = item.lastActivityMs ?? item.createdAtMs;
+  const ageHours = Math.max(nowMs - lastActivity, 0) / (3600 * 1000);
+  return order * sign - ageHours / HOT_DECAY_HOURS;
+}
+
+// Sort a list of rankables by the chosen mode, returning a NEW array (stable,
+// non-mutating). "hot" uses hotScore; "top" is pure upvotes desc; "new" is
+// recency desc. Ties fall back to recency so ordering is deterministic.
+export function sortBoards<T extends Rankable>(
+  items: readonly T[],
+  sort: BoardSort,
+  nowMs: number = Date.now(),
+): T[] {
+  const arr = [...items];
+  if (sort === "new") {
+    arr.sort((a, b) => b.createdAtMs - a.createdAtMs);
+  } else if (sort === "top") {
+    arr.sort((a, b) => b.upvotes - a.upvotes || b.createdAtMs - a.createdAtMs);
+  } else {
+    arr.sort((a, b) => hotScore(b, nowMs) - hotScore(a, nowMs) || b.createdAtMs - a.createdAtMs);
+  }
+  return arr;
 }
 
 // ---------------------------------------------------------------------------
@@ -318,4 +445,18 @@ export async function autoLabelResource(
     return normalizeResourceTags([...aiTags, ...fallback]);
   }
   return aiTags;
+}
+
+// Auto-label a BOARD (title + description) the same way we label a single
+// resource — a board is a themed collection, so the same topic vocabulary
+// applies. We reuse autoLabelResource by mapping the board's description into the
+// "note" slot. NEVER throws / never blocks board creation (same guarantees).
+export function autoLabelBoard(
+  board: { title: string; description?: string | null },
+  model: ModelCall = callModel,
+): Promise<string[]> {
+  return autoLabelResource(
+    { title: board.title, note: board.description ?? null, url: null },
+    model,
+  );
 }

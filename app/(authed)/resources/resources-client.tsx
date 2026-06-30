@@ -1,41 +1,39 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { useRouter } from "next/navigation";
+import { useMemo, useState } from "react";
+import Link from "next/link";
+import { motion, useReducedMotion } from "framer-motion";
 import { TagList } from "@/components/tag-list";
-import { IconX, IconPlus, IconTrash, IconArrowRight } from "@/components/icons";
 import {
-  RESOURCE_TITLE_MAX,
-  RESOURCE_NOTE_MAX,
-  RESOURCE_TAGS_MAX,
-  filterByTag,
-} from "@/lib/resources-label";
-import { createResourceAction, deleteResourceAction } from "./actions";
+  IconPlus,
+  IconFlame,
+  IconStar,
+  IconClock,
+  IconPin,
+  IconArrowRight,
+  IconBook,
+} from "@/components/icons";
+import { sortBoards, type BoardSort, filterByTag } from "@/lib/resources-label";
+import { UpvoteButton } from "./upvote-button";
+import { toggleBoardUpvoteAction } from "./actions";
 
-export type ResourceCard = {
+export type BoardCard = {
   id: string;
   title: string;
-  url: string;
-  note: string | null;
+  description: string | null;
   tags: string[];
+  pinned: boolean;
+  contributionCount: number;
+  upvotes: number;
+  viewerUpvoted: boolean;
   createdAt: string; // ISO
+  lastActivityAt: string; // ISO
   authorName: string;
   isStudent: boolean;
   isMine: boolean;
 };
 
-const controlCls =
-  "w-full rounded-md border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-amber-400/50";
-
-// Derive the display host for a link (drops "www."). Defensive: a malformed URL
-// shouldn't crash the list (the server already validated http(s), but be safe).
-function hostOf(url: string): string {
-  try {
-    return new URL(url).hostname.replace(/^www\./, "");
-  } catch {
-    return url;
-  }
-}
+const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
 function relativeDate(iso: string): string {
   const d = new Date(iso);
@@ -43,53 +41,114 @@ function relativeDate(iso: string): string {
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" });
 }
 
-// The full Resources surface: a "share a resource" form, a tag-filter chip strip,
-// and the newest-first browsable list. Tag filtering is client-side over the
-// already-loaded list (the library is small); each card shows the author's
-// coarsened name + an at-a-glance tag set via the shared <TagList>.
-export function ResourcesClient({
-  resources,
+const SORTS: Array<{ key: BoardSort; label: string; Icon: typeof IconFlame }> = [
+  { key: "hot", label: "Hot", Icon: IconFlame },
+  { key: "top", label: "Top", Icon: IconStar },
+  { key: "new", label: "New", Icon: IconClock },
+];
+
+// The boards INDEX: a sort switcher (Hot / Top / New), a "Create board" CTA, a
+// topic-tag filter strip (reuses <TagList>), an optional "trending this week"
+// strip, and the board cards. Sorting + filtering happen client-side over the
+// already-loaded list via the SHARED pure ranker (lib/resources-label), so the
+// UI and the tests agree on ordering.
+export function BoardsClient({
+  boards,
   tagCounts,
 }: {
-  resources: ResourceCard[];
+  boards: BoardCard[];
   tagCounts: Array<{ tag: string; count: number }>;
 }) {
-  const router = useRouter();
-  const [showForm, setShowForm] = useState(false);
+  const [sort, setSort] = useState<BoardSort>("hot");
   const [activeTag, setActiveTag] = useState<string | null>(null);
+  const reduce = useReducedMotion();
 
-  const filtered = useMemo(
-    () => filterByTag(resources, activeTag),
-    [resources, activeTag],
-  );
+  // "now" is captured ONCE via a lazy initializer (runs a single time, outside
+  // the render path) and used as the stable clock for hot-ranking + the trending
+  // window. Re-reading Date.now() every render would be impure and could reorder
+  // cards mid-interaction.
+  const [now] = useState<number>(() => Date.now());
+
+  const filtered = useMemo(() => filterByTag(boards, activeTag), [boards, activeTag]);
+
+  const ranked = useMemo(() => {
+    const rankable = filtered.map((b) => ({
+      ...b,
+      createdAtMs: new Date(b.createdAt).getTime(),
+      lastActivityMs: new Date(b.lastActivityAt).getTime(),
+    }));
+    return sortBoards(rankable, sort, now);
+  }, [filtered, sort, now]);
+
+  // "Trending this week": boards active in the last 7 days, by upvotes.
+  const trending = useMemo(() => {
+    return [...boards]
+      .filter((b) => now - new Date(b.lastActivityAt).getTime() < WEEK_MS && b.upvotes > 0)
+      .sort((a, b) => b.upvotes - a.upvotes)
+      .slice(0, 4);
+  }, [boards, now]);
 
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <p className="text-sm text-white/50">
-          {resources.length} {resources.length === 1 ? "resource" : "resources"} shared by the
-          community
+          {boards.length} {boards.length === 1 ? "board" : "boards"} · curated by the OHS community
         </p>
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
+        <Link
+          href="/resources/new"
           className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
         >
-          {showForm ? <IconX className="h-4 w-4" /> : <IconPlus className="h-4 w-4" />}
-          {showForm ? "Close" : "Share a resource"}
-        </button>
+          <IconPlus className="h-4 w-4" />
+          Create board
+        </Link>
       </div>
 
-      {showForm && (
-        <ShareForm
-          onDone={() => {
-            setShowForm(false);
-            router.refresh();
-          }}
-        />
+      {/* Trending this week strip — only when there's something warm to show. */}
+      {trending.length > 0 && (
+        <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-4">
+          <div className="mb-3 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-amber-200/80">
+            <IconFlame className="h-4 w-4" />
+            Trending this week
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {trending.map((b) => (
+              <Link
+                key={b.id}
+                href={`/resources/${b.id}`}
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1.5 text-xs text-white/80 transition-colors hover:border-amber-400/40 hover:text-white"
+              >
+                <span className="font-medium">{b.title}</span>
+                <span className="text-amber-200/80">▲ {b.upvotes}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
       )}
 
-      {/* Tag filter chip strip — reuses the shared <TagList> "+N more" collapse. */}
+      {/* Sort switcher. */}
+      <div className="flex items-center gap-2">
+        {SORTS.map(({ key, label, Icon }) => {
+          const active = sort === key;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setSort(key)}
+              aria-pressed={active}
+              className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                active
+                  ? "border-amber-400/60 bg-amber-400/15 text-amber-200"
+                  : "border-white/15 bg-white/[0.04] text-white/60 hover:bg-white/10 hover:text-white/80"
+              }`}
+            >
+              <Icon className="h-4 w-4" />
+              {label}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Topic filter chip strip — reuses the shared <TagList> "+N more" collapse. */}
       {tagCounts.length > 0 && (
         <div className="flex flex-wrap items-center gap-2">
           <span className="text-xs font-medium text-white/40">Filter by topic:</span>
@@ -132,31 +191,29 @@ export function ResourcesClient({
         </div>
       )}
 
-      {/* The browsable list, newest-first (already ordered by the server). */}
-      {filtered.length === 0 ? (
+      {/* Board cards. */}
+      {ranked.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
-          {resources.length === 0 ? (
+          {boards.length === 0 ? (
             <>
-              <p className="text-white/60">No resources shared yet.</p>
-              <button
-                type="button"
-                onClick={() => setShowForm(true)}
+              <p className="text-white/60">No boards yet — be the first to start one.</p>
+              <Link
+                href="/resources/new"
                 className="mt-4 inline-flex items-center gap-1.5 text-sm font-medium text-amber-300 hover:text-amber-200"
               >
-                Be the first to share <IconArrowRight className="h-4 w-4" />
-              </button>
+                Create the first board <IconArrowRight className="h-4 w-4" />
+              </Link>
             </>
           ) : (
             <p className="text-white/60">
-              No resources tagged{" "}
-              <span className="text-amber-200">{activeTag}</span> yet.
+              No boards tagged <span className="text-amber-200">{activeTag}</span> yet.
             </p>
           )}
         </div>
       ) : (
-        <ul className="flex flex-col gap-3">
-          {filtered.map((r) => (
-            <ResourceListItem key={r.id} resource={r} onDeleted={() => router.refresh()} />
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {ranked.map((b, i) => (
+            <BoardCardItem key={b.id} board={b} index={i} reduce={Boolean(reduce)} />
           ))}
         </ul>
       )}
@@ -164,165 +221,83 @@ export function ResourcesClient({
   );
 }
 
-function ResourceListItem({
-  resource,
-  onDeleted,
+function BoardCardItem({
+  board,
+  index,
+  reduce,
 }: {
-  resource: ResourceCard;
-  onDeleted: () => void;
+  board: BoardCard;
+  index: number;
+  reduce: boolean;
 }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  const remove = () => {
-    if (!confirm("Remove this resource from the library?")) return;
-    setError(null);
-    startTransition(async () => {
-      const res = await deleteResourceAction({ id: resource.id });
-      if (res.ok) onDeleted();
-      else setError(res.error);
-    });
-  };
-
   return (
-    <li className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-white/20">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <a
-            href={resource.url}
-            target="_blank"
-            rel="noopener noreferrer nofollow"
-            className="text-base font-semibold text-white hover:text-amber-200"
-          >
-            {resource.title}
-          </a>
-          <p className="mt-0.5 truncate text-xs text-white/40">{hostOf(resource.url)}</p>
-        </div>
-        {resource.isMine && (
-          <button
-            type="button"
-            onClick={remove}
-            disabled={pending}
-            aria-label="Remove this resource"
-            title="Remove this resource"
-            className="shrink-0 rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/5 hover:text-red-300 disabled:opacity-50"
-          >
-            <IconTrash className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-
-      {resource.note && (
-        <p className="mt-2 whitespace-pre-line text-sm text-white/65">{resource.note}</p>
-      )}
-
-      {resource.tags.length > 0 && (
-        <div className="mt-3">
-          <TagList tags={resource.tags} max={RESOURCE_TAGS_MAX} />
-        </div>
-      )}
-
-      <p className="mt-3 text-xs text-white/40">
-        Shared by <span className="text-white/60">{resource.authorName}</span>
-        {resource.isStudent && <span className="text-white/40"> (student)</span>}
-        {" · "}
-        {relativeDate(resource.createdAt)}
-      </p>
-
-      {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
-    </li>
-  );
-}
-
-// The "share a resource" form: title, URL, short note. Tags are auto-generated
-// server-side on submit (no tag input here — the library auto-labels). The author
-// may optionally add hint tags, but to keep the form simple we don't expose that
-// in v1; the AI/heuristic labeler handles it.
-function ShareForm({ onDone }: { onDone: () => void }) {
-  const [title, setTitle] = useState("");
-  const [url, setUrl] = useState("");
-  const [note, setNote] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [pending, startTransition] = useTransition();
-
-  const submit = () => {
-    setError(null);
-    startTransition(async () => {
-      const res = await createResourceAction({ title, url, note, tags: [] });
-      if (res.ok) {
-        setTitle("");
-        setUrl("");
-        setNote("");
-        onDone();
-      } else {
-        setError(res.error);
-      }
-    });
-  };
-
-  return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        submit();
-      }}
-      className="flex flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5"
+    <motion.li
+      initial={reduce ? false : { opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, delay: reduce ? 0 : Math.min(index * 0.03, 0.2) }}
+      className="group relative flex flex-col rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-amber-400/30"
     >
-      <div>
-        <h2 className="text-lg font-semibold">Share a resource</h2>
-        <p className="mt-1 text-sm text-white/50">
-          Add a link the community should learn from — we&apos;ll auto-label it with topic tags.
-        </p>
+      <Link href={`/resources/${board.id}`} className="absolute inset-0 z-0" aria-label={board.title}>
+        <span className="sr-only">{board.title}</span>
+      </Link>
+
+      <div className="relative z-10 flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            {board.pinned && (
+              <span
+                className="inline-flex items-center gap-1 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-amber-200"
+                title="Pinned board"
+              >
+                <IconPin className="h-3 w-3" />
+                Pinned
+              </span>
+            )}
+          </div>
+          <h3 className="mt-1 truncate text-base font-semibold text-white group-hover:text-amber-200">
+            {board.title}
+          </h3>
+        </div>
+        {/* Upvote sits above the overlay link so clicking it doesn't navigate. */}
+        <div className="relative z-10 shrink-0">
+          <UpvoteButton
+            initialCount={board.upvotes}
+            initialUpvoted={board.viewerUpvoted}
+            onToggle={() => toggleBoardUpvoteAction({ boardId: board.id })}
+            size="sm"
+            label="board upvote"
+          />
+        </div>
       </div>
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-white/80">Title</span>
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          maxLength={RESOURCE_TITLE_MAX}
-          placeholder="e.g. Khan Academy — AP Calculus BC"
-          className={controlCls}
-        />
-      </label>
+      {board.description && (
+        <p className="relative z-10 mt-1.5 line-clamp-2 text-sm text-white/60">{board.description}</p>
+      )}
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-white/80">Link</span>
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          inputMode="url"
-          placeholder="https://…"
-          className={controlCls}
-        />
-      </label>
+      {board.tags.length > 0 && (
+        <div className="relative z-10 mt-3">
+          <TagList tags={board.tags} max={4} />
+        </div>
+      )}
 
-      <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-white/80">
-          Why it&apos;s worth it <span className="font-normal text-white/45">(optional)</span>
+      <div className="relative z-10 mt-3 flex items-center gap-3 text-xs text-white/40">
+        <span className="inline-flex items-center gap-1">
+          <IconBook className="h-3.5 w-3.5" />
+          {board.contributionCount} {board.contributionCount === 1 ? "item" : "items"}
         </span>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          maxLength={RESOURCE_NOTE_MAX}
-          rows={3}
-          placeholder="A sentence or two on what students/parents will get out of it."
-          className={controlCls}
-        />
-      </label>
-
-      {error && <p className="text-sm text-red-300">{error}</p>}
-
-      <div className="flex items-center gap-3">
-        <button
-          type="submit"
-          disabled={pending}
-          className="rounded-full bg-amber-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:opacity-50"
-        >
-          {pending ? "Sharing…" : "Share resource"}
-        </button>
-        <span className="text-xs text-white/40">Topic tags are added automatically.</span>
+        <span aria-hidden>·</span>
+        <span className="truncate">
+          {board.authorName}
+          {board.isStudent && " (student)"}
+        </span>
+        <span aria-hidden>·</span>
+        <span className="shrink-0">{relativeDate(board.createdAt)}</span>
       </div>
-    </form>
+
+      {/* The card invites navigation; this arrow nudges it without competing. */}
+      <span className="pointer-events-none absolute bottom-4 right-4 z-10 text-white/0 transition-colors group-hover:text-amber-300">
+        <IconArrowRight className="h-4 w-4" />
+      </span>
+    </motion.li>
   );
 }

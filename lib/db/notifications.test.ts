@@ -26,6 +26,7 @@ describe("isNotificationType", () => {
       "community_connected",
       "community_mention",
       "event_rsvp",
+      "board_contribution",
     ]);
   });
 

@@ -6,36 +6,50 @@ import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { isFamilyVerified } from "@/lib/directory";
 import type { SignupRow } from "@/lib/db/schema/signups";
+import { createNotification } from "@/lib/db/notifications";
 import {
-  createResource,
-  deleteResource,
-  countResourcesByAuthorSince,
+  createBoard,
+  deleteBoard,
+  countBoardsByAuthorSince,
+  createContribution,
+  deleteContribution,
+  getContributionBoardId,
+  countContributionsByAuthorSince,
+  toggleBoardUpvote,
+  toggleContributionUpvote,
+  toggleBoardFollow,
+  listBoardFollowerIds,
+  getBoard,
 } from "@/lib/db/resources";
 import {
-  validateResourceTitle,
+  validateBoardTitle,
+  validateBoardDescription,
+  validateContributionTitle,
+  validateContributionBody,
   validateResourceUrl,
-  validateResourceNote,
   normalizeResourceTags,
-  autoLabelResource,
+  isContributionKind,
+  autoLabelBoard,
+  type ContributionKind,
 } from "@/lib/resources-label";
 
-// Server actions for the OHS "Resources" living library. Every action authorizes
-// ENTIRELY server-side from the Clerk session (never a client-supplied identity),
-// and every actor must be a VERIFIED OHS family. Anyone verified (parent OR
-// student) can share a resource; only the author can delete their own. Inputs are
-// validated/sanitized; auto-labeling NEVER blocks a submission.
+// Server actions for the OHS "Resource Boards" — a Reddit-like, OHS-only,
+// permanent, community-curated library. Every action authorizes ENTIRELY
+// server-side from the Clerk session (never a client-supplied identity), and
+// every actor must be a VERIFIED OHS family. Anyone verified (parent OR student)
+// can create a board, contribute, upvote, and follow; only the author can delete
+// their own board/contribution. Inputs are validated/sanitized; auto-labeling
+// NEVER blocks board creation.
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Per-author submission rate limit: at most N new resources in a rolling window.
-const RESOURCE_RATE_LIMIT = 10;
-const RESOURCE_RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+// Per-author rate limits over a rolling window.
+const BOARD_RATE_LIMIT = 8;
+const CONTRIBUTION_RATE_LIMIT = 25;
+const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
 
-// Resolve the signed-in caller to their VERIFIED OHS family signup, or null. The
-// identity is derived from the Clerk session (currentUser → primaryEmail); a
-// client can never supply it. Mirrors community/actions.ts.
 async function verifiedCaller(): Promise<{ user: SignupRow; clerkId: string } | null> {
   const user = await currentUser();
   if (!user) return null;
@@ -47,79 +61,243 @@ async function verifiedCaller(): Promise<{ user: SignupRow; clerkId: string } | 
   return { user: signup, clerkId: user.id };
 }
 
-// Share a resource. Caller must be a verified OHS family. Title + URL required;
-// note optional. Topic tags are auto-generated server-side (the author's own
-// hint tags are merged in, then capped) — and auto-labeling can NEVER block the
-// submission (it falls back to heuristic tags on any AI failure / missing key).
-export async function createResourceAction(input: {
+// -------------------------------------------------------------------------
+// Boards
+// -------------------------------------------------------------------------
+
+// Create a board. Title required; description optional. Topic tags are
+// auto-generated server-side (the author's hint tags merged in, then capped);
+// auto-labeling can NEVER block creation (heuristic fallback on any AI failure).
+export async function createBoardAction(input: {
   title: string;
-  url: string;
-  note: string;
-  // Optional author-supplied hint tags merged with the AI/heuristic tags.
+  description: string;
   tags?: string[];
 }): Promise<ActionResult> {
   const caller = await verifiedCaller();
-  if (!caller) return { ok: false, error: "You must be a verified OHS member to share a resource." };
+  if (!caller) return { ok: false, error: "You must be a verified OHS member to create a board." };
 
-  const title = validateResourceTitle(input.title);
+  const title = validateBoardTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
-  const url = validateResourceUrl(input.url);
-  if (!url.ok) return { ok: false, error: url.error };
-  const note = validateResourceNote(input.note);
-  if (!note.ok) return { ok: false, error: note.error };
+  const description = validateBoardDescription(input.description);
+  if (!description.ok) return { ok: false, error: description.error };
 
-  // Rate limit: count this author's submissions in the rolling window.
-  const recent = await countResourcesByAuthorSince(
-    caller.user.id,
-    Date.now() - RESOURCE_RATE_WINDOW_MS,
-  );
-  if (recent >= RESOURCE_RATE_LIMIT) {
-    return { ok: false, error: "You've shared a lot recently — please try again later." };
+  const recent = await countBoardsByAuthorSince(caller.user.id, Date.now() - RATE_WINDOW_MS);
+  if (recent >= BOARD_RATE_LIMIT) {
+    return { ok: false, error: "You've created a lot of boards recently — please try again later." };
   }
 
-  // Auto-label. Best-effort by design: autoLabelResource never throws and always
-  // returns at least one tag, so a missing/failed AI key never blocks a share.
   let tags: string[] = [];
   try {
-    tags = await autoLabelResource({ title: title.value, note: note.value, url: url.value });
+    tags = await autoLabelBoard({ title: title.value, description: description.value });
   } catch {
     tags = [];
   }
-  // Merge any author-supplied hint tags, then sanitize + cap.
   const merged = normalizeResourceTags([...(input.tags ?? []), ...tags]);
 
   try {
-    const row = await createResource({
+    const row = await createBoard({
       authorSignupId: caller.user.id,
       authorClerkId: caller.clerkId,
       title: title.value,
-      url: url.value,
-      note: note.value || null,
+      description: description.value || null,
       tags: merged,
     });
     revalidatePath("/resources");
     return { ok: true, id: row.id };
   } catch (err) {
-    console.error("createResourceAction failed:", err);
-    return { ok: false, error: "Couldn't share this resource. Please try again." };
+    console.error("createBoardAction failed:", err);
+    return { ok: false, error: "Couldn't create this board. Please try again." };
   }
 }
 
-// Delete a resource. ONLY the author may delete — enforced by the scoped WHERE in
-// deleteResource (a resource owned by someone else matches 0 rows → no-op).
-export async function deleteResourceAction(input: { id: string }): Promise<ActionResult> {
-  if (!UUID_RE.test(input.id)) return { ok: false, error: "Unknown resource." };
-
+export async function deleteBoardAction(input: { id: string }): Promise<ActionResult> {
+  if (!UUID_RE.test(input.id)) return { ok: false, error: "Unknown board." };
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS member." };
-
   try {
-    const ok = await deleteResource({ id: input.id, authorSignupId: caller.user.id });
-    if (!ok) return { ok: false, error: "You can only remove resources you shared." };
+    const ok = await deleteBoard({ id: input.id, authorSignupId: caller.user.id });
+    if (!ok) return { ok: false, error: "You can only remove boards you created." };
     revalidatePath("/resources");
     return { ok: true };
   } catch (err) {
-    console.error("deleteResourceAction failed:", err);
-    return { ok: false, error: "Couldn't remove this resource. Please try again." };
+    console.error("deleteBoardAction failed:", err);
+    return { ok: false, error: "Couldn't remove this board. Please try again." };
+  }
+}
+
+// -------------------------------------------------------------------------
+// Contributions
+// -------------------------------------------------------------------------
+
+// Add a contribution to a board. `kind` determines which fields are required:
+//   link → url required; file → filePath+fileName required; text → body required.
+// On success, followers of the board (except the contributor) get notified.
+export async function createContributionAction(input: {
+  boardId: string;
+  kind: ContributionKind | string;
+  title: string;
+  url?: string;
+  filePath?: string;
+  fileName?: string;
+  body?: string;
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.boardId)) return { ok: false, error: "Unknown board." };
+  if (!isContributionKind(input.kind)) return { ok: false, error: "Pick a contribution type." };
+
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member to contribute." };
+
+  const title = validateContributionTitle(input.title);
+  if (!title.ok) return { ok: false, error: title.error };
+
+  // Per-kind required fields.
+  let url: string | null = null;
+  let filePath: string | null = null;
+  let fileName: string | null = null;
+  let body: string | null = null;
+
+  if (input.kind === "link") {
+    const u = validateResourceUrl(input.url);
+    if (!u.ok) return { ok: false, error: u.error };
+    url = u.value;
+  } else if (input.kind === "file") {
+    // The file was uploaded client-side via /api/blob/upload; we store the
+    // returned path + display name. Both must be present.
+    const p = typeof input.filePath === "string" ? input.filePath.trim() : "";
+    const n = typeof input.fileName === "string" ? input.fileName.trim().slice(0, 200) : "";
+    if (!p || !n) return { ok: false, error: "Upload a file first." };
+    // Defense in depth: only accept the app's own blob host as a file path.
+    try {
+      const parsed = new URL(p);
+      if (parsed.protocol !== "https:" || !/\.public\.blob\.vercel-storage\.com$/.test(parsed.hostname)) {
+        return { ok: false, error: "That file couldn't be verified." };
+      }
+    } catch {
+      return { ok: false, error: "That file couldn't be verified." };
+    }
+    filePath = p;
+    fileName = n;
+  } else {
+    const b = validateContributionBody(input.body);
+    if (!b.ok) return { ok: false, error: b.error };
+    if (!b.value) return { ok: false, error: "Add some text for this contribution." };
+    body = b.value;
+  }
+
+  const recent = await countContributionsByAuthorSince(caller.user.id, Date.now() - RATE_WINDOW_MS);
+  if (recent >= CONTRIBUTION_RATE_LIMIT) {
+    return { ok: false, error: "You've contributed a lot recently — please try again later." };
+  }
+
+  try {
+    const row = await createContribution({
+      boardId: input.boardId,
+      authorSignupId: caller.user.id,
+      authorClerkId: caller.clerkId,
+      kind: input.kind,
+      title: title.value,
+      url,
+      filePath,
+      fileName,
+      body,
+    });
+
+    // Notify followers (best-effort, never blocks the contribution).
+    try {
+      const board = await getBoard({ id: input.boardId, viewerSignupId: caller.user.id });
+      const followers = await listBoardFollowerIds({
+        boardId: input.boardId,
+        excludeSignupId: caller.user.id,
+      });
+      const boardTitle = board?.title ?? "a board";
+      await Promise.all(
+        followers.map((recipientSignupId) =>
+          createNotification({
+            recipientSignupId,
+            type: "board_contribution",
+            title: `New contribution in “${boardTitle}”`,
+            body: title.value,
+            link: `/resources/${input.boardId}`,
+          }),
+        ),
+      );
+    } catch (err) {
+      console.error("board_contribution notifications failed:", err);
+    }
+
+    revalidatePath(`/resources/${input.boardId}`);
+    revalidatePath("/resources");
+    return { ok: true, id: row.id };
+  } catch (err) {
+    console.error("createContributionAction failed:", err);
+    return { ok: false, error: "Couldn't add this contribution. Please try again." };
+  }
+}
+
+export async function deleteContributionAction(input: { id: string }): Promise<ActionResult> {
+  if (!UUID_RE.test(input.id)) return { ok: false, error: "Unknown contribution." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+  try {
+    const boardId = await getContributionBoardId(input.id);
+    const ok = await deleteContribution({ id: input.id, authorSignupId: caller.user.id });
+    if (!ok) return { ok: false, error: "You can only remove contributions you added." };
+    if (boardId) revalidatePath(`/resources/${boardId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("deleteContributionAction failed:", err);
+    return { ok: false, error: "Couldn't remove this contribution. Please try again." };
+  }
+}
+
+// -------------------------------------------------------------------------
+// Upvotes + follow (optimistic toggles)
+// -------------------------------------------------------------------------
+
+export async function toggleBoardUpvoteAction(input: {
+  boardId: string;
+}): Promise<{ ok: true; upvoted: boolean; count: number } | { ok: false; error: string }> {
+  if (!UUID_RE.test(input.boardId)) return { ok: false, error: "Unknown board." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+  try {
+    const res = await toggleBoardUpvote({ boardId: input.boardId, signupId: caller.user.id });
+    return { ok: true, ...res };
+  } catch (err) {
+    console.error("toggleBoardUpvoteAction failed:", err);
+    return { ok: false, error: "Couldn't record your vote. Please try again." };
+  }
+}
+
+export async function toggleContributionUpvoteAction(input: {
+  contributionId: string;
+}): Promise<{ ok: true; upvoted: boolean; count: number } | { ok: false; error: string }> {
+  if (!UUID_RE.test(input.contributionId)) return { ok: false, error: "Unknown contribution." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+  try {
+    const res = await toggleContributionUpvote({
+      contributionId: input.contributionId,
+      signupId: caller.user.id,
+    });
+    return { ok: true, ...res };
+  } catch (err) {
+    console.error("toggleContributionUpvoteAction failed:", err);
+    return { ok: false, error: "Couldn't record your vote. Please try again." };
+  }
+}
+
+export async function toggleBoardFollowAction(input: {
+  boardId: string;
+}): Promise<{ ok: true; following: boolean } | { ok: false; error: string }> {
+  if (!UUID_RE.test(input.boardId)) return { ok: false, error: "Unknown board." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+  try {
+    const res = await toggleBoardFollow({ boardId: input.boardId, signupId: caller.user.id });
+    return { ok: true, ...res };
+  } catch (err) {
+    console.error("toggleBoardFollowAction failed:", err);
+    return { ok: false, error: "Couldn't update follow. Please try again." };
   }
 }

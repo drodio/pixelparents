@@ -6,11 +6,25 @@ import {
   normalizeResourceTags,
   heuristicTags,
   autoLabelResource,
+  autoLabelBoard,
   filterByTag,
+  validateBoardTitle,
+  validateBoardDescription,
+  validateContributionTitle,
+  validateContributionBody,
+  isContributionKind,
+  isBoardSort,
+  hotScore,
+  sortBoards,
   RESOURCE_TITLE_MAX,
   RESOURCE_NOTE_MAX,
   RESOURCE_TAGS_MAX,
   RESOURCE_TAGS_MIN,
+  BOARD_TITLE_MAX,
+  BOARD_DESC_MAX,
+  CONTRIBUTION_TITLE_MAX,
+  CONTRIBUTION_BODY_MAX,
+  type Rankable,
 } from "@/lib/resources-label";
 
 // ---------------------------------------------------------------------------
@@ -251,5 +265,177 @@ describe("filterByTag", () => {
     const copy = [...items];
     filterByTag(items, "math");
     expect(items).toEqual(copy);
+  });
+});
+
+// ===========================================================================
+// BOARDS MODEL — validators, kind guard, ranking, board auto-label.
+// ===========================================================================
+
+describe("validateBoardTitle", () => {
+  it("rejects empty / whitespace", () => {
+    expect(validateBoardTitle("   ").ok).toBe(false);
+    expect(validateBoardTitle("").ok).toBe(false);
+  });
+  it("collapses whitespace and trims", () => {
+    const r = validateBoardTitle("  AP   Calc  BC ");
+    expect(r.ok && r.value).toBe("AP Calc BC");
+  });
+  it("rejects over the cap", () => {
+    expect(validateBoardTitle("x".repeat(BOARD_TITLE_MAX + 1)).ok).toBe(false);
+    expect(validateBoardTitle("x".repeat(BOARD_TITLE_MAX)).ok).toBe(true);
+  });
+});
+
+describe("validateBoardDescription", () => {
+  it("treats empty as valid (optional)", () => {
+    const r = validateBoardDescription("");
+    expect(r.ok && r.value).toBe("");
+  });
+  it("preserves paragraph breaks", () => {
+    const r = validateBoardDescription("one\n\ntwo");
+    expect(r.ok && r.value).toBe("one\n\ntwo");
+  });
+  it("rejects over the cap", () => {
+    expect(validateBoardDescription("x".repeat(BOARD_DESC_MAX + 1)).ok).toBe(false);
+  });
+});
+
+describe("validateContributionTitle", () => {
+  it("requires a title", () => {
+    expect(validateContributionTitle("").ok).toBe(false);
+  });
+  it("rejects over the cap", () => {
+    expect(validateContributionTitle("x".repeat(CONTRIBUTION_TITLE_MAX + 1)).ok).toBe(false);
+    expect(validateContributionTitle("x".repeat(CONTRIBUTION_TITLE_MAX)).ok).toBe(true);
+  });
+});
+
+describe("validateContributionBody", () => {
+  it("allows empty (the action enforces required-for-text separately)", () => {
+    expect(validateContributionBody("").ok).toBe(true);
+  });
+  it("preserves markdown structure (newlines)", () => {
+    const r = validateContributionBody("# Heading\n\n- a\n- b");
+    expect(r.ok && r.value).toBe("# Heading\n\n- a\n- b");
+  });
+  it("rejects over the cap", () => {
+    expect(validateContributionBody("x".repeat(CONTRIBUTION_BODY_MAX + 1)).ok).toBe(false);
+  });
+});
+
+describe("isContributionKind", () => {
+  it("accepts the three known kinds", () => {
+    expect(isContributionKind("link")).toBe(true);
+    expect(isContributionKind("file")).toBe(true);
+    expect(isContributionKind("text")).toBe(true);
+  });
+  it("rejects anything else", () => {
+    expect(isContributionKind("video")).toBe(false);
+    expect(isContributionKind("")).toBe(false);
+    expect(isContributionKind(42)).toBe(false);
+    expect(isContributionKind(null)).toBe(false);
+  });
+});
+
+describe("isBoardSort", () => {
+  it("accepts hot/top/new only", () => {
+    expect(isBoardSort("hot")).toBe(true);
+    expect(isBoardSort("top")).toBe(true);
+    expect(isBoardSort("new")).toBe(true);
+    expect(isBoardSort("trending")).toBe(false);
+    expect(isBoardSort(null)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Ranking — hotScore + sortBoards (pure, deterministic).
+// ---------------------------------------------------------------------------
+
+const NOW = 1_700_000_000_000; // fixed clock for deterministic ranking tests
+const mk = (over: Partial<Rankable>): Rankable => ({
+  upvotes: 0,
+  createdAtMs: NOW,
+  ...over,
+});
+
+describe("hotScore", () => {
+  it("rewards more upvotes (monotonic in votes at equal time)", () => {
+    const low = hotScore(mk({ upvotes: 2, createdAtMs: NOW, lastActivityMs: NOW }), NOW);
+    const high = hotScore(mk({ upvotes: 50, createdAtMs: NOW, lastActivityMs: NOW }), NOW);
+    expect(high).toBeGreaterThan(low);
+  });
+  it("rewards more recent activity at equal votes", () => {
+    const older = hotScore(mk({ upvotes: 5, lastActivityMs: NOW - 3 * 24 * 3600 * 1000 }), NOW);
+    const newer = hotScore(mk({ upvotes: 5, lastActivityMs: NOW }), NOW);
+    expect(newer).toBeGreaterThan(older);
+  });
+  it("uses log dampening — the vote term grows logarithmically, not linearly", () => {
+    // At equal (zero) age, the score IS the vote term. 100 votes should NOT be
+    // 10x the score of 10 votes — log10 gives 2 vs 1, a 2x gap, far below 10x.
+    const a = hotScore(mk({ upvotes: 10, lastActivityMs: NOW }), NOW);
+    const b = hotScore(mk({ upvotes: 100, lastActivityMs: NOW }), NOW);
+    expect(b).toBeLessThan(a * 10); // sub-linear
+    expect(b).toBeGreaterThan(a); // still monotonic
+  });
+  it("never throws on zero votes", () => {
+    expect(() => hotScore(mk({ upvotes: 0 }), NOW)).not.toThrow();
+  });
+});
+
+describe("sortBoards", () => {
+  const boards: Array<Rankable & { id: string }> = [
+    { id: "old-popular", upvotes: 40, createdAtMs: NOW - 60 * 24 * 3600 * 1000, lastActivityMs: NOW - 60 * 24 * 3600 * 1000 },
+    { id: "new-quiet", upvotes: 1, createdAtMs: NOW - 1 * 3600 * 1000, lastActivityMs: NOW - 1 * 3600 * 1000 },
+    { id: "mid-warm", upvotes: 12, createdAtMs: NOW - 2 * 24 * 3600 * 1000, lastActivityMs: NOW - 1 * 3600 * 1000 },
+  ];
+
+  it("'new' orders by recency desc", () => {
+    const ids = sortBoards(boards, "new", NOW).map((b) => b.id);
+    expect(ids).toEqual(["new-quiet", "mid-warm", "old-popular"]);
+  });
+  it("'top' orders by upvotes desc", () => {
+    const ids = sortBoards(boards, "top", NOW).map((b) => b.id);
+    expect(ids).toEqual(["old-popular", "mid-warm", "new-quiet"]);
+  });
+  it("'hot' blends votes + recency (recent-warm beats stale-popular)", () => {
+    const ids = sortBoards(boards, "hot", NOW).map((b) => b.id);
+    expect(ids[0]).toBe("mid-warm");
+  });
+  it("does not mutate the input array", () => {
+    const copy = [...boards];
+    sortBoards(boards, "hot", NOW);
+    expect(boards).toEqual(copy);
+  });
+  it("is deterministic for ties (falls back to recency)", () => {
+    const tied: Rankable[] = [
+      { upvotes: 5, createdAtMs: NOW - 1000 },
+      { upvotes: 5, createdAtMs: NOW },
+    ];
+    const ids = sortBoards(tied, "top", NOW);
+    expect(ids[0]!.createdAtMs).toBe(NOW); // newer wins the tie
+  });
+});
+
+describe("autoLabelBoard", () => {
+  it("labels a board from its title + description without a key (heuristic)", async () => {
+    delete process.env.VERCEL_AI_GATEWAY;
+    delete process.env.AI_GATEWAY_API_KEY;
+    delete process.env.ANTHROPIC_API_KEY;
+    const tags = await autoLabelBoard({
+      title: "AP Calculus study group",
+      description: "Practice problems and writing tips for the exam",
+    });
+    expect(tags).toContain("math");
+  });
+  it("uses the model when a key is present (mocked)", async () => {
+    process.env.VERCEL_AI_GATEWAY = "test-key";
+    try {
+      const model = async () => '["math", "college-prep"]';
+      const tags = await autoLabelBoard({ title: "Calc", description: null }, model);
+      expect(tags).toEqual(["math", "college-prep"]);
+    } finally {
+      delete process.env.VERCEL_AI_GATEWAY;
+    }
   });
 });

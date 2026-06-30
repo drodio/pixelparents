@@ -314,6 +314,88 @@ export function IconChevronRight(props: IconProps) {
   );
 }
 
+// Upward chevron-over-stem — the board/contribution UPVOTE control.
+export function IconArrowUp(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 19V5" />
+      <path d="M6 11l6-6 6 6" />
+    </Icon>
+  );
+}
+
+// A pushpin — marks a pinned/featured board.
+export function IconPin(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 4h6l-1 6 3 3H7l3-3-1-6z" />
+      <path d="M12 16v4" />
+    </Icon>
+  );
+}
+
+// A chain link — a "link" contribution.
+export function IconLink(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M9 15l6-6" />
+      <path d="M10.5 6.5l1-1a3.5 3.5 0 0 1 5 5l-1 1" />
+      <path d="M13.5 17.5l-1 1a3.5 3.5 0 0 1-5-5l1-1" />
+    </Icon>
+  );
+}
+
+// A document with a folded corner — a "file" contribution.
+export function IconFile(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8l-5-5z" />
+      <path d="M14 3v5h5" />
+    </Icon>
+  );
+}
+
+// Stacked lines — a "text" (markdown) contribution.
+export function IconText(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M5 7h14" />
+      <path d="M5 12h14" />
+      <path d="M5 17h9" />
+    </Icon>
+  );
+}
+
+// A bell — "follow this board / notify me".
+export function IconBell(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6z" />
+      <path d="M10 19a2 2 0 0 0 4 0" />
+    </Icon>
+  );
+}
+
+// A flame — the "Hot" sort / trending strip.
+export function IconFlame(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 3c1 3-1 4-2 6-1 2 0 4 2 4 2 0 3-2 2-4 2 1 3 3 3 5a5 5 0 0 1-10 0c0-4 3-6 5-11z" />
+    </Icon>
+  );
+}
+
+// A download tray — the "download this file" affordance.
+export function IconDownload(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 4v10" />
+      <path d="M8 11l4 4 4-4" />
+      <path d="M5 19h14" />
+    </Icon>
+  );
+}
+
 // "in" mark in a rounded square — a LinkedIn link. Drawn in the house stroke
 // style (currentColor) rather than the brand blue glyph so it matches the set.
 export function IconLinkedin(props: IconProps) {
