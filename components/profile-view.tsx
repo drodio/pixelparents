@@ -22,6 +22,7 @@ import {
   IconLinkedin,
   IconGithub,
   IconGradCap,
+  IconSparkles,
 } from "@/components/icons";
 import { PhotoCarousel, type CaptionPart } from "@/components/photo-carousel";
 import { VisibilityControl } from "@/components/visibility-control";
@@ -217,13 +218,18 @@ export async function ProfileView({
     ? signup.firstName
     : `${signup.firstName} ${signup.lastName ?? ""}`.trim();
 
-  const body = (
+  // Header (name + student badge + location + visibility control). Rendered
+  // inside a banner-overlap wrapper when there's a banner photo, or standalone
+  // when there isn't — see headerBlock / variant rendering below.
+  const nameRow = (
     <>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{displayName}</h1>
+          <h1 className="text-3xl font-semibold tracking-tight drop-shadow-sm sm:text-4xl">
+            {displayName}
+          </h1>
           {isStudent && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs font-medium text-white/75">
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.05] px-2.5 py-1 text-xs font-medium text-white/75 backdrop-blur-sm">
               <IconGradCap className="h-3.5 w-3.5" strokeWidth={2} />
               OHS student
             </span>
@@ -240,9 +246,13 @@ export async function ProfileView({
         />
       </div>
       {visible.has("location") && location && (
-        <p className="mt-1.5 text-white/55">{location}</p>
+        <p className="mt-1.5 text-white/60">{location}</p>
       )}
+    </>
+  );
 
+  const body = (
+    <>
       {builder.isBuilder && (
         <div className="mt-3">
           <span
@@ -320,31 +330,49 @@ export async function ProfileView({
       )}
 
       {/* Curated auto-built profile (shared, owner-controlled). Only bio /
-          expertise / how-they-can-help — never the raw facts or source roster. */}
+          expertise / how-they-can-help — never the raw facts or source roster.
+          Presented in a subtly elevated card with an "auto-built" indicator so
+          the app's most advanced feature reads as such. */}
       {enrichment && (
         <section className="mt-9">
-          <Label>About</Label>
-          {enrichment.bio && <p className="text-white/80">{enrichment.bio}</p>}
-          {enrichment.expertiseTags.length > 0 && (
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-white/35">
-                Areas of expertise
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <Label>About</Label>
+            <span className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-2.5 py-1 text-[11px] font-medium text-amber-200">
+              <IconSparkles className="h-3 w-3" />
+              Auto-built profile
+            </span>
+          </div>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            {enrichment.bio && (
+              <p className="text-[15px] leading-relaxed text-white/80">{enrichment.bio}</p>
+            )}
+            {enrichment.expertiseTags.length > 0 && (
+              <div className={enrichment.bio ? "mt-5" : ""}>
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-white/40">
+                  Areas of expertise
+                </div>
+                <Pills items={enrichment.expertiseTags} />
               </div>
-              <Pills items={enrichment.expertiseTags} />
-            </div>
-          )}
-          {enrichment.canHelpWith.length > 0 && (
-            <div className="mt-4">
-              <div className="mb-2 text-xs font-medium uppercase tracking-wide text-white/35">
-                How they can help
+            )}
+            {enrichment.canHelpWith.length > 0 && (
+              <div className="mt-5">
+                <div className="mb-2 text-xs font-medium uppercase tracking-wide text-white/40">
+                  How they can help
+                </div>
+                <ul className="space-y-1.5 text-[15px] text-white/75">
+                  {enrichment.canHelpWith.map((h) => (
+                    <li key={h} className="flex gap-2">
+                      <span
+                        aria-hidden
+                        className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-amber-400/70"
+                      />
+                      <span>{h}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
-              <ul className="list-disc pl-5 text-[15px] text-white/75">
-                {enrichment.canHelpWith.map((h) => (
-                  <li key={h}>{h}</li>
-                ))}
-              </ul>
-            </div>
-          )}
+            )}
+          </div>
         </section>
       )}
 
@@ -437,14 +465,25 @@ export async function ProfileView({
             ← Directory
           </Link>
         </nav>
-        {bannerUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={bannerUrl}
-            alt=""
-            referrerPolicy="no-referrer"
-            className="mb-6 aspect-[13/5] w-full rounded-2xl object-cover object-top"
-          />
+        {bannerUrl ? (
+          // Banner with a bottom gradient scrim; the name overlaps the banner
+          // for a designed header rather than a stacked photo-then-text flow.
+          <div className="relative mb-6 overflow-hidden rounded-2xl">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={bannerUrl}
+              alt=""
+              referrerPolicy="no-referrer"
+              className="aspect-[13/5] w-full object-cover object-top"
+            />
+            <div
+              aria-hidden
+              className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black/90 via-black/45 to-transparent"
+            />
+            <div className="absolute inset-x-0 bottom-0 p-5 sm:p-6">{nameRow}</div>
+          </div>
+        ) : (
+          <div className="mb-6">{nameRow}</div>
         )}
         {body}
       </div>
@@ -455,13 +494,23 @@ export async function ProfileView({
   return (
     <main className="min-h-dvh bg-black text-white">
       {bannerUrl && (
-        // eslint-disable-next-line @next/next/no-img-element
-        <img
-          src={bannerUrl}
-          alt=""
-          referrerPolicy="no-referrer"
-          className="aspect-[13/5] w-full object-cover object-top"
-        />
+        <div className="relative">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={bannerUrl}
+            alt=""
+            referrerPolicy="no-referrer"
+            className="aspect-[13/5] w-full object-cover object-top"
+          />
+          {/* Scrim so the overlapped name stays legible over any photo. */}
+          <div
+            aria-hidden
+            className="absolute inset-x-0 bottom-0 h-2/3 bg-gradient-to-t from-black via-black/40 to-transparent"
+          />
+          <div className="absolute inset-x-0 bottom-0">
+            <div className="mx-auto w-full max-w-2xl px-6 pb-5 sm:pb-6">{nameRow}</div>
+          </div>
+        </div>
       )}
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         {visibility === "ohs" && (
@@ -472,6 +521,7 @@ export async function ProfileView({
             &gt;
           </nav>
         )}
+        {!bannerUrl && <div className="mb-6">{nameRow}</div>}
         {body}
       </div>
     </main>

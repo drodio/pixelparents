@@ -1,3 +1,36 @@
+## Progress Update as of [June 30, 2026 — 7:07 AM Pacific]
+
+### Summary of changes since last update
+Polished the **Landing** (`app/page.tsx`) and **Profile** (`components/profile-view.tsx`)
+surfaces. Landing: replaced the underlined-link CTA with a real amber pill button
+("Sign up free →" / "Open dashboard →"), tightened the type hierarchy (bolder,
+larger H1; lighter supporting subhead), and added an amber radial brand wash
+behind the grayscale mosaic so the hero pulses in brand color (interest-tiles.tsx
+itself is out of scope, so the tint is applied as a wash from the page). Profile:
+the name now overlaps a scrimmed banner (gradient-to-top scrim, name + student
+badge + location + visibility control sit on the banner) in both the dashboard
+and public variants; the enrichment "About" section is now an elevated card with
+an "Auto-built profile" sparkle chip and amber bullet dots to lean into the
+app's most advanced feature.
+
+### Detail of changes made:
+- `app/page.tsx`: confident H1 ("Join N other Pixel Parents"), supporting subhead
+  keeps the kids/interests counts + IrlTooltip, real amber pill CTA with hover
+  shadow + arrow nudge + focus-visible ring + active press (motion-reduce safe).
+  Footer (report/privacy/terms) and all copy preserved. Added a pointer-events-
+  none amber radial wash div at z-0.
+- `components/profile-view.tsx`: extracted the name/badge/location/visibility into
+  a `nameRow`; both variants overlap it on the banner with a bottom scrim when a
+  banner photo exists, else render it standalone above the body. Enrichment About
+  wrapped in `surface` card + amber "Auto-built profile" chip; "How they can help"
+  uses amber dot bullets. Raised a couple `white/55→white/60` meta-text instances.
+  All privacy gating (canViewProfile, student coarsening, share fields) untouched.
+
+### Potential concerns to address:
+- Public-variant banner overlap relies on an absolutely-positioned name row inside
+  the full-bleed banner; verified types/lint clean. Visual check recommended in the
+  copy-into-main build step.
+
 ## Progress Update as of [June 30, 2026 — 7:05 AM Pacific]
 
 ### Summary of changes since last update

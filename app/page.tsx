@@ -68,6 +68,13 @@ export default async function Home() {
   return (
     <main className="relative flex flex-1 flex-col overflow-hidden bg-black px-6 py-12 text-center">
       <InterestTiles interests={interests} variant="fade" />
+      {/* Amber brand wash behind the mosaic so the background subtly pulses in
+          brand color rather than reading as a flat grayscale field. Pure CSS,
+          pointer-events-none, sits above the (z-0) mosaic but below content. */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[60vh] bg-[radial-gradient(60%_70%_at_50%_-10%,rgba(245,158,11,0.16),transparent_70%)]"
+      />
 
       {isAdmin ? (
         // Signed-in admins get a quick link into the admin area.
@@ -81,34 +88,37 @@ export default async function Home() {
         </Link>
       )}
 
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-6">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-5">
         <PixelMascot widthClass="w-48 max-w-[80vw] sm:w-64" />
-        <h1 className="text-3xl font-semibold tracking-tight text-white sm:text-5xl">
-          <Link
-            href="/signup"
-            className="text-amber-400 underline decoration-amber-400/60 underline-offset-4 transition-colors hover:text-amber-300"
-          >
-            Sign up
-          </Link>{" "}
-          to Join{" "}
+        <h1 className="max-w-3xl text-balance text-4xl font-bold tracking-tight text-white sm:text-6xl">
+          Join{" "}
           <span className="text-amber-400">{count.toLocaleString()}</span> other
           Pixel Parents
         </h1>
-        <h2 className="max-w-prose text-xl font-bold text-white/80 sm:text-2xl">
-          and connect with{" "}
-          <span className="text-amber-400">{kidsCount.toLocaleString()}</span> OHS
-          kids
-          <br />
-          around{" "}
-          <span className="text-amber-400">{interestsCount.toLocaleString()}</span>{" "}
+        <h2 className="max-w-prose text-lg font-medium text-white/70 sm:text-xl">
+          Connect with{" "}
+          <span className="font-semibold text-amber-400">{kidsCount.toLocaleString()}</span>{" "}
+          OHS kids around{" "}
+          <span className="font-semibold text-amber-400">
+            {interestsCount.toLocaleString()}
+          </span>{" "}
           shared interests, <IrlTooltip />
         </h2>
-        {signedIn && (
+        {signedIn ? (
           <Link
             href="/dashboard"
-            className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-6 py-3 text-base font-semibold text-black shadow-sm transition hover:bg-amber-300"
+            className="group mt-1 inline-flex items-center gap-2 rounded-full bg-amber-400 px-7 py-3.5 text-base font-semibold text-black shadow-lg shadow-amber-400/20 transition-all hover:bg-amber-300 hover:shadow-amber-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:scale-[0.98] motion-reduce:transition-none"
           >
-            Open dashboard <IconArrowRight className="h-5 w-5" />
+            Open dashboard
+            <IconArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
+          </Link>
+        ) : (
+          <Link
+            href="/signup"
+            className="group mt-1 inline-flex items-center gap-2 rounded-full bg-amber-400 px-7 py-3.5 text-base font-semibold text-black shadow-lg shadow-amber-400/20 transition-all hover:bg-amber-300 hover:shadow-amber-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:scale-[0.98] motion-reduce:transition-none"
+          >
+            Sign up free
+            <IconArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </Link>
         )}
       </div>
