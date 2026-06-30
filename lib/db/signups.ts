@@ -2,6 +2,15 @@ import { eq, desc, sql } from "drizzle-orm";
 import { getDb, getSql } from "@/lib/db";
 import { signups, children, type SignupRow, type ChildRow } from "@/lib/db/schema/signups";
 import { ensureFamiliesSchema } from "@/lib/db/ensure";
+import { OHS_AFFILIATIONS } from "@/lib/options";
+
+// The two student affiliations from OHS_AFFILIATIONS — current students and
+// alumni. Used to count "students building Pixel Parents". Sliced from the
+// canonical list so the exact strings stay in lockstep with the signup form.
+const STUDENT_AFFILIATIONS: readonly string[] = [
+  OHS_AFFILIATIONS[3], // "Current OHS student (I'm currently enrolled at OHS)"
+  OHS_AFFILIATIONS[4], // "Alumni student (I graduated from OHS)"
+];
 
 // Map a signed-in user's email to their most recent signup (for /account).
 // Emails are stored as typed (not normalized), so match case-insensitively —
@@ -61,6 +70,21 @@ export async function getBuilderCounts(): Promise<{ technical: number; curious: 
     FROM signups
   `) as Array<{ technical: number; curious: number }>;
   return { technical: rows[0]?.technical ?? 0, curious: rows[0]?.curious ?? 0 };
+}
+
+// Number of OHS students (current students + alumni) who have also opted in as
+// builders (extra.builderInterest = 'builder'). Used on the home footer
+// ("…and N students building Pixel Parents"). Mirrors getBuilderCounts: raw
+// getSql with explicit columns, so no ensureFamiliesSchema() SELECT * concern.
+export async function getStudentBuilderCount(): Promise<number> {
+  const sql = getSql();
+  const rows = (await sql`
+    SELECT count(*)::int AS c
+    FROM signups
+    WHERE ohs_affiliation = ANY(${STUDENT_AFFILIATIONS})
+      AND extra->>'builderInterest' = 'builder'
+  `) as Array<{ c: number }>;
+  return rows[0]?.c ?? 0;
 }
 
 // Thanks-page editor: a signup + its children, used to pre-fill the family form

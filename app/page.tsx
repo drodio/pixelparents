@@ -10,6 +10,7 @@ import {
   getChildrenCount,
   getInterestsCount,
   getBuilderCounts,
+  getStudentBuilderCount,
 } from "@/lib/db/signups";
 import { getInterestPool } from "@/lib/interests";
 
@@ -26,20 +27,24 @@ export default async function Home() {
   let interestsCount = 0;
   let interests: string[] = [];
   let builders = { technical: 0, curious: 0 };
+  let studentBuilders = 0;
   try {
-    [count, kidsCount, interestsCount, interests, builders] = await Promise.all([
-      getSignupCount(),
-      getChildrenCount(),
-      getInterestsCount(),
-      getInterestPool(),
-      getBuilderCounts(),
-    ]);
+    [count, kidsCount, interestsCount, interests, builders, studentBuilders] =
+      await Promise.all([
+        getSignupCount(),
+        getChildrenCount(),
+        getInterestsCount(),
+        getInterestPool(),
+        getBuilderCounts(),
+        getStudentBuilderCount(),
+      ]);
   } catch {
     count = 0;
     kidsCount = 0;
     interestsCount = 0;
     interests = [];
     builders = { technical: 0, curious: 0 };
+    studentBuilders = 0;
   }
 
   // Read auth server-side so the public splash never loads Clerk JS. auth() is a
@@ -111,9 +116,28 @@ export default async function Home() {
         Created with{" "}
         <IconHeart className="inline-block h-4 w-4 -translate-y-px text-red-400" title="love" />{" "}
         by <span className="text-amber-400">{builders.technical.toLocaleString()}</span>{" "}
-        technical parents and{" "}
+        technical {builders.technical === 1 ? "parent" : "parents"},{" "}
         <span className="text-amber-400">{builders.curious.toLocaleString()}</span>{" "}
-        non-technical parents learning to become builders.{" "}
+        non-technical {builders.curious === 1 ? "parent" : "parents"} learning to
+        become builders
+        {studentBuilders > 0 && (
+          <>
+            , and{" "}
+            <span className="text-amber-400">
+              {studentBuilders.toLocaleString()}
+            </span>{" "}
+            {studentBuilders === 1 ? "student" : "students"} building Pixel
+            Parents
+          </>
+        )}
+        .{" "}
+        <Link
+          href="/builders#student-builders"
+          className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
+        >
+          Become a student builder
+        </Link>
+        .{" "}
         <Link
           href="/builders"
           className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
