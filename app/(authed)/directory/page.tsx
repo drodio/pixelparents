@@ -2,12 +2,12 @@ import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
-import { desc } from "drizzle-orm";
+import { unstable_cache } from "next/cache";
 import { primaryEmail } from "@/lib/clerk";
-import { getSignupByEmail } from "@/lib/db/signups";
+import { getSignupByEmail, getDirectorySignups } from "@/lib/db/signups";
 import { getStats, getBreakdowns } from "@/lib/db/aggregates";
 import { getDb, hasDatabase } from "@/lib/db";
-import { signups, children, type ChildRow, type SignupRow } from "@/lib/db/schema/signups";
+import { children, type ChildRow, type SignupRow } from "@/lib/db/schema/signups";
 import { isStudentAccount } from "@/lib/family-display";
 import {
   buildDirectoryCard,
@@ -40,6 +40,34 @@ const AMBER = "#fbbf24";
 
 // How many photo thumbnails to entice a click with, per card.
 const MAX_THUMBS = 4;
+
+// The map markers + condensed stats change slowly (they move only when a family
+// joins / updates), yet getStats()/getBreakdowns() are several aggregate queries
+// that ran on EVERY cold render. Cache the unfiltered aggregates for a short
+// window so a cold start serves them from Next's data cache instead of
+// recomputing. Unfiltered only — the filtered API callers (stats/breakdowns
+// routes, MCP) keep calling getStats/getBreakdowns directly and are unaffected.
+// 60s keeps the directory's headline numbers effectively live while removing the
+// per-request aggregate cost. Keyed + tagged so they can be revalidated if needed.
+const AGGREGATES_REVALIDATE_SECONDS = 60;
+
+const getCachedStats = unstable_cache(() => getStats(), ["directory-stats"], {
+  revalidate: AGGREGATES_REVALIDATE_SECONDS,
+  tags: ["directory-aggregates"],
+});
+
+const getCachedBreakdowns = unstable_cache(() => getBreakdowns(), ["directory-breakdowns"], {
+  revalidate: AGGREGATES_REVALIDATE_SECONDS,
+  tags: ["directory-aggregates"],
+});
+
+// Streamed child that resolves the thumbnail-complete card set (its presigns are
+// deferred off the first paint — see CommunityPage). Module-scoped so it isn't
+// recreated per render; it just awaits the caller's already-started Promise, so
+// React can suspend on it behind a hero-only fallback.
+async function ThumbnailedShowcase({ cards }: { cards: Promise<DirectoryCard[]> }) {
+  return <ShowcaseClient cards={await cards} />;
+}
 
 function PageHeader() {
   return (
@@ -129,13 +157,16 @@ export default async function CommunityPage() {
   }
 
   // 3) Load signups + children for the member grid (directory load path) AND the
-  //    map/stats aggregates — all in parallel.
+  //    map/stats aggregates — all in parallel. getDirectorySignups pushes the
+  //    cheap visibility preconditions into SQL (so a cold render reads a fraction
+  //    of the table); the authoritative isDirectoryVisible() gate still runs in
+  //    JS below. Aggregates are served from Next's short-lived data cache.
   const db = getDb();
   const [allRows, kids, stats, breakdowns] = await Promise.all([
-    db.select().from(signups).orderBy(desc(signups.createdAt)),
+    getDirectorySignups(),
     db.select().from(children).orderBy(children.createdAt),
-    getStats(),
-    getBreakdowns(),
+    getCachedStats(),
+    getCachedBreakdowns(),
   ]);
 
   // Keep ONLY opt-in, OHS-visible profiles via the shared isDirectoryVisible gate
@@ -164,32 +195,71 @@ export default async function CommunityPage() {
     else studentsByFamily.set(r.familyId, [r]);
   }
 
-  // Presign every needed photo (hero + up to MAX_THUMBS per card) in one deduped
-  // batch. Per-field exposure (and student coarsening) lives in buildDirectoryCard.
-  const allPaths = Array.from(
+  // Photo presigning is the per-render hot spot: it was up to (1 hero + MAX_THUMBS)
+  // presigns PER visible card. Split it so the grid paints fast:
+  //   • HEROES are presigned eagerly here — they're above the fold and drive the
+  //     first visual. One presign per card.
+  //   • THUMBNAILS are deferred (presigned inside a streamed Suspense child below)
+  //     so they don't block the initial render. Until they arrive the cards show
+  //     just the hero (thumbUrls = []), exactly as a photoless card already does;
+  //     no shown photo is dropped — the thumbnails simply stream in a beat later.
+  const currentYear = new Date().getFullYear();
+
+  // Build the full visible card set from a pathname→url map. Reused for the
+  // hero-only first paint and the thumbnail-complete streamed render so the card
+  // projection (field gating, student coarsening) stays single-sourced.
+  const buildCards = (urlByPath: Map<string, string>): DirectoryCard[] =>
+    included.map((row) =>
+      buildDirectoryCard(
+        row,
+        kidsByFamily.get(row.familyId) ?? [],
+        urlByPath,
+        MAX_THUMBS,
+        currentYear,
+        studentsByFamily.get(row.familyId) ?? [],
+      ),
+    );
+
+  // Presign a set of pathnames into a pathname→url map (drops failed signs).
+  const presignToMap = async (paths: string[]): Promise<Map<string, string>> => {
+    const urlByPath = new Map<string, string>();
+    if (paths.length === 0) return urlByPath;
+    const signed = await signedPhotoUrls(paths);
+    paths.forEach((p, i) => {
+      if (signed[i]) urlByPath.set(p, signed[i]);
+    });
+    return urlByPath;
+  };
+
+  // Hero = the FIRST photo path of each card; thumbnails = the next MAX_THUMBS.
+  const heroPaths = Array.from(
     new Set(
       included.flatMap((r) =>
-        directoryPhotoPaths(r, kidsByFamily.get(r.familyId) ?? []).slice(0, 1 + MAX_THUMBS),
+        directoryPhotoPaths(r, kidsByFamily.get(r.familyId) ?? []).slice(0, 1),
       ),
     ),
   );
-  const signed = allPaths.length > 0 ? await signedPhotoUrls(allPaths) : [];
-  const urlByPath = new Map<string, string>();
-  allPaths.forEach((p, i) => {
-    if (signed[i]) urlByPath.set(p, signed[i]);
-  });
-
-  const currentYear = new Date().getFullYear();
-  const cards: DirectoryCard[] = included.map((row) =>
-    buildDirectoryCard(
-      row,
-      kidsByFamily.get(row.familyId) ?? [],
-      urlByPath,
-      MAX_THUMBS,
-      currentYear,
-      studentsByFamily.get(row.familyId) ?? [],
+  const thumbPaths = Array.from(
+    new Set(
+      included.flatMap((r) =>
+        directoryPhotoPaths(r, kidsByFamily.get(r.familyId) ?? []).slice(1, 1 + MAX_THUMBS),
+      ),
     ),
   );
+
+  // First paint: heroes presigned now (full card data — names, tags, filters all
+  // work immediately over the complete visible set).
+  const heroUrlByPath = await presignToMap(heroPaths);
+  const heroCards = buildCards(heroUrlByPath);
+
+  // Deferred: presign hero + thumbnail paths together and rebuild the cards with
+  // full thumbnails. Started here (not awaited) and streamed via Suspense so it
+  // never blocks the first render. (Re-includes heroPaths so heroUrl survives the
+  // rebuild.) Only kicked off when there are thumbnails to add.
+  const thumbnailedCards: Promise<DirectoryCard[]> | null =
+    thumbPaths.length > 0
+      ? presignToMap([...heroPaths, ...thumbPaths]).then(buildCards)
+      : null;
 
   // Map + condensed stats (gracefully degrade if the aggregates aren't ready).
   const hasStats = stats.database !== "pending";
@@ -243,16 +313,26 @@ export default async function CommunityPage() {
 
         {/* The consolidated member showcase */}
         <section>
-          {cards.length === 0 ? (
+          {heroCards.length === 0 ? (
             <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center text-white/55">
               No members are sharing with the community yet.
             </div>
-          ) : (
+          ) : thumbnailedCards === null ? (
+            // No thumbnails to defer — the hero cards are already the final set.
             // ShowcaseClient calls useSearchParams() to restore shareable filters
             // from the URL; a Suspense boundary is required so the build doesn't
             // bail out of prerendering the surrounding tree (App Router rule).
             <Suspense fallback={null}>
-              <ShowcaseClient cards={cards} />
+              <ShowcaseClient cards={heroCards} />
+            </Suspense>
+          ) : (
+            // Stream the thumbnail-complete grid: the fallback is the hero-only
+            // grid (fully interactive — search/sort/filter all run over the
+            // complete visible set), and ThumbnailedShowcase swaps in the cards
+            // with thumbnails once their presigns resolve. The Suspense boundary
+            // also satisfies the useSearchParams() prerender rule.
+            <Suspense fallback={<ShowcaseClient cards={heroCards} />}>
+              <ThumbnailedShowcase cards={thumbnailedCards} />
             </Suspense>
           )}
         </section>

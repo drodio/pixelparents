@@ -109,6 +109,35 @@ export function ensureFamiliesSchema(): Promise<void> {
   return familiesEnsured;
 }
 
+// Supporting index for the Directory read path. The directory query
+// (getDirectorySignups) returns only rows that can possibly be visible — the
+// cheap, index-friendly visibility preconditions (share_enabled = true,
+// share_token present) — ordered newest-first. A PARTIAL index over exactly that
+// predicate keeps the index tiny (only shared profiles) and lets Postgres serve
+// the ordered scan straight from the index instead of reading + sorting the whole
+// signups table on every cold render. Created idempotently (IF NOT EXISTS) on the
+// first directory read per cold start, mirroring the other guards above. Purely a
+// performance index — it never changes which rows are returned; the authoritative
+// isDirectoryVisible() gate still runs in JS over the (now far smaller) result.
+let directoryIndexEnsured: Promise<void> | null = null;
+
+export function ensureDirectoryIndex(): Promise<void> {
+  if (!directoryIndexEnsured) {
+    directoryIndexEnsured = (async () => {
+      const sql = getSql();
+      await sql`
+        CREATE INDEX IF NOT EXISTS signups_directory_idx
+          ON signups (created_at DESC)
+          WHERE share_enabled = true AND share_token IS NOT NULL
+      `;
+    })().catch((e) => {
+      directoryIndexEnsured = null;
+      throw e;
+    });
+  }
+  return directoryIndexEnsured;
+}
+
 // Self-healing guard for the OHS asks → expertise-matching connector (same
 // rationale as the guards above: this app shares one Neon DB with features that
 // run their own partial `drizzle-kit push`, and there is NO migrate-on-deploy, so
