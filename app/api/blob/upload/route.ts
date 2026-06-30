@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { put } from "@vercel/blob";
+import { currentUser } from "@clerk/nextjs/server";
 
 export const runtime = "nodejs";
 
@@ -7,6 +8,15 @@ export const runtime = "nodejs";
 const MAX_BYTES = 6 * 1024 * 1024;
 
 export async function POST(request: Request) {
+  // Auth gate: these are private family photos, so require a signed-in Clerk
+  // user. Identity comes from the session (currentUser) — never the client —
+  // matching the rest of the app's server routes/actions. Without this anyone
+  // could write to the private blob store.
+  const user = await currentUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
   let form: FormData;
   try {
     form = await request.formData();

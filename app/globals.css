@@ -3,6 +3,30 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* ---- Design-system foundation (dark UI tokens) -------------------------
+     A single source of truth for surfaces, radii, focus, and the muted-text
+     floor. These are tokens only — later component work references them, so
+     the visual wave can move components onto the scale without re-deriving
+     values here. Current visuals stay essentially the same. */
+
+  /* Elevation scale — one elevation-0 base, two raised tiers above it. */
+  --surface-0: #09090b; /* app base (elevation 0) */
+  --surface-1: #131316; /* cards / panels (elevation 1) */
+  --surface-2: #1d1d21; /* popovers / raised controls (elevation 2) */
+
+  /* Radius rhythm. */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.625rem;
+  --radius-lg: 1rem;
+  --radius-full: 9999px;
+
+  /* Brand accent used for the focus ring. */
+  --focus-ring: #f59e0b; /* amber-500 */
+
+  /* Muted-text floor: meta text may sit here and still clear WCAG AA on the
+     dark base. Components opt in via the .text-muted utility below. */
+  --text-muted: rgba(255, 255, 255, 0.6);
 }
 
 @theme inline {
@@ -10,11 +34,23 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+
+  /* Surface a subset of the foundation tokens to Tailwind so utilities like
+     `bg-surface-1`, `rounded-md` (already), and `text-muted` resolve. */
+  --color-surface-0: var(--surface-0);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-focus-ring: var(--focus-ring);
+
+  --radius-sm: var(--radius-sm);
+  --radius-md: var(--radius-md);
+  --radius-lg: var(--radius-lg);
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
+    /* Keep --background aligned with the elevation-0 token. */
+    --background: var(--surface-0);
     --foreground: #ededed;
   }
 }
@@ -22,7 +58,28 @@
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), system-ui, sans-serif;
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+/* Global focus-visible ring for keyboard/AT users. Subtle amber ring with an
+   offset so it never overlaps content; only shows for :focus-visible, so it
+   never appears on mouse clicks. Honors a custom radius when one is set. */
+:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
+  border-radius: var(--focus-radius, var(--radius-sm));
+}
+
+/* Muted-text floor utility — meta text can adopt this and still clear AA. */
+.text-muted {
+  color: var(--text-muted);
 }
 
 /* ---------------------------------------------------------------------------
