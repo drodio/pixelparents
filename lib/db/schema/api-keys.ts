@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { integer, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 // Developer API key requests + keys (one row per request/key). Owns its own
 // schema file so it composes with the signup schema via the lib/db/schema/* glob.
@@ -28,6 +28,10 @@ export const apiKeys = pgTable("api_keys", {
   revealedAt: timestamp("revealed_at", { withTimezone: true }),
   revokedAt: timestamp("revoked_at", { withTimezone: true }),
   lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
+  // Lightweight usage telemetry: bumped best-effort on each verified API call
+  // (see verifyApiKey). Surfaced on /account so families/the founder can see the
+  // key is alive. Never gates the request — purely informational.
+  requestCount: integer("request_count").notNull().default(0),
   // Retired: one approval gate now, no tiers. Kept for back-compat; unused.
   tier: text("tier"),
   // Legacy column retained so existing rows/migrations don't break.

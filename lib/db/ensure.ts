@@ -36,6 +36,7 @@ export function ensureApiKeysTable(): Promise<void> {
           revealed_at timestamptz,
           revoked_at timestamptz,
           last_used_at timestamptz,
+          request_count integer NOT NULL DEFAULT 0,
           tier text,
           label text,
           approved_at timestamptz
@@ -48,6 +49,7 @@ export function ensureApiKeysTable(): Promise<void> {
       await sql`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS decided_by text`;
       await sql`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS reject_reason text`;
       await sql`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS revealed_at timestamptz`;
+      await sql`ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS request_count integer NOT NULL DEFAULT 0`;
       // Keys no longer exist at request time, so these must be nullable.
       await sql`ALTER TABLE api_keys ALTER COLUMN key_hash DROP NOT NULL`;
       await sql`ALTER TABLE api_keys ALTER COLUMN key_prefix DROP NOT NULL`;

@@ -7,17 +7,51 @@ import { readApprovalStatus } from "@/lib/approval";
 import { getRequestByClerkUser } from "@/lib/db/api-keys";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { hasDatabase } from "@/lib/db";
+import { formatLastUsed } from "@/lib/format";
 import { shareFieldsOrDefault, coerceShareVisibility } from "@/lib/share";
 import { shareUrlFor } from "@/lib/url";
 import { ShareSettings } from "@/app/signup/thanks/share-settings";
 import { DashboardShell } from "@/components/dashboard-shell";
-import { IconClock } from "@/components/icons";
+import { IconClock, IconCode } from "@/components/icons";
 import { KeyPanel } from "./key-panel";
 import { RequestForm } from "./request-form";
 
 export const dynamic = "force-dynamic";
 
 export const metadata = { title: "Account — Pixel Parents" };
+
+// Lightweight, read-only telemetry for an approved key: when it was last seen on
+// the API and how many requests it has served. Both values are bumped best-effort
+// in verifyApiKey, so they're informational, never authoritative.
+function UsagePanel({
+  lastUsedAt,
+  requestCount,
+}: {
+  lastUsedAt: Date | string | null;
+  requestCount: number;
+}) {
+  return (
+    <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
+      <p className="text-xs font-semibold uppercase tracking-wide text-white/55">Usage</p>
+      <dl className="mt-3 grid gap-4 sm:grid-cols-2">
+        <div className="flex items-start gap-2.5">
+          <IconClock className="mt-0.5 h-4 w-4 shrink-0 text-white/40" />
+          <div>
+            <dt className="text-xs text-white/55">Last used</dt>
+            <dd className="text-sm font-medium text-white/90">{formatLastUsed(lastUsedAt)}</dd>
+          </div>
+        </div>
+        <div className="flex items-start gap-2.5">
+          <IconCode className="mt-0.5 h-4 w-4 shrink-0 text-white/40" />
+          <div>
+            <dt className="text-xs text-white/55">Total requests</dt>
+            <dd className="text-sm font-medium text-white/90">{requestCount.toLocaleString()}</dd>
+          </div>
+        </div>
+      </dl>
+    </div>
+  );
+}
 
 function AccountHeader() {
   return (
@@ -69,6 +103,10 @@ export default async function AccountPage() {
         {reqStatus === "approved" ? (
           <>
             <KeyPanel hasKey={Boolean(req?.keyHash)} prefix={req?.keyPrefix ?? null} />
+            <UsagePanel
+              lastUsedAt={req?.lastUsedAt ?? null}
+              requestCount={req?.requestCount ?? 0}
+            />
             <p className="text-sm text-white/50">
               Use it as{" "}
               <code className="font-mono text-xs text-white/80">

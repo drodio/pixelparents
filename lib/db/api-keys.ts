@@ -98,7 +98,7 @@ export type VerifiedKey = { keyId: string; clerkUserId: string | null };
 
 // Verify an Authorization header. Returns the owner on success, or null (→ 401)
 // when the key is missing, malformed, unknown, revoked, or not approved.
-// Touches last_used_at best-effort.
+// Touches last_used_at and bumps request_count best-effort.
 export async function verifyApiKey(
   authHeader: string | null,
 ): Promise<VerifiedKey | null> {
@@ -119,9 +119,12 @@ export async function verifyApiKey(
     .limit(1);
   if (!row) return null;
   try {
-    await getDb().update(apiKeys).set({ lastUsedAt: sql`NOW()` }).where(eq(apiKeys.id, row.id));
+    await getDb()
+      .update(apiKeys)
+      .set({ lastUsedAt: sql`NOW()`, requestCount: sql`${apiKeys.requestCount} + 1` })
+      .where(eq(apiKeys.id, row.id));
   } catch {
-    // ignore — last_used_at is non-critical telemetry
+    // ignore — last_used_at / request_count are non-critical telemetry
   }
   return { keyId: row.id, clerkUserId: row.clerkUserId };
 }
