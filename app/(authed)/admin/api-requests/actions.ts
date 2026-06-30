@@ -3,6 +3,7 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin";
+import { approveFamilyByEmail } from "@/lib/approval";
 import { approveRequest, getRequestById, rejectRequest } from "@/lib/db/api-keys";
 import { notifyApiDecision } from "@/lib/email";
 
@@ -19,8 +20,13 @@ export async function approve(formData: FormData): Promise<void> {
   if (!id) return;
   const row = await getRequestById(id);
   await approveRequest(id, admin);
-  if (row) await notifyApiDecision({ to: row.email, name: row.name, approved: true });
+  if (row) {
+    // API access entails verification — mark the applicant's family verified.
+    await approveFamilyByEmail(row.email, new Date().toISOString());
+    await notifyApiDecision({ to: row.email, name: row.name, approved: true });
+  }
   revalidatePath("/admin/api-requests");
+  revalidatePath("/directory");
 }
 
 export async function reject(formData: FormData): Promise<void> {

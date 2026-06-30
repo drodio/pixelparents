@@ -108,6 +108,15 @@ describe("isFamilyVerified (directory verification gate)", () => {
     expect(isFamilyVerified({ extra: { approvalStatus: "approved" }, createdAt: new Date() })).toBe(true);
   });
 
+  it("treats an api-access approval as verified (post-cutoff, not grandfathered)", () => {
+    expect(
+      isFamilyVerified({
+        extra: { approvalStatus: "approved", approvalBy: "api-access" },
+        createdAt: new Date(VERIFICATION_CUTOFF + 86_400_000),
+      }),
+    ).toBe(true);
+  });
+
   it("grandfathers families created before the cutoff", () => {
     expect(isFamilyVerified({ extra: {}, createdAt: new Date(VERIFICATION_CUTOFF - 1) })).toBe(true);
   });

@@ -1,4 +1,5 @@
 import { getSql } from "./db";
+import { ensureFamiliesSchema } from "./db/ensure";
 
 // OHS-directory access approval, stored in signups.extra:
 //   approvalStatus: "pending" | "approved" | "denied"
@@ -66,4 +67,29 @@ export async function recordApprovalDecision(
     status: (current[0].status as ApprovalStatus) ?? "pending",
     by: current[0].by,
   };
+}
+
+// "API access entails verification": when a developer's API request is approved,
+// mark the matching parent's family verified too (so they appear in the directory
+// and show Verified on the dashboard). Mirrors confirmStudentCode's family-wide
+// propagation — matches the signup by email (case-insensitive), propagates to
+// every parent sharing that family_id, is idempotent, and NEVER resurrects a row
+// an admin explicitly denied. No-op when no signup matches the email.
+export async function approveFamilyByEmail(email: string, atIso: string): Promise<void> {
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return;
+  await ensureFamiliesSchema();
+  const sql = getSql();
+  await sql`
+    UPDATE signups
+    SET extra = jsonb_set(jsonb_set(jsonb_set(
+          COALESCE(extra, '{}'::jsonb),
+          '{approvalStatus}', to_jsonb('approved'::text), true),
+          '{approvalBy}', to_jsonb('api-access'::text), true),
+          '{approvalAt}', to_jsonb(${atIso}::text), true)
+    WHERE family_id IN (
+      SELECT family_id FROM signups WHERE lower(email) = ${normalized}
+    )
+      AND COALESCE(extra->>'approvalStatus', 'pending') <> 'denied'
+  `;
 }
