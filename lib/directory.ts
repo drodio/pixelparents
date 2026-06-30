@@ -77,6 +77,35 @@ export type DirectoryCard = {
   } | null;
 };
 
+// A member's expertise signals for the asks matcher: the UNION of their curated
+// enrichment expertiseTags (owner edits merged in by curatedEnrichmentOf), their
+// self-reported skillsets, and their parent interests. De-duplicated
+// case-insensitively, keeping the first-seen display label. Pure — used both to
+// build matcher candidates (lib/db/asks.ts) and as the richness proxy
+// (signalCount) for the matcher's deterministic tiebreak. NOTE: this reads the
+// member's RAW signals for MATCHING only; it does NOT imply any are shown on a
+// card — card rendering still routes through the share-field gates.
+export function expertiseSignalsOf(row: Pick<SignupRow, "skillsets" | "parentInterests" | "extra">): string[] {
+  const stored = ((row.extra ?? {}) as Record<string, unknown>).enrichment as
+    | StoredEnrichment
+    | null
+    | undefined;
+  const curated = curatedEnrichmentOf(stored);
+  const all = [
+    ...(curated?.expertiseTags ?? []),
+    ...((row.skillsets ?? []).filter((s): s is string => typeof s === "string")),
+    ...((row.parentInterests ?? []).filter((s): s is string => typeof s === "string")),
+  ];
+  const byKey = new Map<string, string>();
+  for (const t of all) {
+    const v = t.trim();
+    if (!v) continue;
+    const k = v.toLowerCase();
+    if (!byKey.has(k)) byKey.set(k, v);
+  }
+  return Array.from(byKey.values());
+}
+
 // Families that signed up BEFORE this cutoff are grandfathered into the directory
 // so the live directory isn't suddenly emptied; everyone who joins after must
 // verify (approvalStatus="approved", set by the student-email flow, an admin, or
