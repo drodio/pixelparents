@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState, useTransition } from "react";
 import {
   OHS_AFFILIATIONS,
   US_STATES,
@@ -12,8 +12,87 @@ import { SaveStatus } from "@/components/save-status";
 import { TagPicker } from "@/app/signup/thanks/family-form";
 import type { SignupPatch } from "@/app/signup/actions";
 import { builderStatusOf } from "@/lib/builder";
+import { SHARE_VISIBILITY, type ShareVisibility } from "@/lib/share";
 import { IconCode, IconSparkles } from "@/components/icons";
-import { patchFamilyMember, refreshBuilderStatus, setBuilderManual } from "./actions";
+import {
+  patchFamilyMember,
+  refreshBuilderStatus,
+  setBuilderManual,
+  setFamilyMemberVisibility,
+} from "./actions";
+
+// Per-member visibility control. UNLIKE components/visibility-control.tsx (which
+// routes through the owner-only setShareVisibility paths), this calls the
+// family-scoped setFamilyMemberVisibility, so ANY family member can change ANY
+// member's visibility — the action re-derives the caller from the session and
+// scopes the write to the caller's family. Tiers + styling mirror the shared
+// control so the UI stays consistent. Optimistic + supersede-on-newer-click, so
+// an in-flight Server-Action page refresh never freezes the toggle.
+function FamilyVisibilityControl({
+  memberId,
+  initial,
+}: {
+  memberId: string;
+  initial: ShareVisibility;
+}) {
+  const [v, setV] = useState<ShareVisibility>(initial);
+  const [error, setError] = useState<string | null>(null);
+  const [, start] = useTransition();
+  const latest = useRef<ShareVisibility>(initial);
+
+  function choose(next: ShareVisibility) {
+    if (next === v) return;
+    const prev = v;
+    latest.current = next;
+    setV(next); // optimistic
+    setError(null);
+    start(async () => {
+      const r = await setFamilyMemberVisibility(memberId, next);
+      if (latest.current !== next) return; // a newer click already took over
+      if (r.ok && r.visibility) {
+        setV(r.visibility);
+      } else {
+        setV(prev);
+        setError("Couldn’t update — try again.");
+      }
+    });
+  }
+
+  return (
+    <div className="flex flex-col gap-1">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-[11px] font-semibold uppercase tracking-wide text-white/35">
+          Visibility
+        </span>
+        <div className="inline-flex rounded-full border border-white/15 bg-white/[0.04] p-0.5 text-xs">
+          {SHARE_VISIBILITY.map((o) => {
+            const active = o.value === v;
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => choose(o.value)}
+                aria-pressed={active}
+                title={`Set to "${o.label}"`}
+                className={`rounded-full px-3 py-1 font-medium transition-colors ${
+                  active ? "bg-amber-400 text-black" : "text-white/55 hover:text-white"
+                }`}
+              >
+                {o.label}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <p className="text-xs text-white/40">
+        {v === "private"
+          ? "Hidden from everyone except your family."
+          : "Visible to signed-in OHS families in the directory and via the share link."}
+      </p>
+      {error && <p className="text-xs text-red-400" aria-live="polite">{error}</p>}
+    </div>
+  );
+}
 
 const labelCls = "block text-sm font-medium text-white/80";
 const inputCls =
@@ -144,17 +223,22 @@ function BuilderStatusBlock({
   );
 }
 
-// One family member's editable profile card. Used for the caller's own profile
-// AND for each other parent in the family — the SAME secure path either way:
-// every save routes through patchFamilyMember, which re-derives the caller from
-// the session and scopes the write to the caller's family (member ids are never
-// trusted as authorization on their own). Email is the identity key, so it's
-// shown read-only.
+// One family member's editable profile card. Used for the caller's own profile,
+// for each co-parent/guardian, AND for student accounts — the SAME secure path
+// either way: every save routes through patchFamilyMember, which re-derives the
+// caller from the session and scopes the write to the caller's family (member ids
+// are never trusted as authorization on their own). Email is the identity key, so
+// it's shown read-only. The LinkedIn + GitHub username fields and the Builder
+// status block render for ALL members (parents AND student accounts) — they're
+// optional. A per-member visibility control (any family member can change any
+// member's) and read-only student profile fields round out the card.
 export function MemberCard({
   member,
   isSelf,
   isStudent,
   suggestedInterests,
+  initialVisibility,
+  studentProfile,
 }: {
   member: SignupRow;
   isSelf: boolean;
@@ -163,6 +247,13 @@ export function MemberCard({
   // the client bundle).
   isStudent: boolean;
   suggestedInterests: string[];
+  // This member's current share visibility tier (already coerced server-side).
+  initialVisibility: ShareVisibility;
+  // When this is a STUDENT ACCOUNT that matched a `children` row by verified
+  // student email, the dedup enriches the card with that child row's grade +
+  // interests so we show ONE entry (the account) instead of two. Undefined for
+  // parents/guardians and for student accounts with no matching child row.
+  studentProfile?: { grade: string | null; interests: string[] };
 }) {
   const save = useCallback(
     async (patch: SignupPatch) => {
@@ -223,6 +314,32 @@ export function MemberCard({
         </div>
         <SaveStatus status={status} />
       </div>
+
+      {/* Per-member visibility — any family member can change any member's. */}
+      <FamilyVisibilityControl memberId={member.id} initial={initialVisibility} />
+
+      {/* Student profile fields — grade + interests carried over from the matched
+          child row when this student account was deduped against it. Read-only
+          here: the grade/interests still live on (and are edited via) the child
+          card in the Children section. */}
+      {studentProfile && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <span className={labelCls}>Grade</span>
+            <p className="mt-1 text-sm text-white/70">
+              {studentProfile.grade?.trim() || "Not set"}
+            </p>
+          </div>
+          <div>
+            <span className={labelCls}>Student interests</span>
+            <p className="mt-1 text-sm text-white/70">
+              {studentProfile.interests.length > 0
+                ? studentProfile.interests.join(", ")
+                : "Not set"}
+            </p>
+          </div>
+        </div>
+      )}
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
