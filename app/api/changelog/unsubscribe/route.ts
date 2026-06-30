@@ -2,20 +2,35 @@ import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { getDb, hasDatabase } from "@/lib/db";
 import { changelogSubscribers } from "@/lib/db/schema/changelog";
+import { ensureChangelogTables } from "@/lib/changelog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // One-click unsubscribe (linked per-recipient from every changelog email).
+// Prefers a per-subscriber capability token (?token=…) so the link doesn't
+// expose an email address and can't be used to unsubscribe arbitrary people;
+// falls back to ?email=… for older links already sent.
 export async function GET(request: Request) {
-  const email =
-    new URL(request.url).searchParams.get("email")?.trim().toLowerCase() ?? "";
-  if (hasDatabase() && /^\S+@\S+\.\S+$/.test(email)) {
+  const params = new URL(request.url).searchParams;
+  const token = params.get("token")?.trim() ?? "";
+  const email = params.get("email")?.trim().toLowerCase() ?? "";
+
+  if (hasDatabase() && (token || /^\S+@\S+\.\S+$/.test(email))) {
     try {
-      await getDb()
-        .update(changelogSubscribers)
-        .set({ unsubscribedAt: new Date() })
-        .where(eq(changelogSubscribers.email, email));
+      await ensureChangelogTables();
+      const db = getDb();
+      if (token) {
+        await db
+          .update(changelogSubscribers)
+          .set({ unsubscribedAt: new Date() })
+          .where(eq(changelogSubscribers.unsubscribeToken, token));
+      } else {
+        await db
+          .update(changelogSubscribers)
+          .set({ unsubscribedAt: new Date() })
+          .where(eq(changelogSubscribers.email, email));
+      }
     } catch (err) {
       console.error("unsubscribe failed:", err);
     }

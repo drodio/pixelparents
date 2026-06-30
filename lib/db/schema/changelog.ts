@@ -39,6 +39,8 @@ export const changelogSubscribers = pgTable(
     email: text("email").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
     unsubscribedAt: timestamp("unsubscribed_at", { withTimezone: true }),
+    // Per-subscriber capability token for one-click unsubscribe links.
+    unsubscribeToken: uuid("unsubscribe_token").defaultRandom().notNull(),
   },
   (t) => ({
     emailUnique: uniqueIndex("changelog_subscribers_email_unique").on(t.email),

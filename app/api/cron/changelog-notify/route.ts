@@ -3,6 +3,7 @@ import { isNull, eq } from "drizzle-orm";
 import { getDb, hasDatabase } from "@/lib/db";
 import { changelogEntries, changelogSubscribers } from "@/lib/db/schema/changelog";
 import { sendChangelogEmail } from "@/lib/changelog-email";
+import { ensureChangelogTables } from "@/lib/changelog";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,6 +22,7 @@ export async function GET(request: Request) {
   }
   if (!hasDatabase()) return NextResponse.json({ error: "no database" }, { status: 503 });
 
+  await ensureChangelogTables();
   const db = getDb();
   const pending = await db
     .select()
@@ -37,7 +39,7 @@ export async function GET(request: Request) {
   for (const entry of pending) {
     let entrySent = 0;
     for (const s of subs) {
-      if (await sendChangelogEmail(s.email, entry)) entrySent++;
+      if (await sendChangelogEmail(s.email, entry, s.unsubscribeToken)) entrySent++;
     }
     sent += entrySent;
     // Only mark notified once it actually went out (or there's no one to email),

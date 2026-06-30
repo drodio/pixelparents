@@ -160,6 +160,13 @@ export default async function Home() {
           <ReportDialog />
           <span aria-hidden="true">·</span>
           <Link
+            href="/changelog"
+            className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
+          >
+            Changelog
+          </Link>
+          <span aria-hidden="true">·</span>
+          <Link
             href="/privacy"
             className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
           >

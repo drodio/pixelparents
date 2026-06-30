@@ -10,6 +10,7 @@ const FROM = process.env.RESEND_FROM ?? "Pixel Parents <noreply@pixelparents.org
 export async function sendChangelogEmail(
   to: string,
   entry: ChangelogEntryRow,
+  unsubscribeToken?: string,
 ): Promise<boolean> {
   if (!resend) {
     console.warn("RESEND_API_KEY not set — skipping changelog email");
@@ -17,6 +18,10 @@ export async function sendChangelogEmail(
   }
   const base = getBaseUrl();
   const url = `${base}/changelog#${entry.slug}`;
+  // Prefer a per-subscriber token link (no email in the URL); fall back to email.
+  const unsubscribeUrl = unsubscribeToken
+    ? `${base}/api/changelog/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
+    : `${base}/api/changelog/unsubscribe?email=${encodeURIComponent(to)}`;
   const text = [
     `New on Pixel Parents:`,
     ``,
@@ -28,7 +33,7 @@ export async function sendChangelogEmail(
     `See it: ${url}`,
     ``,
     `You're getting this because you subscribed to the Pixel Parents changelog.`,
-    `Unsubscribe: ${base}/api/changelog/unsubscribe?email=${encodeURIComponent(to)}`,
+    `Unsubscribe: ${unsubscribeUrl}`,
   ].join("\n");
   try {
     await resend.emails.send({
