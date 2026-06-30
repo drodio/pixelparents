@@ -23,7 +23,10 @@ describe("PKCE S256", () => {
 
   it("rejects a tampered verifier", () => {
     const { verifier, challenge } = generatePkcePair();
-    const tampered = "A" + verifier.slice(1);
+    // Flip the first char to a GUARANTEED-different one. A random verifier's
+    // first char is already "A" ~1/64 of the time, so a fixed "A" prefix would
+    // occasionally be a no-op tamper and flake the assertion.
+    const tampered = (verifier[0] === "A" ? "B" : "A") + verifier.slice(1);
     expect(verifyPkce(tampered, challenge)).toBe(false);
   });
 

@@ -1,3 +1,14 @@
+## Progress Update as of June 30, 2026 — 6:56 AM Pacific
+
+### Summary of changes since last update
+CI flake fix: the PKCE "rejects a tampered verifier" test forced the first char to "A", which is a no-op ~1/64 runs (random verifier already starts with "A"). Now flips to a guaranteed-different char. Verify logic unchanged + correct.
+
+### Detail of changes made:
+- `lib/oauth/pkce.test.ts`: deterministic tamper.
+
+### Potential concerns to address:
+- None.
+
 ## Progress Update as of [June 30, 2026 — 6:49 AM Pacific]
 
 ### Summary of changes since last update
