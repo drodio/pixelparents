@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { iconForInterest } from "@/lib/interest-icons";
 import { IconX } from "@/components/icons";
@@ -9,13 +10,23 @@ import {
   familyWithinRadius,
   geocodeLocation,
 } from "@/lib/directory-filters";
+import {
+  parseUrlState,
+  serializeUrlState,
+  type DirectorySortDir,
+  type DirectorySortKey,
+} from "@/lib/directory-url-state";
 import type { LatLng } from "@/lib/data/us-geo";
 import type { DirectoryCard } from "@/lib/directory";
 
 export type { DirectoryCard };
 
-type SortKey = "name" | "child";
-type SortDir = "asc" | "desc";
+type SortKey = DirectorySortKey;
+type SortDir = DirectorySortDir;
+
+// How long to wait after the last keystroke before reflecting the search text in
+// the URL — keeps fast typing from thrashing router.replace / browser history.
+const SEARCH_URL_DEBOUNCE_MS = 300;
 
 // Age slider bounds. AGE_MAX is rendered as "18+" — a family with any shown
 // child AGE_MAX or older matches the top of the range.
@@ -218,16 +229,86 @@ function DualRange({
 }
 
 export function DirectoryClient({ cards }: { cards: DirectoryCard[] }) {
-  const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [sortKey, setSortKey] = useState<SortKey>("name");
-  const [sortDir, setSortDir] = useState<SortDir>("asc");
-  const [density, setDensity] = useState(3);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  // The set of interest keys that actually exist on the current cards. Used to
+  // validate interests coming in from a shared URL (unknown ones are dropped) —
+  // derived straight from `cards` so it's available inside the state
+  // initializers below without depending on a later useMemo.
+  const validInterestKeys = useMemo(() => {
+    const keys = new Set<string>();
+    for (const c of cards) for (const i of c.interests) keys.add(i.toLowerCase());
+    return keys;
+  }, [cards]);
+
+  // Restore filter state from the URL on first render (so a shared/bookmarked
+  // link reproduces the view). Read once via a lazy initializer — subsequent URL
+  // writes are driven BY this component, so we don't want to re-derive from the
+  // URL on every render. "Near me" is intentionally absent (never URL-persisted).
+  const [initialState] = useState(() =>
+    parseUrlState(new URLSearchParams(searchParams.toString()), validInterestKeys),
+  );
+
+  const [query, setQuery] = useState(initialState.query);
+  const [selected, setSelected] = useState<Set<string>>(
+    () => new Set(initialState.interests),
+  );
+  const [sortKey, setSortKey] = useState<SortKey>(initialState.sortKey);
+  const [sortDir, setSortDir] = useState<SortDir>(initialState.sortDir);
+  const [density, setDensity] = useState(initialState.perRow);
 
   // Age-range filter. Inactive until a thumb moves off the extremes.
-  const [ageLower, setAgeLower] = useState(AGE_MIN);
-  const [ageUpper, setAgeUpper] = useState(AGE_MAX);
+  const [ageLower, setAgeLower] = useState(initialState.ageLower);
+  const [ageUpper, setAgeUpper] = useState(initialState.ageUpper);
   const ageActive = ageLower > AGE_MIN || ageUpper < AGE_MAX;
+
+  // Debounce ONLY the search text before it reaches the URL, so fast typing
+  // doesn't fire a router.replace per keystroke. Non-text controls (chips, sort,
+  // age, per-row) write through immediately. The filtering itself uses the live
+  // `query` — this debounced copy is for the URL write alone.
+  const [debouncedQuery, setDebouncedQuery] = useState(initialState.query);
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), SEARCH_URL_DEBOUNCE_MS);
+    return () => clearTimeout(t);
+  }, [query]);
+
+  // Mirror the persisted filter state into the URL (replace, NOT push — typing
+  // and toggling shouldn't spam browser history). The "Near me" radius/origin is
+  // deliberately excluded: a user's location must never land in a shareable URL.
+  // We skip the very first run so a shared link's params aren't immediately
+  // rewritten (and so the canonical no-filter URL stays clean on load).
+  const didMountUrlSync = useRef(false);
+  useEffect(() => {
+    if (!didMountUrlSync.current) {
+      didMountUrlSync.current = true;
+      return;
+    }
+    const next = serializeUrlState({
+      query: debouncedQuery,
+      interests: Array.from(selected),
+      sortKey,
+      sortDir,
+      ageLower,
+      ageUpper,
+      perRow: density,
+    }).toString();
+    // Avoid a redundant navigation when nothing actually changed.
+    if (next === searchParams.toString()) return;
+    router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+  }, [
+    debouncedQuery,
+    selected,
+    sortKey,
+    sortDir,
+    ageLower,
+    ageUpper,
+    density,
+    pathname,
+    router,
+    searchParams,
+  ]);
 
   // Radius filter (opt-in). Origin is the viewer's geolocated or typed location.
   const [radiusOn, setRadiusOn] = useState(false);

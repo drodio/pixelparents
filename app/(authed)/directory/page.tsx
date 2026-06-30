@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -156,7 +157,12 @@ export default async function DirectoryPage() {
           No families are sharing with the OHS directory yet.
         </div>
       ) : (
-        <DirectoryClient cards={cards} />
+        // DirectoryClient calls useSearchParams() to restore shareable filters
+        // from the URL; a Suspense boundary is required so the build doesn't bail
+        // out of prerendering the surrounding tree (Next App Router requirement).
+        <Suspense fallback={null}>
+          <DirectoryClient cards={cards} />
+        </Suspense>
       )}
     </>,
   );
