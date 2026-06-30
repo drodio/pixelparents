@@ -8,6 +8,7 @@ import {
   isDirectoryVisible,
   isFamilyVerified,
   VERIFICATION_CUTOFF,
+  childFullName,
 } from "@/lib/directory";
 import { familyMatchesAgeRange, familyWithinRadius } from "@/lib/directory-filters";
 import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
@@ -106,6 +107,19 @@ describe("isDirectoryVisible (directory inclusion gate)", () => {
         signup({ extra: { approvalStatus: "approved" }, createdAt: new Date(VERIFICATION_CUTOFF + 86_400_000) }),
       ),
     ).toBe(true);
+  });
+});
+
+describe("childFullName", () => {
+  it("appends the parent surname", () => {
+    expect(childFullName("Ansh", "Vasani")).toBe("Ansh Vasani");
+  });
+  it("does not double an already-present surname", () => {
+    expect(childFullName("Devina Odio", "Odio")).toBe("Devina Odio");
+  });
+  it("handles a missing/blank surname", () => {
+    expect(childFullName("Ansh", null)).toBe("Ansh");
+    expect(childFullName("Ansh", "  ")).toBe("Ansh");
   });
 });
 

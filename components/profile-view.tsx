@@ -8,6 +8,7 @@ import { isStudentAccount } from "@/lib/family-display";
 import { signedPhotoUrls } from "@/lib/blob";
 import { renderCaption } from "@/lib/mentions";
 import { builderStatusOf } from "@/lib/builder";
+import { childFullName } from "@/lib/directory";
 import {
   IconPhone,
   IconMail,
@@ -310,7 +311,7 @@ export async function ProfileView({
                 >
                   <div className="flex items-baseline justify-between gap-3">
                     <h3 className="text-lg font-semibold">
-                      {`${kid.firstName} ${signup.lastName ?? ""}`.trim()}
+                      {childFullName(kid.firstName, signup.lastName)}
                     </h3>
                     {kid.grade === "Not an OHS child" && kid.birthYear && (
                       <span className="shrink-0 text-sm font-semibold text-amber-400">

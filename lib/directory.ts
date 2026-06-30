@@ -11,6 +11,16 @@ function githubUrlFromUsername(handle: string | null | undefined): string | null
   return h ? `https://github.com/${h}` : null;
 }
 
+// A child's display name = first name + the family/parent surname, EXCEPT when the
+// first-name field already contains the surname (some families typed the full name
+// into it) — then we don't double it ("Devina Odio" stays, not "Devina Odio Odio").
+export function childFullName(first: string, last: string | null | undefined): string {
+  const fn = (first ?? "").trim();
+  const ln = (last ?? "").trim();
+  if (!ln || fn.toLowerCase().includes(ln.toLowerCase())) return fn;
+  return `${fn} ${ln}`;
+}
+
 // Re-export the pure, client-safe filter helpers so server code and tests can
 // keep importing them from "@/lib/directory". The client imports them straight
 // from "@/lib/directory-filters" to avoid pulling node:crypto (via lib/share)
@@ -150,9 +160,9 @@ export function buildDirectoryCard(
     fields.has("children") && !isStudent
       ? familyKids.map((k) => ({
           firstName: k.firstName,
-          // Full name = child's first + the card owner's (parent's) surname, so
-          // the directory shows e.g. "Ansh Vasani" rather than just "Ansh".
-          name: [k.firstName, row.lastName].filter(Boolean).join(" ") || k.firstName,
+          // Full name = child's first + the card owner's (parent's) surname (e.g.
+          // "Ansh Vasani"), without doubling an already-present surname.
+          name: childFullName(k.firstName, row.lastName),
           grade: k.grade ?? null,
           interests: k.interests ?? [],
           age: childAge(k, currentYear),
