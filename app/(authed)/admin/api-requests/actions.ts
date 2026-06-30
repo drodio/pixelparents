@@ -28,7 +28,7 @@ export async function approve(formData: FormData): Promise<void> {
   revalidatePath("/admin/api-requests");
   // The directory merged into the community showcase; revalidate that route so a
   // newly verified family shows up there. (/directory only redirects now.)
-  revalidatePath("/community");
+  revalidatePath("/directory");
 }
 
 export async function reject(formData: FormData): Promise<void> {

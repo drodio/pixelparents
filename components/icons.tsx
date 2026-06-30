@@ -136,6 +136,28 @@ export function IconClock(props: IconProps) {
   );
 }
 
+// Pencil — edit a post (creator-only control on the Exchange).
+export function IconPencil(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 20h4l10-10-4-4L4 16v4z" />
+      <path d="M13.5 6.5l4 4" />
+    </Icon>
+  );
+}
+
+// Trash can — delete a post (creator-only, behind a confirm dialog).
+export function IconTrash(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M4 7h16" />
+      <path d="M9 7V4.5h6V7" />
+      <path d="M6 7l1 13h10l1-13" />
+      <path d="M10 11v6M14 11v6" />
+    </Icon>
+  );
+}
+
 // --- Dashboard navigation ---------------------------------------------------
 
 // Grid of four tiles — the dashboard / overview.

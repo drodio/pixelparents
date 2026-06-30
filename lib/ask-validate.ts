@@ -5,7 +5,14 @@
 // skillsets, not a fixed industry slug list), so tags are sanitized + capped
 // rather than constrained to a closed vocabulary.
 
-import { ASK_PROPOSES, type AskProposes } from "@/lib/db/asks";
+import {
+  ASK_PROPOSES,
+  ASK_KINDS,
+  ASK_URGENCIES,
+  type AskProposes,
+  type AskKind,
+  type AskUrgency,
+} from "@/lib/db/asks";
 
 export const ASK_TITLE_MAX = 140;
 export const ASK_BODY_MAX = 2000;
@@ -89,5 +96,46 @@ export function validateAskTags(input: unknown): Result<string[]> {
 export function validateProposes(input: unknown): Result<AskProposes> {
   if (typeof input === "string" && (ASK_PROPOSES as readonly string[]).includes(input))
     return { ok: true, value: input as AskProposes };
-  return { ok: false, error: "Choose how you'd like to help.", field: "proposes" };
+  return { ok: false, error: "Choose how you'd like to connect.", field: "proposes" };
+}
+
+// Which direction the post is: an Ask (need help) or an Offer (can help).
+export function validateKind(input: unknown): Result<AskKind> {
+  if (typeof input === "string" && (ASK_KINDS as readonly string[]).includes(input))
+    return { ok: true, value: input as AskKind };
+  return { ok: false, error: "Choose whether this is an ask or an offer.", field: "kind" };
+}
+
+// How time-sensitive the post is. Defaults to 'normal' if omitted/blank so the
+// urgency control is optional on the form, but a non-empty value must be valid.
+export function validateUrgency(input: unknown): Result<AskUrgency> {
+  if (input === undefined || input === null || input === "")
+    return { ok: true, value: "normal" };
+  if (typeof input === "string" && (ASK_URGENCIES as readonly string[]).includes(input))
+    return { ok: true, value: input as AskUrgency };
+  return { ok: false, error: "Choose a valid urgency.", field: "urgency" };
+}
+
+// Optional expiry. Empty/absent → no expiry (null). A provided value must parse
+// as a date AND be in the future (a post can't expire in the past). Accepts an
+// ISO string or a date-only "YYYY-MM-DD" (interpreted at end-of-day local-ish via
+// Date parsing). `now` is injectable for deterministic tests.
+export function validateValidUntil(
+  input: unknown,
+  now: number = Date.now(),
+): Result<Date | null> {
+  if (input === undefined || input === null) return { ok: true, value: null };
+  if (typeof input !== "string") {
+    return { ok: false, error: "Enter a valid date.", field: "validUntil" };
+  }
+  const trimmed = input.trim();
+  if (!trimmed) return { ok: true, value: null };
+  const ms = Date.parse(trimmed);
+  if (!Number.isFinite(ms)) {
+    return { ok: false, error: "Enter a valid date.", field: "validUntil" };
+  }
+  if (ms <= now) {
+    return { ok: false, error: "The expiry date must be in the future.", field: "validUntil" };
+  }
+  return { ok: true, value: new Date(ms) };
 }

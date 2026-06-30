@@ -9,16 +9,16 @@ import { isFamilyVerified, expertiseSignalsOf } from "@/lib/directory";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import { IconArrowRight } from "@/components/icons";
-import { PostAskForm } from "./post-ask-form";
+import { PostForm } from "./post-form";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Post an ask — Pixel Parents",
+  title: "New post — Pixel Parents",
   robots: { index: false, follow: false },
 };
 
-export default async function NewAskPage() {
+export default async function NewExchangePostPage() {
   const viewer = await currentUser();
   if (!viewer) {
     return (
@@ -48,11 +48,11 @@ export default async function NewAskPage() {
   if (!isVerified) {
     return shell(
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
-        <h2 className="text-lg font-semibold">Verify to post an ask</h2>
+        <h2 className="text-lg font-semibold">Verify to post</h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
           {viewerSignup
-            ? "Confirm your OHS student's Stanford email to post asks."
-            : "Join Pixel Parents to post asks."}
+            ? "Confirm your OHS student's Stanford email to post on the Community."
+            : "Join Pixel Parents to post on the Community."}
         </p>
         <Link
           href={viewerSignup ? "/verify" : "/signup"}
@@ -64,7 +64,7 @@ export default async function NewAskPage() {
     );
   }
 
-  // Suggest the asker's own expertise signals as quick-add tags — these are the
+  // Suggest the author's own expertise signals as quick-add tags — these are the
   // same tags the matcher uses, so it primes a useful tag set.
   const suggestedTags = expertiseSignalsOf(viewerSignup!).slice(0, 12);
 
@@ -72,17 +72,19 @@ export default async function NewAskPage() {
     <>
       <header className="mb-8">
         <Link
-          href="/asks"
+          href="/community"
           className="mb-3 inline-flex items-center gap-1.5 text-sm text-white/50 hover:text-white/80"
         >
-          <IconArrowRight className="h-4 w-4 rotate-180" /> Back to asks
+          <IconArrowRight className="h-4 w-4 rotate-180" /> Back to Community
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Post an ask</h1>
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">New post</h1>
         <p className="mt-1 text-sm text-white/55">
-          Tell the community what you need — and tag the expertise that would help.
+          Post an <span className="text-amber-300">Ask</span> (you need help) or an{" "}
+          <span className="text-violet-300">Offer</span> (you can help) — and tag the relevant
+          expertise.
         </p>
       </header>
-      <PostAskForm suggestedTags={suggestedTags} />
+      <PostForm suggestedTags={suggestedTags} />
     </>,
   );
 }

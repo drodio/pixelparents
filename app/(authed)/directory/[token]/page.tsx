@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// In-dashboard profile view. Clicking a member in the /community showcase lands
+// In-dashboard profile view. Clicking a member in the /directory showcase lands
 // here — the FULL profile rendered INSIDE the DashboardShell tab (no jump out to
 // /p, which would exit the shell). It reuses the shared ProfileView ("dashboard"
 // variant); the public /p/<token> route reuses the same component ("public"
@@ -29,7 +29,7 @@ export default async function CommunityProfilePage({
 }) {
   const { token } = await params;
 
-  // Auth + OHS-family gate — identical to the showcase index (/community).
+  // Auth + OHS-family gate — identical to the showcase index (/directory).
   const viewer = await currentUser();
   if (!viewer) redirect("/sign-in");
   const email = primaryEmail(viewer);

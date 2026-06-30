@@ -28,7 +28,7 @@ import { VisibilityControl } from "@/components/visibility-control";
 
 // Shared, reusable profile renderer. Powers BOTH:
 //   • the public secret share page  /p/<token>        (variant="public")
-//   • the in-dashboard profile view /community/<token> (variant="dashboard")
+//   • the in-dashboard profile view /directory/<token> (variant="dashboard")
 // so the two never drift. The public variant is full-bleed (its own <main> +
 // edge-to-edge banner); the dashboard variant is contained so it sits inside the
 // DashboardShell tab without breaking out of the shell chrome.
@@ -126,8 +126,8 @@ export async function ProfileView({
             Pixel Parents →
           </Link>
         ) : (
-          <Link href="/community" className="text-sm text-amber-400 hover:underline">
-            ← Back to the community
+          <Link href="/directory" className="text-sm text-amber-400 hover:underline">
+            ← Back to the directory
           </Link>
         )}
       </div>
@@ -429,8 +429,8 @@ export async function ProfileView({
     return (
       <div>
         <nav className="mb-4 text-sm text-white/50">
-          <Link href="/community" className="text-amber-400 hover:underline">
-            ← Community
+          <Link href="/directory" className="text-amber-400 hover:underline">
+            ← Directory
           </Link>
         </nav>
         {bannerUrl && (
@@ -462,8 +462,8 @@ export async function ProfileView({
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         {visibility === "ohs" && (
           <nav className="mb-2 text-sm text-white/50">
-            <Link href="/community" className="text-amber-400 hover:underline">
-              OHS Community
+            <Link href="/directory" className="text-amber-400 hover:underline">
+              OHS Directory
             </Link>{" "}
             &gt;
           </nav>

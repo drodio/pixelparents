@@ -11,6 +11,12 @@ const nextConfig: NextConfig = {
         destination: "https://pixelparents.org/:path*",
         permanent: true,
       },
+      // The "Asks" board became the bidirectional "Exchange". Redirect the old
+      // route (and any sub-path) so bookmarks / links keep working.
+      { source: "/asks", destination: "/community", permanent: true },
+      { source: "/asks/:path*", destination: "/community/:path*", permanent: true },
+      { source: "/exchange", destination: "/community", permanent: true },
+      { source: "/exchange/:path*", destination: "/community/:path*", permanent: true },
     ];
   },
 };

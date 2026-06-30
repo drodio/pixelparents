@@ -76,10 +76,10 @@ export function ShareSettings({
           <p className="text-sm text-white/70">
             Your family profile is now listed in our{" "}
             <Link
-              href="/community"
+              href="/directory"
               className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
             >
-              OHS community showcase
+              OHS directory showcase
             </Link>
             . You can also share this direct link with them:
           </p>
@@ -101,7 +101,7 @@ export function ShareSettings({
 
         <div>
           <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/40">
-            Choose what&apos;s visible in the OHS community showcase:
+            Choose what&apos;s visible in the OHS directory showcase:
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
             {SHARE_FIELDS.map((f) => (

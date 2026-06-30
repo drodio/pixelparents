@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { ASK_OFFER_MAX } from "@/lib/ask-validate";
-import { ASK_PROPOSES } from "@/lib/db/asks";
+import { ASK_PROPOSES, type AskKind } from "@/lib/db/asks";
 import { respondToAskAction } from "../actions";
 
 const PROPOSE_LABEL: Record<(typeof ASK_PROPOSES)[number], string> = {
@@ -16,8 +16,12 @@ const PROPOSE_LABEL: Record<(typeof ASK_PROPOSES)[number], string> = {
 const controlCls =
   "w-full rounded-md border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-amber-400/50";
 
-export function OfferHelpForm({ askId }: { askId: string }) {
+// Respond to a post. Wording flips with the post's direction: on an Ask you OFFER
+// to help; on an Offer you REQUEST it. The underlying action + storage are the
+// same (ask_responses).
+export function OfferHelpForm({ askId, kind }: { askId: string; kind: AskKind }) {
   const router = useRouter();
+  const isOffer = kind === "offer";
   const [offer, setOffer] = useState("");
   const [proposes, setProposes] = useState<(typeof ASK_PROPOSES)[number]>("async");
   const [error, setError] = useState<string | null>(null);
@@ -44,13 +48,19 @@ export function OfferHelpForm({ askId }: { askId: string }) {
       className="flex max-w-2xl flex-col gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-5"
     >
       <label className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium text-white/80">How can you help?</span>
+        <span className="text-sm font-medium text-white/80">
+          {isOffer ? "Why are you interested?" : "How can you help?"}
+        </span>
         <textarea
           value={offer}
           onChange={(e) => setOffer(e.target.value)}
           maxLength={ASK_OFFER_MAX}
           rows={3}
-          placeholder="A sentence or two on how you can help."
+          placeholder={
+            isOffer
+              ? "A sentence or two on what you're looking for."
+              : "A sentence or two on how you can help."
+          }
           className={controlCls}
         />
       </label>
@@ -78,7 +88,7 @@ export function OfferHelpForm({ askId }: { askId: string }) {
           disabled={pending}
           className="rounded-full bg-amber-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:opacity-50"
         >
-          {pending ? "Sending…" : "Send offer"}
+          {pending ? "Sending…" : isOffer ? "Request this" : "Send offer"}
         </button>
       </div>
     </form>

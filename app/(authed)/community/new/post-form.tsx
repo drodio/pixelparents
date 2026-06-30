@@ -4,17 +4,50 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { IconX } from "@/components/icons";
 import { ASK_BODY_MAX, ASK_TAGS_MAX, ASK_TITLE_MAX } from "@/lib/ask-validate";
-import { createAskAction } from "../actions";
+import { ASK_KINDS, ASK_URGENCIES, type AskKind, type AskUrgency } from "@/lib/db/asks";
+import { createAskAction, updateAskAction } from "../actions";
 
 const controlCls =
   "w-full rounded-md border border-white/15 bg-white/[0.04] px-3 py-2 text-sm text-white outline-none placeholder:text-white/35 focus:border-amber-400/50";
 
-export function PostAskForm({ suggestedTags }: { suggestedTags: string[] }) {
+const KIND_LABEL: Record<AskKind, string> = {
+  ask: "Ask — I need help",
+  offer: "Offer — I can help",
+};
+
+const URGENCY_LABEL: Record<AskUrgency, string> = {
+  low: "Low",
+  normal: "Normal",
+  high: "High",
+};
+
+// Shared create/edit form for an Community post. When `initial` is provided it
+// edits that post (via updateAskAction); otherwise it creates a new one. Kind,
+// title, body, expertise tags, urgency, and an optional "valid until" date.
+export function PostForm({
+  suggestedTags,
+  initial,
+}: {
+  suggestedTags: string[];
+  initial?: {
+    id: string;
+    kind: AskKind;
+    title: string;
+    body: string;
+    tags: string[];
+    urgency: AskUrgency;
+    validUntil: string | null; // YYYY-MM-DD for the date input
+  };
+}) {
   const router = useRouter();
-  const [title, setTitle] = useState("");
-  const [body, setBody] = useState("");
-  const [tags, setTags] = useState<string[]>([]);
+  const editing = Boolean(initial);
+  const [kind, setKind] = useState<AskKind>(initial?.kind ?? "ask");
+  const [title, setTitle] = useState(initial?.title ?? "");
+  const [body, setBody] = useState(initial?.body ?? "");
+  const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
+  const [urgency, setUrgency] = useState<AskUrgency>(initial?.urgency ?? "normal");
+  const [validUntil, setValidUntil] = useState(initial?.validUntil ?? "");
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
 
@@ -35,9 +68,19 @@ export function PostAskForm({ suggestedTags }: { suggestedTags: string[] }) {
   const submit = () => {
     setError(null);
     startTransition(async () => {
-      const res = await createAskAction({ title, body, tags });
+      const payload = {
+        kind,
+        title,
+        body,
+        tags,
+        urgency,
+        validUntil: validUntil || null,
+      };
+      const res = editing
+        ? await updateAskAction({ id: initial!.id, ...payload })
+        : await createAskAction(payload);
       if (res.ok) {
-        router.push(res.id ? `/asks/${res.id}` : "/asks");
+        router.push(res.id ? `/community/${res.id}` : "/community");
         router.refresh();
       } else {
         setError(res.error);
@@ -57,13 +100,31 @@ export function PostAskForm({ suggestedTags }: { suggestedTags: string[] }) {
       }}
       className="flex max-w-2xl flex-col gap-5"
     >
+      <div className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-white/80">What kind of post?</span>
+        <div className="inline-flex w-fit overflow-hidden rounded-full border border-white/15">
+          {ASK_KINDS.map((k) => (
+            <button
+              key={k}
+              type="button"
+              onClick={() => setKind(k)}
+              className={`px-4 py-2 text-sm font-medium transition-colors ${
+                kind === k ? "bg-amber-400 text-black" : "text-white/65 hover:bg-white/10"
+              }`}
+            >
+              {KIND_LABEL[k]}
+            </button>
+          ))}
+        </div>
+      </div>
+
       <label className="flex flex-col gap-1.5">
         <span className="text-sm font-medium text-white/80">Title</span>
         <input
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={ASK_TITLE_MAX}
-          placeholder="What do you need help with?"
+          placeholder={kind === "offer" ? "What can you help with?" : "What do you need help with?"}
           className={controlCls}
         />
       </label>
@@ -75,7 +136,7 @@ export function PostAskForm({ suggestedTags }: { suggestedTags: string[] }) {
           onChange={(e) => setBody(e.target.value)}
           maxLength={ASK_BODY_MAX}
           rows={5}
-          placeholder="Give the community enough context to help."
+          placeholder="Give the community enough context."
           className={controlCls}
         />
       </label>
@@ -136,6 +197,35 @@ export function PostAskForm({ suggestedTags }: { suggestedTags: string[] }) {
         )}
       </div>
 
+      <div className="flex flex-wrap gap-5">
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-white/80">Urgency</span>
+          <select
+            value={urgency}
+            onChange={(e) => setUrgency(e.target.value as AskUrgency)}
+            className={`${controlCls} w-40`}
+          >
+            {ASK_URGENCIES.map((u) => (
+              <option key={u} value={u}>
+                {URGENCY_LABEL[u]}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1.5">
+          <span className="text-sm font-medium text-white/80">
+            Valid until <span className="font-normal text-white/45">(optional)</span>
+          </span>
+          <input
+            type="date"
+            value={validUntil}
+            onChange={(e) => setValidUntil(e.target.value)}
+            className={`${controlCls} w-48`}
+          />
+        </label>
+      </div>
+
       {error && <p className="text-sm text-red-300">{error}</p>}
 
       <div>
@@ -144,7 +234,7 @@ export function PostAskForm({ suggestedTags }: { suggestedTags: string[] }) {
           disabled={pending}
           className="rounded-full bg-amber-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:opacity-50"
         >
-          {pending ? "Posting…" : "Post ask"}
+          {pending ? "Saving…" : editing ? "Save changes" : "Post"}
         </button>
       </div>
     </form>

@@ -1,4 +1,4 @@
-// Pure helpers for the /community world map. OHS is a global online school, so
+// Pure helpers for the /directory world map. OHS is a global online school, so
 // the signup form captures an optional country alongside US state: US families
 // are plotted by state centroid and international families by country centroid,
 // all on the same Equal-Earth world map (see components/world-map.tsx).

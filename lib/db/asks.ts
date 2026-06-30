@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, asc, eq, ne } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { ensureAsksSchema, ensureFamiliesSchema } from "@/lib/db/ensure";
 import {
@@ -16,39 +16,62 @@ import {
 } from "@/lib/directory";
 import { rankCandidates, type AskMatch, type HelperCandidate } from "@/lib/ask-matching";
 
-// Data layer for the OHS asks → expertise-matching connector. Thin DB access:
-// every function self-heals the asks schema first (the country-column P0 lesson —
-// new tables/columns must be self-healed AND every read path must call the ensure
-// fn), then runs the query. Authorization + privacy live in the server actions
-// and the matcher; this module is purely reads/writes.
+// Data layer for the OHS "Exchange" connector (evolved from the one-directional
+// "Asks" board). Thin DB access: every function self-heals the asks schema first
+// (the country-column P0 lesson — new tables/columns must be self-healed AND
+// every read path must call the ensure fn), then runs the query. Authorization +
+// privacy live in the server actions and the matcher; this module is purely
+// reads/writes. The TABLE stays named `asks`; a `kind` column splits ask/offer.
 
-export type AskStatus = "open" | "matched" | "closed";
+// 'open' (active) | 'matched' (a response was accepted) | 'resolved' (author
+// marked it done) | 'closed' (withdrawn).
+export type AskStatus = "open" | "matched" | "resolved" | "closed";
 export type AskResponseStatus = "offered" | "accepted" | "declined";
 export type AskProposes = "async" | "zoom" | "dinner" | "other";
+export type AskKind = "ask" | "offer";
+export type AskUrgency = "low" | "normal" | "high";
 
 export const ASK_PROPOSES: readonly AskProposes[] = ["async", "zoom", "dinner", "other"];
+export const ASK_KINDS: readonly AskKind[] = ["ask", "offer"];
+export const ASK_URGENCIES: readonly AskUrgency[] = ["low", "normal", "high"];
 
 // --- Reads --------------------------------------------------------------------
 
-// All OPEN asks, newest first — the board's default list.
+// All OPEN posts, oldest first — the board's DEFAULT list (oldest pending on top
+// so the longest-waiting post gets attention first). Other sorts/filters are
+// applied client-side from this set.
 export async function listOpenAsks(): Promise<AskRow[]> {
   await ensureAsksSchema();
   return getDb()
     .select()
     .from(asks)
     .where(eq(asks.status, "open"))
-    .orderBy(desc(asks.createdAt));
+    .orderBy(asc(asks.createdAt));
 }
 
-// A single ask by id (any status), or null. Used by the detail page.
+// All posts regardless of status (open + resolved + matched), oldest open first
+// for the board. Used when the viewer asks to see resolved posts too. We fetch
+// broadly and let the client toggle status; ordering here is created_at ASC so
+// the default "oldest open first" holds once the client filters to open.
+export async function listAllAsks(): Promise<AskRow[]> {
+  await ensureAsksSchema();
+  return getDb()
+    .select()
+    .from(asks)
+    .where(ne(asks.status, "closed"))
+    .orderBy(asc(asks.createdAt));
+}
+
+// A single post by id (any status), or null. Used by the detail page.
 export async function getAskById(id: string): Promise<AskRow | null> {
   await ensureAsksSchema();
   const [row] = await getDb().select().from(asks).where(eq(asks.id, id)).limit(1);
   return row ?? null;
 }
 
-// Every response to an ask, oldest first (offer order). The detail page shows
-// these to the asker (who can accept/decline) and lets a helper see their own.
+// Every response to a post, oldest first (offer/request order). The detail page
+// shows these to the author (who can accept/decline) and lets a responder see
+// their own.
 export async function listResponsesForAsk(askId: string): Promise<AskResponseRow[]> {
   await ensureAsksSchema();
   return getDb()
@@ -58,8 +81,8 @@ export async function listResponsesForAsk(askId: string): Promise<AskResponseRow
     .orderBy(askResponses.createdAt);
 }
 
-// How many asks this author has created since `sinceMs` (epoch). Backs the
-// per-author rate limit in the create-ask server action.
+// How many posts this author has created since `sinceMs` (epoch). Backs the
+// per-author rate limit in the create action.
 export async function countAsksByAuthorSince(
   authorSignupId: string,
   sinceMs: number,
@@ -75,8 +98,8 @@ export async function countAsksByAuthorSince(
   }).length;
 }
 
-// Whether this responder already offered on this ask (one offer per helper per
-// ask — enforced in the respond action so a helper can't spam a single ask).
+// Whether this responder already responded to this post (one response per member
+// per post — enforced in the respond action so a member can't spam a single post).
 export async function hasResponded(
   askId: string,
   responderSignupId: string,
@@ -95,19 +118,19 @@ export async function hasResponded(
   return Boolean(row);
 }
 
-// The DB↔matcher adapter: load candidate helper profiles and rank them by
-// expertise overlap with the ask. We pull every VERIFIED, NON-student family
-// signup (the matcher needs their raw expertise signals), project each into a
-// HelperCandidate, and defer ALL ranking to the pure rankCandidates(). The asker
-// + students are excluded inside the matcher too (belt and suspenders).
+// The DB↔matcher adapter: load candidate member profiles and rank them by
+// expertise overlap with the post. We pull every VERIFIED family signup (the
+// matcher needs their raw expertise signals), project each into a HelperCandidate,
+// and defer ALL ranking to the pure rankCandidates(). The author is excluded
+// inside the matcher too (belt and suspenders). For an Ask, these are people who
+// could help; for an Offer, these are people who might be interested.
 //
 // Privacy: `token` is set ONLY when the member passes isDirectoryVisible (the
 // same single-source-of-truth gate the directory/`/p` uses), so a suggested card
 // links to a profile ONLY if that member opted into sharing — never leaking a
 // path to a private profile. Members who match on expertise but share nothing are
-// still suggested (name only, no link) so the asker can see help exists, but no
-// PII/contact is exposed. Verification is required so unverified families never
-// surface as helpers.
+// still suggested (name only, no link). Verification is required so unverified
+// families never surface.
 export async function getSuggestedHelpers(
   ask: Pick<AskRow, "expertiseTags" | "authorSignupId">,
   limit = 8,
@@ -119,7 +142,7 @@ export async function getSuggestedHelpers(
   const rows = await getDb().select().from(signups);
 
   const candidates: HelperCandidate[] = rows
-    .filter((r) => isFamilyVerified(r)) // unverified families never help
+    .filter((r) => isFamilyVerified(r)) // unverified families never surface
     .map((r) => {
       const signals = expertiseSignalsOf(r);
       return {
@@ -159,9 +182,12 @@ export async function getResponseById(id: string): Promise<AskResponseRow | null
 export async function createAsk(input: {
   authorSignupId: string;
   authorClerkId: string | null;
+  kind: AskKind;
   title: string;
   body: string;
   expertiseTags: string[];
+  urgency: AskUrgency;
+  validUntil: Date | null;
 }): Promise<AskRow> {
   await ensureAsksSchema();
   const [row] = await getDb()
@@ -169,12 +195,79 @@ export async function createAsk(input: {
     .values({
       authorSignupId: input.authorSignupId,
       authorClerkId: input.authorClerkId,
+      kind: input.kind,
       title: input.title,
       body: input.body,
       expertiseTags: input.expertiseTags,
+      urgency: input.urgency,
+      validUntil: input.validUntil,
     })
     .returning();
   return row;
+}
+
+// Update a post's editable fields — scoped to the author (the WHERE clause is the
+// authorization: a post owned by someone else matches 0 rows → null no-op).
+export async function updateAsk(input: {
+  id: string;
+  authorSignupId: string;
+  kind: AskKind;
+  title: string;
+  body: string;
+  expertiseTags: string[];
+  urgency: AskUrgency;
+  validUntil: Date | null;
+}): Promise<AskRow | null> {
+  await ensureAsksSchema();
+  const [row] = await getDb()
+    .update(asks)
+    .set({
+      kind: input.kind,
+      title: input.title,
+      body: input.body,
+      expertiseTags: input.expertiseTags,
+      urgency: input.urgency,
+      validUntil: input.validUntil,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(asks.id, input.id), eq(asks.authorSignupId, input.authorSignupId)))
+    .returning();
+  return row ?? null;
+}
+
+// Delete a post — scoped to the author. Returns true if a row was deleted (the
+// caller was the author), false otherwise. Cascades to ask_responses (FK).
+export async function deleteAsk(input: {
+  id: string;
+  authorSignupId: string;
+}): Promise<boolean> {
+  await ensureAsksSchema();
+  const deleted = await getDb()
+    .delete(asks)
+    .where(and(eq(asks.id, input.id), eq(asks.authorSignupId, input.authorSignupId)))
+    .returning({ id: asks.id });
+  return deleted.length > 0;
+}
+
+// Toggle a post between open and resolved — scoped to the author. On resolve we
+// set status='resolved' + resolved_at; on reopen we clear back to open + null
+// resolved_at. Returns the updated row, or null (not the author / unknown id).
+export async function setAskResolved(input: {
+  id: string;
+  authorSignupId: string;
+  resolved: boolean;
+}): Promise<AskRow | null> {
+  await ensureAsksSchema();
+  const [row] = await getDb()
+    .update(asks)
+    .set({
+      status: input.resolved ? "resolved" : "open",
+      resolvedAt: input.resolved ? new Date() : null,
+      updatedAt: new Date(),
+    })
+    .where(and(eq(asks.id, input.id), eq(asks.authorSignupId, input.authorSignupId)))
+    .returning();
+  return row ?? null;
 }
 
 export async function createResponse(input: {
@@ -198,11 +291,11 @@ export async function createResponse(input: {
   return row;
 }
 
-// Record the asker's decision on a response, scoped so it ONLY applies to a
-// response whose parent ask the caller authored (authorSignupId). The join-in-
-// WHERE is the authorization: a response on someone else's ask matches 0 rows and
-// is a silent no-op. On ACCEPT we also flip the ask to 'matched'. Returns the
-// updated response, or null if nothing matched (not the asker / unknown id).
+// Record the author's decision on a response, scoped so it ONLY applies to a
+// response whose parent post the caller authored (authorSignupId). The join-in-
+// WHERE is the authorization: a response on someone else's post matches 0 rows
+// and is a silent no-op. On ACCEPT we also flip the post to 'matched'. Returns the
+// updated response, or null if nothing matched (not the author / unknown id).
 export async function decideResponse(input: {
   responseId: string;
   askerSignupId: string;
@@ -211,7 +304,7 @@ export async function decideResponse(input: {
   await ensureAsksSchema();
   const db = getDb();
 
-  // Confirm the response belongs to an ask authored by the caller before writing.
+  // Confirm the response belongs to a post authored by the caller before writing.
   const [match] = await db
     .select({ responseId: askResponses.id, askId: asks.id })
     .from(askResponses)

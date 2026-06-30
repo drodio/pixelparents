@@ -232,11 +232,11 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
     </div>
   );
 
-  // Clicking a member opens their profile IN-TAB at /community/<token> — a nested
+  // Clicking a member opens their profile IN-TAB at /directory/<token> — a nested
   // route rendered inside DashboardShell, NOT a jump to /p (which exits the shell).
   return (
     <Link
-      href={`/community/${card.token}`}
+      href={`/directory/${card.token}`}
       className={
         wide
           ? "group flex gap-4 rounded-2xl border border-white/10 bg-white/[0.02] p-4 transition-colors hover:border-amber-400/40 hover:bg-white/[0.04]"
@@ -315,7 +315,7 @@ function DualRange({
 
 // The consolidated community member grid: parents AND students who opted in. A
 // fork of the old directory client — same URL-persisted filters (search, age,
-// near-me, interests, sort, per-row) — but cards open IN-TAB at /community/<token>
+// near-me, interests, sort, per-row) — but cards open IN-TAB at /directory/<token>
 // and surface the student badge, skillsets, and opt-in LinkedIn/GitHub links.
 export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
   const router = useRouter();

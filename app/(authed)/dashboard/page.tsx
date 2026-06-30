@@ -178,8 +178,8 @@ export default async function DashboardPage() {
           </h2>
           <div className="grid gap-4 sm:grid-cols-2">
             <LinkCard
-              href="/community"
-              title="Community"
+              href="/directory"
+              title="Directory"
               desc="Browse OHS families and students who are sharing, plus a map of where we're building."
               Icon={IconUsers}
             />

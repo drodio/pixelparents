@@ -109,10 +109,10 @@ export default async function VerifyPage({
                 Open dashboard
               </Link>
               <Link
-                href="/community"
+                href="/directory"
                 className="rounded-full border border-white/20 px-5 py-2 text-sm font-semibold text-white transition hover:bg-white/10"
               >
-                Community
+                Directory
               </Link>
             </div>
           )}

@@ -21,7 +21,7 @@ export const metadata: Metadata = {
 };
 
 // The public secret share page. Renders the shared ProfileView in its full-bleed
-// "public" variant; the SAME component powers the in-dashboard /community/<token>
+// "public" variant; the SAME component powers the in-dashboard /directory/<token>
 // view ("dashboard" variant), so the two can never drift.
 export default async function SharedProfilePage({
   params,
