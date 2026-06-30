@@ -8,6 +8,7 @@ import { optimizeImage } from "@/lib/image";
 import type { Photo } from "@/lib/db/schema/signups";
 import { MentionCaptionInput, type MentionCandidate } from "@/components/mention-caption-input";
 import { iconForInterest } from "@/lib/interest-icons";
+import { TagList } from "@/components/tag-list";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import { IconX } from "@/components/icons";
@@ -85,9 +86,15 @@ export function TagPicker({
 
   return (
     <div className="mt-1">
+      {/* Selected tags compress to the first few + "+N more" so a long list of
+          picks doesn't bury the input below it. Each chip stays a click-to-remove
+          button; expanding reveals the rest inline. */}
       {value.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-2">
-          {value.map((t) => {
+        <TagList
+          tags={value}
+          className="mb-2 flex flex-wrap items-center gap-2"
+          toggleClassName="inline-flex items-center rounded-md border border-white/20 px-3 py-1 text-sm font-medium text-white/70 transition-colors hover:bg-white/10"
+          renderTag={(t) => {
             const Icon = iconForInterest(t);
             return (
               <button
@@ -100,8 +107,8 @@ export function TagPicker({
                 {t} <IconX className="h-3 w-3" />
               </button>
             );
-          })}
-        </div>
+          }}
+        />
       )}
       <input
         value={draft}

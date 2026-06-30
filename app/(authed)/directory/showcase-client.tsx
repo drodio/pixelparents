@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { iconForInterest } from "@/lib/interest-icons";
 import { IconX, IconCode, IconGradCap, IconLinkedin, IconGithub } from "@/components/icons";
+import { TagList } from "@/components/tag-list";
 import {
   familyMatchesAgeRange,
   familyWithinRadius,
@@ -165,8 +166,11 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
         <p className="text-sm text-amber-400/90">{childNames.join(", ")}</p>
       )}
       {tags.length > 0 && (
-        <div className="mt-1 flex flex-wrap gap-1.5">
-          {tags.slice(0, wide ? 12 : 6).map((t) => {
+        <TagList
+          tags={tags}
+          max={wide ? 12 : 6}
+          className="mt-1 flex flex-wrap items-center gap-1.5"
+          renderTag={(t) => {
             const Icon = iconForInterest(t);
             return (
               <span
@@ -177,13 +181,8 @@ function Card({ card, wide }: { card: DirectoryCard; wide: boolean }) {
                 {t}
               </span>
             );
-          })}
-          {tags.length > (wide ? 12 : 6) && (
-            <span className="self-center text-xs text-white/40">
-              +{tags.length - (wide ? 12 : 6)}
-            </span>
-          )}
-        </div>
+          }}
+        />
       )}
       {(card.linkedinUrl || card.githubUrl) && (
         <div className="flex flex-wrap gap-2 pt-0.5 text-white/45">
@@ -699,28 +698,35 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
           </div>
         </div>
 
-        {/* Interest / skill filter chips */}
+        {/* Interest / skill filter chips. Collapsed to a handful with a
+            "+N more" toggle so the ~40-item facet doesn't dominate the page;
+            expanding reveals the rest, and every chip stays a clickable filter. */}
         {allInterests.length > 0 && (
           <div className="flex flex-wrap items-center gap-2">
-            {allInterests.map((label) => {
-              const active = selected.has(label.toLowerCase());
-              const Icon = iconForInterest(label);
-              return (
-                <button
-                  key={label}
-                  type="button"
-                  onClick={() => toggleInterest(label)}
-                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
-                    active
-                      ? "border-amber-400 bg-amber-400 text-black"
-                      : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/10"
-                  }`}
-                >
-                  <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                  {label}
-                </button>
-              );
-            })}
+            <TagList
+              tags={allInterests}
+              max={12}
+              className="flex flex-wrap items-center gap-2"
+              renderTag={(label) => {
+                const active = selected.has(label.toLowerCase());
+                const Icon = iconForInterest(label);
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => toggleInterest(label)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs transition-colors ${
+                      active
+                        ? "border-amber-400 bg-amber-400 text-black"
+                        : "border-white/15 bg-white/[0.04] text-white/70 hover:bg-white/10"
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+                    {label}
+                  </button>
+                );
+              }}
+            />
             {selected.size > 0 && (
               <button
                 type="button"

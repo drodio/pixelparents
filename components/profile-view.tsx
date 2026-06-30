@@ -25,6 +25,7 @@ import {
 } from "@/components/icons";
 import { PhotoCarousel, type CaptionPart } from "@/components/photo-carousel";
 import { VisibilityControl } from "@/components/visibility-control";
+import { TagList } from "@/components/tag-list";
 
 // Shared, reusable profile renderer. Powers BOTH:
 //   • the public secret share page  /p/<token>        (variant="public")
@@ -39,18 +40,17 @@ import { VisibilityControl } from "@/components/visibility-control";
 // regardless of which fields they opted to share. Opt-in links (LinkedIn/GitHub)
 // are gated behind the NEW, default-OFF "links" share field.
 
+// Interest / skill / expertise chip blocks. Long lists collapse to the first
+// few with a "+N more" toggle (TagList owns the collapse logic) so a profile
+// with dozens of tags doesn't render as one big messy block.
 function Pills({ items }: { items: string[] }) {
   return (
-    <div className="flex flex-wrap gap-2">
-      {items.map((t) => (
-        <span
-          key={t}
-          className="rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-sm text-white/85"
-        >
-          {t}
-        </span>
-      ))}
-    </div>
+    <TagList
+      tags={items}
+      className="flex flex-wrap items-center gap-2"
+      chipClassName="rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-sm text-white/85"
+      toggleClassName="inline-flex items-center rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-sm font-medium text-white/60 transition-colors hover:bg-white/10 hover:text-white/85"
+    />
   );
 }
 
