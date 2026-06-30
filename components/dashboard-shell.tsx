@@ -13,6 +13,7 @@ import {
   IconSettings,
   IconLock,
   IconHeart,
+  IconCalendar,
 } from "@/components/icons";
 
 type NavItem = {
@@ -28,6 +29,10 @@ const NAV: NavItem[] = [
   // need help") or Offers ("I can help") + get matched. The surface gates to
   // verified families; the tab shows for all authed users (unverified → a prompt).
   { href: "/community", label: "Community", Icon: IconHeart },
+  // "Events" is the shared OHS calendar: a month grid of community-created events
+  // plus the auto-imported Stanford OHS school-year calendar. Placed right after
+  // Community; the surface gates to verified OHS families (like Community/Directory).
+  { href: "/events", label: "Events", Icon: IconCalendar },
   // "Directory" is the consolidated member showcase (grid + map + stats) with
   // in-tab profile views, now served at /directory.
   { href: "/directory", label: "Directory", Icon: IconUsers },

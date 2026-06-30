@@ -1,0 +1,141 @@
+// PURE, DB-free helpers that turn a flat list of events into a month-grid + the
+// list views the calendar UI renders. Shared by the client component and the unit
+// tests. All date math is done in the VIEWER's local time (the client passes a
+// `now` and the Date objects are already local-rendered), so a multi-day event
+// lands on every local day it overlaps.
+
+export type CalendarEvent = {
+  id: string;
+  title: string;
+  description: string | null;
+  // ISO instant strings (UTC) — parsed to Date for placement.
+  startsAt: string;
+  endsAt: string | null;
+  isOnline: boolean;
+  allDay: boolean;
+  location: string | null;
+  onlineUrl: string | null;
+  source: "user" | "ohs";
+  authorLabel: string | null;
+  goingCount: number;
+  interestedCount: number;
+  // Whether the current viewer can edit this event (author or admin, never OHS).
+  canEdit: boolean;
+  // The viewer's own RSVP, if any.
+  myRsvp: "going" | "interested" | null;
+};
+
+export type DayCell = {
+  // Local calendar date this cell represents.
+  date: Date;
+  inMonth: boolean;
+  isToday: boolean;
+  // Events overlapping this day, sorted (all-day/multi-day first, then by start).
+  events: CalendarEvent[];
+};
+
+// A local YYYY-MM-DD key for a Date (viewer-local, not UTC) — used to bucket
+// events onto days without timezone drift.
+export function localDayKey(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// Midnight (local) at the start of the given day.
+function startOfDay(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate());
+}
+
+// True if an event overlaps the local calendar day `day` (midnight→midnight).
+export function eventOverlapsDay(ev: CalendarEvent, day: Date): boolean {
+  const dayStart = startOfDay(day).getTime();
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000;
+  const start = new Date(ev.startsAt).getTime();
+  // For an event with no end, treat it as instantaneous (placed on its start day).
+  const end = ev.endsAt ? new Date(ev.endsAt).getTime() : start;
+  // Overlap if [start, end] intersects [dayStart, dayEnd). An all-day event whose
+  // end is stored as the inclusive last day still overlaps that day.
+  return start < dayEnd && end >= dayStart;
+}
+
+// Sort key within a day: multi-day / all-day events bubble to the top, then by
+// start instant, then title.
+function dayEventSort(a: CalendarEvent, b: CalendarEvent): number {
+  const aMulti = a.allDay || Boolean(a.endsAt);
+  const bMulti = b.allDay || Boolean(b.endsAt);
+  if (aMulti !== bMulti) return aMulti ? -1 : 1;
+  const at = new Date(a.startsAt).getTime();
+  const bt = new Date(b.startsAt).getTime();
+  if (at !== bt) return at - bt;
+  return a.title.localeCompare(b.title);
+}
+
+// Build the 6-row (42-cell) grid for the month containing `monthAnchor`. The grid
+// starts on the Sunday on/before the 1st and runs 42 days so every month fits a
+// stable 6×7 layout. `weekStartsOn` defaults to 0 (Sunday).
+export function buildMonthGrid(
+  monthAnchor: Date,
+  events: CalendarEvent[],
+  now: Date = new Date(),
+  weekStartsOn = 0,
+): DayCell[] {
+  const year = monthAnchor.getFullYear();
+  const month = monthAnchor.getMonth();
+  const first = new Date(year, month, 1);
+
+  // Back up to the start-of-week before (or on) the 1st.
+  const lead = (first.getDay() - weekStartsOn + 7) % 7;
+  const gridStart = new Date(year, month, 1 - lead);
+
+  const todayKey = localDayKey(now);
+
+  const cells: DayCell[] = [];
+  for (let i = 0; i < 42; i++) {
+    const date = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + i);
+    const dayEvents = events.filter((ev) => eventOverlapsDay(ev, date)).sort(dayEventSort);
+    cells.push({
+      date,
+      inMonth: date.getMonth() === month,
+      isToday: localDayKey(date) === todayKey,
+      events: dayEvents,
+    });
+  }
+  return cells;
+}
+
+// Partition events into upcoming (end/start >= now) and past, each sorted. An
+// event with an end uses its end to decide "past"; otherwise its start.
+export function splitUpcomingPast(
+  events: CalendarEvent[],
+  now: Date = new Date(),
+): { upcoming: CalendarEvent[]; past: CalendarEvent[] } {
+  const nowMs = now.getTime();
+  const upcoming: CalendarEvent[] = [];
+  const past: CalendarEvent[] = [];
+  for (const ev of events) {
+    const ref = ev.endsAt ? new Date(ev.endsAt).getTime() : new Date(ev.startsAt).getTime();
+    if (ref >= nowMs) upcoming.push(ev);
+    else past.push(ev);
+  }
+  upcoming.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+  past.sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime());
+  return { upcoming, past };
+}
+
+// Events that start within the next 7 days (inclusive of today) — drives the
+// "happening this week" highlight strip.
+export function eventsThisWeek(
+  events: CalendarEvent[],
+  now: Date = new Date(),
+): CalendarEvent[] {
+  const start = startOfDay(now).getTime();
+  const end = start + 7 * 24 * 60 * 60 * 1000;
+  return events
+    .filter((ev) => {
+      const s = new Date(ev.startsAt).getTime();
+      const e = ev.endsAt ? new Date(ev.endsAt).getTime() : s;
+      // Overlaps the [today, +7d) window.
+      return s < end && e >= start;
+    })
+    .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+}

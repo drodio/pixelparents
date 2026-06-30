@@ -217,6 +217,57 @@ export function IconCode(props: IconProps) {
   );
 }
 
+// Calendar — the Events tab. A grid with a header bar + two hanging tabs.
+export function IconCalendar(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3.5" y="5" width="17" height="15.5" rx="2" />
+      <path d="M3.5 9.5h17" />
+      <path d="M8 3v4" />
+      <path d="M16 3v4" />
+      <path d="M7.5 13h2M11 13h2M14.5 13h2M7.5 16.5h2M11 16.5h2" />
+    </Icon>
+  );
+}
+
+// Map pin — an in-person event's location marker.
+export function IconMapPin(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 21s7-5.5 7-11a7 7 0 0 0-14 0c0 5.5 7 11 7 11Z" />
+      <circle cx="12" cy="10" r="2.5" />
+    </Icon>
+  );
+}
+
+// Video camera — an online event marker.
+export function IconVideo(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="3" y="6.5" width="12" height="11" rx="2" />
+      <path d="M15 10.5l6-3.5v10l-6-3.5" />
+    </Icon>
+  );
+}
+
+// Plus — "new event" / add control.
+export function IconPlus(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 5v14M5 12h14" />
+    </Icon>
+  );
+}
+
+// Star — "interested" RSVP.
+export function IconStar(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M12 4l2.3 4.9 5.2.6-3.9 3.6 1.1 5.1L12 16.9 7.2 18.8l1.1-5.1L4.4 10l5.2-.6L12 4Z" />
+    </Icon>
+  );
+}
+
 // Padlock — a locked / sign-in-required nav item. Shown beside grayed tabs when
 // the dashboard renders in its signed-out (unauthenticated) mode.
 export function IconLock(props: IconProps) {

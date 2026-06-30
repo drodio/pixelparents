@@ -7,3 +7,4 @@ export * from "./signups";
 export * from "./admins";
 export * from "./changelog";
 export * from "./asks";
+export * from "./events";

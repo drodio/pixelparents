@@ -215,3 +215,89 @@ export function ensureAsksSchema(): Promise<void> {
   }
   return asksEnsured;
 }
+
+// Self-healing guard for the Events calendar (same rationale as the guards above:
+// this app shares one Neon DB with features that run their own partial
+// `drizzle-kit push`, and there is NO migrate-on-deploy, so a brand-new table
+// won't exist until a human migrates — by which point every events read/write
+// would throw). We create `events` + `event_admins` + `event_rsvps` idempotently
+// on the first events op per cold start so the surface works immediately. Every
+// read/write path in lib/db/events.ts calls this first (the country-column P0
+// lesson: new tables MUST be self-healed AND read paths must invoke the ensure).
+//
+// Statements mirror lib/db/schema/events.ts. CREATE handles a dropped table; the
+// ALTERs upgrade an older table in place. All idempotent, in ONE round-trip.
+let eventsEnsured: Promise<void> | null = null;
+
+export function ensureEventsSchema(): Promise<void> {
+  if (!eventsEnsured) {
+    eventsEnsured = (async () => {
+      const sql = getSql();
+      await sql.transaction([
+        sql`
+        CREATE TABLE IF NOT EXISTS events (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at timestamptz NOT NULL DEFAULT now(),
+          updated_at timestamptz NOT NULL DEFAULT now(),
+          title text NOT NULL,
+          description text,
+          starts_at timestamptz NOT NULL,
+          ends_at timestamptz,
+          is_online boolean NOT NULL DEFAULT false,
+          location text,
+          online_url text,
+          all_day boolean NOT NULL DEFAULT false,
+          source text NOT NULL DEFAULT 'user',
+          author_signup_id uuid REFERENCES signups(id) ON DELETE CASCADE,
+          author_clerk_id text,
+          author_label text,
+          external_key text
+        )
+      `,
+        sql`
+        CREATE TABLE IF NOT EXISTS event_admins (
+          event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+          signup_id uuid NOT NULL REFERENCES signups(id) ON DELETE CASCADE,
+          created_at timestamptz NOT NULL DEFAULT now()
+        )
+      `,
+        sql`
+        CREATE TABLE IF NOT EXISTS event_rsvps (
+          id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+          created_at timestamptz NOT NULL DEFAULT now(),
+          event_id uuid NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+          signup_id uuid NOT NULL REFERENCES signups(id) ON DELETE CASCADE,
+          status text NOT NULL DEFAULT 'going'
+        )
+      `,
+        // Idempotent upgrades for an older `events` shape.
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now()`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS description text`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS ends_at timestamptz`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS is_online boolean NOT NULL DEFAULT false`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS location text`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS online_url text`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS all_day boolean NOT NULL DEFAULT false`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS source text NOT NULL DEFAULT 'user'`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS author_signup_id uuid`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS author_clerk_id text`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS author_label text`,
+        sql`ALTER TABLE events ADD COLUMN IF NOT EXISTS external_key text`,
+        // De-dup key for OHS imports: one event per external_key. A partial unique
+        // index (only where external_key is set) lets the importer UPSERT on it
+        // while leaving user events (NULL key) unconstrained.
+        sql`CREATE UNIQUE INDEX IF NOT EXISTS events_external_key_idx ON events (external_key) WHERE external_key IS NOT NULL`,
+        // One RSVP per (event, member) — backs the upsert that flips going↔interested.
+        sql`CREATE UNIQUE INDEX IF NOT EXISTS event_rsvps_event_signup_idx ON event_rsvps (event_id, signup_id)`,
+        // One admin row per (event, member).
+        sql`CREATE UNIQUE INDEX IF NOT EXISTS event_admins_event_signup_idx ON event_admins (event_id, signup_id)`,
+        // The calendar reads a date window ordered by start — index it.
+        sql`CREATE INDEX IF NOT EXISTS events_starts_at_idx ON events (starts_at)`,
+      ]);
+    })().catch((e) => {
+      eventsEnsured = null;
+      throw e;
+    });
+  }
+  return eventsEnsured;
+}
