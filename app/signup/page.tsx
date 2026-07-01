@@ -74,7 +74,7 @@ export default async function SignupPage({
           <h2 className="mt-2 max-w-prose text-xl font-bold text-white/80 sm:text-2xl">
             and connect with{" "}
             <span className="text-amber-400">{kidsCount.toLocaleString()}</span>{" "}
-            OHS kids
+            OHS students
             <br />
             around{" "}
             <span className="text-amber-400">
