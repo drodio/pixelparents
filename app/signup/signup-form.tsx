@@ -365,8 +365,34 @@ export default function SignupForm({
       }
       router.push(`/signup/thanks?id=${id}`);
     } else {
-      setErrors(res.errors ?? {});
-      if (res.message) setMessage(res.message);
+      const errs = res.errors ?? {};
+      setErrors(errs);
+      // completeSignup returns no top-level message for pure field errors, and
+      // the required fields live at the TOP of a long form while the submit
+      // button is at the very bottom — so a blank early field looked like a dead
+      // button (no scroll, no focus, no banner near the button). Always give
+      // visible feedback: set a generic message AND scroll/focus the first
+      // errored field into view.
+      const keys = Object.keys(errs);
+      if (res.message) {
+        setMessage(res.message);
+      } else if (keys.length > 0) {
+        setMessage("Please fix the highlighted fields above.");
+      }
+      if (typeof document !== "undefined" && keys.length > 0) {
+        // Focus the first errored field that has a matching DOM element (some
+        // errors, e.g. section-level ones, may not map to a focusable input —
+        // fall back to scrolling whichever element we can find).
+        const first = keys
+          .map((k) => document.getElementById(k))
+          .find((el): el is HTMLElement => el != null);
+        if (first) {
+          first.scrollIntoView({ behavior: "smooth", block: "center" });
+          if (typeof (first as HTMLElement).focus === "function") {
+            first.focus({ preventScroll: true });
+          }
+        }
+      }
       setSubmitting(false);
     }
   }

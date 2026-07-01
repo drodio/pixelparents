@@ -1,3 +1,36 @@
+## Progress Update as of [June 30, 2026 — 10:00 PM Pacific]
+
+### Summary of changes since last update
+Findings 1, 2, 8. Findings 3, 4, 5, 6, 7, 10, 11, 12, 13, 14 already done. Only
+9 remains (deferred — needs the non-owned student-verify widget).
+
+### Detail of changes made:
+- **Finding 1 (welcome page dead-end)** — `app/signup/welcome/page.tsx` is now a
+  status-aware server component: reads `?id=` (passed from the family-form Finish
+  link), looks up the signup, and if `readApprovalStatus === "approved"` shows a
+  "you're verified — open your dashboard" message; otherwise the pending
+  review-email copy. Either way it now always offers a "Go to dashboard →" link so
+  it's never a wait-for-email dead-end. family-form's Finish link now includes
+  `?id=${signupId}`.
+- **Finding 2 (blank early field = dead button)** — `signup-form.tsx` `onContinue`:
+  on field-only errors it now sets a top banner ("Please fix the highlighted
+  fields above.") AND scrolls/focuses the first errored field (matching DOM id)
+  into view, so there's always visible feedback near the bottom submit button.
+- **Finding 8 (re-verify shows fake "we sent a code")** — `verify-actions.ts`
+  `requestStudentCode`: the already-verified short-circuit now returns
+  `{ok:false, error:"This student is already verified — no code needed."}` instead
+  of `{ok:true, sentTo}`. The widget's existing `!r.ok` path shows the message and
+  keeps the user on the email step, killing the dead-end code screen. Done using
+  the existing widget contract (no widget change needed).
+
+### Deferrals:
+- **Finding 9 (student-account thanks page shows parent-facing verify copy)** —
+  DEFERRED. The only copy lever the widget exposes is `studentNames`, which yields
+  third-person "have <name> check their email" — still wrong when the viewer IS
+  the student. A proper fix needs a new "self" mode in
+  `components/student-verify.tsx`, which is owned by another agent. Noted for that
+  agent; no owned-file fix delivers it.
+
 ## Progress Update as of [June 30, 2026 — 10:08 PM Pacific]
 
 ### Summary of changes since last update

@@ -617,7 +617,10 @@ export default function FamilyForm({
       <div className="flex items-center gap-3">
         {showFinish && (
           <Link
-            href="/signup/welcome"
+            // Pass the signup id so the welcome screen can be status-aware
+            // (already-verified families get a dashboard prompt, not "wait for an
+            // email that isn't coming").
+            href={`/signup/welcome?id=${encodeURIComponent(signupId)}`}
             className="rounded-full bg-white px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90"
           >
             Finish →

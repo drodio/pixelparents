@@ -100,9 +100,19 @@ export async function requestStudentCode(
     if (!row) return { ok: false, error: "We couldn't find your signup — please reload the page." };
     const extra = (row.extra ?? {}) as Record<string, unknown>;
     // A family may verify many students. If this exact email is already verified
-    // there's nothing to do — short-circuit. But an already-approved family can
-    // still send a code for a NEW student, so we only stop on an exact re-verify.
-    if (verifiedEmailsOf(extra).includes(email)) return { ok: true, sentTo: email };
+    // there's nothing to do — but we must NOT return ok:true here: the widget only
+    // checks r.ok and would advance to the code step showing "We sent a 6-digit
+    // code" when no code was sent, leaving the family waiting on a code that never
+    // arrives. Return a clear message via the error path so the widget stays put
+    // and tells them it's already done. (An already-approved family can still send
+    // a code for a NEW, not-yet-verified student — we only stop on an exact
+    // re-verify of an email already on file.)
+    if (verifiedEmailsOf(extra).includes(email)) {
+      return {
+        ok: false,
+        error: "This student is already verified — no code needed.",
+      };
+    }
 
     const prev = pendingOf(extra);
     const now = Date.now();
