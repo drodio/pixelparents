@@ -26,6 +26,8 @@ describe("isNotificationType", () => {
       "community_response",
       "community_connected",
       "community_mention",
+      "community_reply",
+      "community_event",
       "event_rsvp",
       "board_contribution",
     ]);
@@ -103,6 +105,7 @@ describe("notificationsSubtitle", () => {
   it("describes every notification source when the list is empty (finding 6)", () => {
     const copy = notificationsSubtitle(0, 0);
     expect(copy).toMatch(/posts/i);
+    expect(copy).toMatch(/replies/i);
     expect(copy).toMatch(/connections/i);
     expect(copy).toMatch(/events/i);
     expect(copy).toMatch(/boards/i);
