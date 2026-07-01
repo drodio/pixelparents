@@ -36,6 +36,7 @@ export const CHANGELOG_CATEGORIES: { slug: string; label: string }[] = [
   { slug: "design", label: "Design" },
   { slug: "events", label: "Events" },
   { slug: "notifications", label: "Notifications" },
+  { slug: "resources", label: "Resources" },
 ];
 
 export function categoryLabel(slug: string): string {
@@ -140,7 +141,7 @@ export async function getChangelogEntries(): Promise<ChangelogEntryView[]> {
   if (!hasDatabase()) return [];
   try {
     await ensureChangelogTables();
-    await seedIfEmpty();
+    await ensureSeedEntries();
     const rows = await getDb()
       .select()
       .from(changelogEntries)
@@ -202,6 +203,33 @@ export type SeedEntry = {
 };
 
 export const SEED_ENTRIES: SeedEntry[] = [
+  {
+    slug: "community-resource-boards",
+    shippedAt: "2026-06-30T18:00:00Z",
+    title: "Community resource boards",
+    summary:
+      "The Resources tab is now a set of community boards: curated, upvoteable collections of links, files, and notes that stay organized and permanent instead of scrolling away in a chat.",
+    bullets: [
+      "Start a board on any topic and fill it with links, uploaded files, or written notes.",
+      "Boards are auto-labeled by topic, upvoteable, and followable, and every contribution is credited to whoever shared it.",
+    ],
+    changeType: "feature",
+    categories: ["resources", "sharing"],
+  },
+  {
+    slug: "resource-board-files-pinning-editing",
+    shippedAt: "2026-06-30T20:00:00Z",
+    title: "Files, pinning, and editing on boards",
+    summary:
+      "Resource boards now take document uploads, let board owners pin the most useful contributions, and let contributors edit or remove their own posts.",
+    bullets: [
+      "Upload PDFs and documents to a board, not just links.",
+      "Board owners can pin key contributions to the top; anyone can edit or delete their own.",
+      "The whole board card is now clickable, so it is easier to open on any device.",
+    ],
+    changeType: "enhancement",
+    categories: ["resources", "design"],
+  },
   {
     slug: "sign-in-with-pixel-parents",
     shippedAt: "2026-06-29T17:00:00Z",
@@ -391,20 +419,20 @@ export async function seedChangelog(): Promise<number> {
   return inserted;
 }
 
-// Seed the initial entries only when the table is empty. Runs at most once per
-// cold start; never re-seeds after entries exist (so deletes/edits stick).
+// Ensure every seed entry is present, inserting only the ones whose slug is
+// missing (seedChangelog is idempotent via onConflictDoNothing on slug). Unlike
+// the old "seed only when the table is empty" approach, this also backfills NEW
+// seed entries into a table that was populated by an earlier, shorter seed list
+// — otherwise the public changelog silently freezes at whatever shipped the day
+// it was first seeded. Runs at most once per cold start.
 let seedChecked = false;
-export async function seedIfEmpty(): Promise<void> {
+export async function ensureSeedEntries(): Promise<void> {
   if (seedChecked) return;
   seedChecked = true;
   try {
-    const existing = await getDb()
-      .select({ id: changelogEntries.id })
-      .from(changelogEntries)
-      .limit(1);
-    if (existing.length === 0) await seedChangelog();
+    await seedChangelog();
   } catch (err) {
     seedChecked = false; // allow a retry on a later request
-    console.error("seedIfEmpty failed:", err);
+    console.error("ensureSeedEntries failed:", err);
   }
 }
