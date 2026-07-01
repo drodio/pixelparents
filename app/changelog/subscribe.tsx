@@ -26,7 +26,13 @@ export function ChangelogSubscribe() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      setStatus(res.ok ? "done" : "failed");
+      // A 400 is a permanent input problem (e.g. the server's 200-char cap) — the
+      // exact same address will never succeed, so prompt an edit ("invalid") not a
+      // retry. A 429 (rate limited) and any 5xx / network error ARE transient, so
+      // they get the "try again" copy ("failed").
+      setStatus(
+        res.ok ? "done" : res.status === 429 || res.status >= 500 ? "failed" : "invalid",
+      );
     } catch {
       setStatus("failed");
     }
@@ -66,6 +72,7 @@ export function ChangelogSubscribe() {
           if (status === "invalid" || status === "failed") setStatus("idle");
         }}
         placeholder="you@example.com"
+        maxLength={200}
         autoFocus
         className="min-w-0 flex-1 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white placeholder-white/30 outline-none focus:border-white/40 sm:w-56 sm:flex-none"
       />

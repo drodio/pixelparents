@@ -52,7 +52,7 @@ function page(outcome: UnsubscribeOutcome): string {
     return shell(
       "Link expired",
       "We couldn't process that link",
-      "This unsubscribe link is expired or invalid. If you're still getting emails, use the unsubscribe link in the most recent one, or manage your subscription from the changelog.",
+      "This unsubscribe link is expired or invalid. If you're still getting emails, use the unsubscribe link in your most recent Pixel Parents email.",
     );
   }
   return shell(

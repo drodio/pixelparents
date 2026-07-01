@@ -1,5 +1,35 @@
 # feat/qa-shellmisc — QA fix pass (app shell, notifications, help/feedback, admin, changelog, legal, report/error)
 
+## Progress Update as of [June 30, 2026 — 9:58 PM Pacific]
+
+### Summary of changes since last update
+Changelog bucket (findings 13, 14, 15). Fixed the unsubscribe not-found copy so it
+stops promising a changelog manage flow that doesn't exist; added a per-IP rate
+limit to the public subscribe endpoint (the easy-abuse hole); and made the subscribe
+form distinguish a permanent 400 (edit the address) from a transient 429/5xx/network
+error (retry), plus a `maxLength={200}` to match the server cap.
+
+### Detail of changes made:
+- **[13] Unsubscribe not-found copy** — `api/changelog/unsubscribe/route.ts` "not-found"
+  page now says "use the unsubscribe link in your most recent Pixel Parents email"
+  instead of pointing to a nonexistent changelog manage UI (honest option a).
+- **[14] Subscribe abuse** — `api/changelog/subscribe/route.ts` gains a best-effort
+  in-memory per-IP limiter (5 / 10 min, mirroring the report action), returning 429
+  when tripped. NOTE: double opt-in (insert-as-pending + tokenized confirm) is the
+  fuller consent fix but is a larger email-flow change — deferred as a follow-up,
+  the rate limit closes the flood/enroll-arbitrary-address hole. `lib/changelog.ts`
+  unchanged.
+- **[15] Misleading "try again"** — `app/changelog/subscribe.tsx` maps `res.ok→done`,
+  `400→invalid` ("Enter a valid email."), `429|5xx/network→failed` ("try again");
+  added `maxLength={200}` so the client can't submit past the server's cap.
+
+### Files touched (this commit)
+- `app/api/changelog/unsubscribe/route.ts`
+- `app/api/changelog/subscribe/route.ts`
+- `app/changelog/subscribe.tsx`
+
+---
+
 ## Progress Update as of [June 30, 2026 — 9:57 PM Pacific]
 
 ### Summary of changes since last update
