@@ -160,6 +160,31 @@ export function ChangelogTimeline({ entries }: { entries: ChangelogEntryView[] }
               <span className="ml-auto text-xs text-white/40">{formatDate(e.shippedAt)}</span>
             </div>
             <h3 className="mt-2 text-lg font-semibold text-white">{e.title}</h3>
+            {e.authors.length > 0 && (
+              <p className="mt-1 text-xs text-white/40">
+                by{" "}
+                {e.authors.map((a, i) => (
+                  <span key={`${a.login ?? a.name}-${i}`}>
+                    {i > 0 && ", "}
+                    {a.name}
+                    {a.login && (
+                      <>
+                        {" ("}
+                        <a
+                          href={`https://github.com/${a.login}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-amber-300 hover:text-amber-200 hover:underline"
+                        >
+                          {a.login}
+                        </a>
+                        {")"}
+                      </>
+                    )}
+                  </span>
+                ))}
+              </p>
+            )}
             <p className="mt-1 text-white/70">{e.summary}</p>
             {e.bullets.length > 0 && (
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/55">

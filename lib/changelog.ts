@@ -52,6 +52,9 @@ export type ChangelogEntryView = {
   bullets: string[];
   changeType: ChangeType;
   categories: string[];
+  // Who shipped this change: display name + GitHub login (login may be null).
+  // Empty for seeded/historical entries (they render no attribution).
+  authors: { name: string; login: string | null }[];
 };
 
 // ---------------------------------------------------------------------------
@@ -85,14 +88,18 @@ export function ensureChangelogTables(): Promise<void> {
           bullets jsonb NOT NULL DEFAULT '[]'::jsonb,
           change_type text NOT NULL,
           categories jsonb NOT NULL DEFAULT '[]'::jsonb,
+          authors jsonb NOT NULL DEFAULT '[]'::jsonb,
           commit_sha text,
+          commit_shas jsonb NOT NULL DEFAULT '[]'::jsonb,
           notified_at timestamptz,
           created_at timestamptz NOT NULL DEFAULT now()
         )
       `,
         db`ALTER TABLE changelog_entries ADD COLUMN IF NOT EXISTS bullets jsonb NOT NULL DEFAULT '[]'::jsonb`,
         db`ALTER TABLE changelog_entries ADD COLUMN IF NOT EXISTS categories jsonb NOT NULL DEFAULT '[]'::jsonb`,
+        db`ALTER TABLE changelog_entries ADD COLUMN IF NOT EXISTS authors jsonb NOT NULL DEFAULT '[]'::jsonb`,
         db`ALTER TABLE changelog_entries ADD COLUMN IF NOT EXISTS commit_sha text`,
+        db`ALTER TABLE changelog_entries ADD COLUMN IF NOT EXISTS commit_shas jsonb NOT NULL DEFAULT '[]'::jsonb`,
         db`ALTER TABLE changelog_entries ADD COLUMN IF NOT EXISTS notified_at timestamptz`,
         db`CREATE UNIQUE INDEX IF NOT EXISTS changelog_entries_slug_unique ON changelog_entries (slug)`,
         db`CREATE UNIQUE INDEX IF NOT EXISTS changelog_entries_commit_sha_unique ON changelog_entries (commit_sha)`,
@@ -155,6 +162,7 @@ export async function getChangelogEntries(): Promise<ChangelogEntryView[]> {
       bullets: r.bullets ?? [],
       changeType: (r.changeType as ChangeType) ?? "enhancement",
       categories: r.categories ?? [],
+      authors: r.authors ?? [],
     }));
   } catch (err) {
     console.error("getChangelogEntries failed:", err);

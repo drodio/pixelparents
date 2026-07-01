@@ -118,3 +118,79 @@ export async function countUserCommits(
   }
   return total;
 }
+
+// A single commit as the changelog generator needs it: title (first line of the
+// message) + body (the rest), the commit author's display name, the linked
+// GitHub login (null when the commit isn't tied to a GH account), the authored
+// date, and the html_url. `body` is trimmed to keep prompts small.
+export type RecentCommit = {
+  sha: string;
+  title: string;
+  body: string;
+  authorName: string;
+  authorLogin: string | null;
+  date: string; // ISO
+  url: string;
+};
+
+// How many pages of up to 100 commits to walk (~200 commits) before stopping.
+const MAX_RECENT_COMMIT_PAGES = 2;
+// Cap a commit body so a single verbose message can't blow up the LLM prompt.
+const COMMIT_BODY_MAX = 500;
+
+// Shape of the GitHub commits API items we read (only the fields we use).
+type GhCommitItem = {
+  sha?: string;
+  html_url?: string;
+  commit?: { message?: string; author?: { name?: string; date?: string } };
+  author?: { login?: string } | null;
+};
+
+// List commits on the default branch merged since `sinceISO`. Paginates up to
+// MAX_RECENT_COMMIT_PAGES, stopping early on a short page. Best-effort: returns
+// [] on any error (missing token, non-2xx, network) so the cron never throws.
+// De-duping by SHA against already-processed commits is the caller's job.
+export async function listRecentCommits(sinceISO: string): Promise<RecentCommit[]> {
+  const t = token();
+  if (!t) {
+    console.warn("GITHUB_ADMIN_TOKEN not set — skipping recent-commits fetch");
+    return [];
+  }
+  const out: RecentCommit[] = [];
+  try {
+    for (let page = 1; page <= MAX_RECENT_COMMIT_PAGES; page += 1) {
+      const url = `${API}/repos/${REPO}/commits?since=${encodeURIComponent(
+        sinceISO,
+      )}&per_page=100&page=${page}`;
+      const res = await fetch(url, { headers: headers(t) });
+      if (!res.ok) {
+        console.error(`GitHub listRecentCommits failed: ${res.status}`);
+        break;
+      }
+      const body = (await res.json()) as unknown;
+      if (!Array.isArray(body)) break;
+      for (const raw of body as GhCommitItem[]) {
+        const sha = raw?.sha;
+        if (!sha) continue;
+        const message = raw.commit?.message ?? "";
+        const lines = message.split("\n");
+        const title = (lines[0] ?? "").trim();
+        const rest = lines.slice(1).join("\n").trim().slice(0, COMMIT_BODY_MAX);
+        out.push({
+          sha,
+          title,
+          body: rest,
+          authorName: raw.commit?.author?.name?.trim() || "Unknown",
+          authorLogin: raw.author?.login ?? null,
+          date: raw.commit?.author?.date ?? new Date().toISOString(),
+          url: raw.html_url ?? `https://github.com/${REPO}/commit/${sha}`,
+        });
+      }
+      if (body.length < 100) break;
+    }
+  } catch (err) {
+    console.error("GitHub listRecentCommits error:", err);
+    return out;
+  }
+  return out;
+}
