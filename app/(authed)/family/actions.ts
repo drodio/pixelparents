@@ -15,7 +15,6 @@ import {
   generateShareToken,
   type ShareVisibility,
 } from "@/lib/share";
-import { after } from "next/server";
 import { getEnrichment, saveEnrichment } from "@/lib/db/enrichment";
 import { runEnrichmentForSignup } from "@/lib/db/enrichment-trigger";
 import {
@@ -291,7 +290,13 @@ export async function setFamilyMemberVisibility(
 export async function setEnrichmentOptIn(
   targetSignupId: string,
   on: boolean,
-): Promise<{ ok: boolean; optedIn?: boolean }> {
+): Promise<{
+  ok: boolean;
+  optedIn?: boolean;
+  ran?: boolean;
+  reason?: string;
+  enrichment?: StoredEnrichment | null;
+}> {
   const target = await authorizedTarget(targetSignupId);
   if (!target) return { ok: false };
 
@@ -306,17 +311,23 @@ export async function setEnrichmentOptIn(
     return { ok: false };
   }
 
-  // Kick a background build on enable (no-op if there's nothing to enrich).
-  if (on === true) {
-    after(async () => {
-      try {
-        await runEnrichmentForSignup(target.id);
-      } catch (err) {
-        console.error("background enrichment (opt-in) failed:", err);
-      }
-    });
+  if (on !== true) return { ok: true, optedIn: false };
+
+  // Run the build INLINE on enable (previously fire-and-forget via after(), which
+  // left the panel showing "Building…" forever — it never polled and no revalidate
+  // fired). Awaiting it means the panel gets a real outcome: the freshly-built
+  // enrichment, or a reason (e.g. "no-inputs") it can turn into actionable copy
+  // instead of a fake "Building…". runEnrichmentForSignup never throws.
+  try {
+    const r = await runEnrichmentForSignup(target.id, { force: true });
+    revalidatePath("/family");
+    const enrichment = (await getEnrichment(target.id)) as StoredEnrichment | null;
+    return { ok: true, optedIn: true, ran: r.ran, reason: r.reason, enrichment };
+  } catch (err) {
+    console.error("enrichment (opt-in) failed:", err);
+    // The opt-in flag is saved; just no build result to report.
+    return { ok: true, optedIn: true };
   }
-  return { ok: true, optedIn: on === true };
 }
 
 // Manual, owner-only "Refresh profile data" — rate-limited inside the trigger
@@ -324,13 +335,23 @@ export async function setEnrichmentOptIn(
 // whether it actually ran (the family UI shows a status). Idempotent.
 export async function refreshEnrichment(
   targetSignupId: string,
-): Promise<{ ok: boolean; ran?: boolean; reason?: string }> {
+): Promise<{
+  ok: boolean;
+  ran?: boolean;
+  reason?: string;
+  enrichment?: StoredEnrichment | null;
+}> {
   const target = await authorizedTarget(targetSignupId);
   if (!target) return { ok: false };
   try {
     const r = await runEnrichmentForSignup(target.id, { force: true });
     revalidatePath("/family");
-    return { ok: true, ran: r.ran, reason: r.reason };
+    // Return the freshly-stored enrichment so the client can replace its local
+    // useState copy — revalidatePath re-renders the server component but React
+    // keeps the mounted client component's stale state, so the panel wouldn't
+    // otherwise reflect the new bio/expertise until a full reload.
+    const enrichment = (await getEnrichment(target.id)) as StoredEnrichment | null;
+    return { ok: true, ran: r.ran, reason: r.reason, enrichment };
   } catch (err) {
     console.error("refreshEnrichment failed:", err);
     return { ok: false };

@@ -83,7 +83,22 @@ export function EnrichmentPanel({
         if (!r.ok) {
           setOptedIn(prev);
           setMsg("Couldn’t save — try again.");
+          return;
         }
+        if (!next) {
+          setMsg(null);
+          return;
+        }
+        // The build now runs inline, so we have a real outcome — swap the
+        // optimistic "Building…" for it (and adopt the fresh enrichment) instead
+        // of leaving a message that never resolves.
+        if (r.enrichment !== undefined) setEnr(r.enrichment);
+        if (r.ran) setMsg("Profile built.");
+        else if (r.reason === "no-inputs")
+          setMsg("Add a LinkedIn, GitHub, or website above first.");
+        else if (r.reason === "rate-limited" || r.reason === "in-flight")
+          setMsg("Building your profile… (~1 min) — check back shortly.");
+        else setMsg(null);
       });
     },
     [memberId, optedIn],
@@ -93,8 +108,14 @@ export function EnrichmentPanel({
     setMsg("Refreshing your profile… (~1 min)");
     start(async () => {
       const r = await refreshEnrichment(memberId);
-      if (!r.ok) setMsg("Couldn’t refresh — try again.");
-      else if (r.ran) setMsg("Profile refreshed.");
+      if (!r.ok) {
+        setMsg("Couldn’t refresh — try again.");
+        return;
+      }
+      // Adopt the freshly-stored enrichment so the bio/expertise below actually
+      // update — revalidatePath alone can't replace this client component's state.
+      if (r.enrichment !== undefined) setEnr(r.enrichment);
+      if (r.ran) setMsg("Profile refreshed.");
       else if (r.reason === "rate-limited") setMsg("Just refreshed — try again in a minute.");
       else if (r.reason === "no-inputs")
         setMsg("Add a LinkedIn, GitHub, or website above first.");

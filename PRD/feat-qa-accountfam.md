@@ -1,3 +1,31 @@
+## Progress Update as of [June 30, 2026 — 10:04 PM Pacific]
+
+### Summary of changes since last update
+Fixed the enrichment-panel feedback cluster on /family: findings 5, 6.
+
+### Detail of changes made:
+- **Finding 5 (opt-in "Building…" forever)** — `family/actions.ts`
+  `setEnrichmentOptIn` now runs the build INLINE on enable (was fire-and-forget
+  `after()` that the panel never observed), revalidates, and returns
+  `{ran, reason, enrichment}`. Removed the now-unused `after` import. The panel's
+  `onToggle` consumes it: swaps the optimistic "Building…" for "Profile built.",
+  the "Add a LinkedIn/GitHub/website first" guidance on `no-inputs`, or a
+  check-back note if a run is already in flight/rate-limited; adopts the returned
+  enrichment via `setEnr`.
+- **Finding 6 (refresh says done but profile stays stale)** — `refreshEnrichment`
+  now also returns the freshly-stored `enrichment`; the panel calls
+  `setEnr(r.enrichment)` so the bio/expertise/facts below actually update (React
+  kept the mounted client component's stale useState through revalidatePath).
+
+### Potential concerns to address:
+- Opt-in now blocks on the enrichment run (a few seconds) instead of returning
+  instantly. This is the same inline model the manual Refresh already uses and is
+  what makes the feedback truthful; acceptable trade-off. If it ever gets slow,
+  option (b) from the finding (poll a status action) is the fallback.
+- The edit-form's bio/tags/help useState are still seeded once at mount, so after
+  a refresh the *display* updates but opening Edit shows the pre-refresh values.
+  Pre-existing behavior (same as onSaveEdit); out of scope for these findings.
+
 ## Progress Update as of [June 30, 2026 — 9:58 PM Pacific]
 
 ### Summary of changes since last update
