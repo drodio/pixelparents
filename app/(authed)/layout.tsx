@@ -7,6 +7,7 @@ import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { getFamilyForEmail } from "@/lib/db/signups";
 import { verifiedEmailsOf } from "@/lib/verify";
+import { PostHogIdentify } from "@/components/posthog-identify";
 
 // ClerkProvider is scoped to this route group (mirrors founder-festival) so the
 // public coming-soon splash never loads Clerk JS or triggers the dev-instance
@@ -72,5 +73,11 @@ export default async function AuthedLayout({
   // "Manage account" modal) with the shared dark/amber appearance so Clerk's
   // default light UI never leaks through. The verification gate above is
   // unaffected — appearance is purely presentational.
-  return <ClerkProvider appearance={clerkAppearance}>{children}</ClerkProvider>;
+  return (
+    <ClerkProvider appearance={clerkAppearance}>
+      {/* Ties PostHog events to the signed-in account (anonymous when signed out). */}
+      <PostHogIdentify />
+      {children}
+    </ClerkProvider>
+  );
 }
