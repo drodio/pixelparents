@@ -125,11 +125,18 @@ export async function getStats(filters: Filters = {}): Promise<Stats> {
   // robust path below on any error (e.g. a pre-families schema).
   if (hasDatabase() && !filtered) {
     try {
+      // Count ONLY completed signups (welcome step fired → extra.notified='true'),
+      // never abandoned/draft rows — otherwise the public headline stats inflate
+      // (e.g. 20 "parents" when only ~6 families actually finished), diverging from
+      // the landing hero which already counts completed-only. Children are counted
+      // only when they belong to a completed family.
       const rows = (await getSql()`
         SELECT
-          (SELECT count(*) FROM signups)::int AS s,
-          (SELECT count(DISTINCT family_id) FROM signups)::int AS f,
-          (SELECT count(*) FROM children)::int AS c
+          (SELECT count(*) FROM signups WHERE (extra->>'notified') = 'true')::int AS s,
+          (SELECT count(DISTINCT family_id) FROM signups WHERE (extra->>'notified') = 'true')::int AS f,
+          (SELECT count(*) FROM children ch WHERE EXISTS (
+             SELECT 1 FROM signups s WHERE s.family_id = ch.family_id AND (s.extra->>'notified') = 'true'
+          ))::int AS c
       `) as Array<{ s: number; f: number; c: number }>;
       const r = rows[0];
       if (r) {
@@ -158,7 +165,8 @@ export async function getStats(filters: Filters = {}): Promise<Stats> {
   }
   const sql = getSql();
   const { conds, params } = signupConds(filters);
-  const where = whereClause([], conds);
+  // Completed-only, matching the fast path above — never count draft/abandoned rows.
+  const where = whereClause(["(extra->>'notified') = 'true'"], conds);
 
   // Each parent is a signup row; a family groups one or more parents.
   const sRows = (await sql.query(
@@ -179,9 +187,13 @@ export async function getStats(filters: Filters = {}): Promise<Stats> {
   let children = 0;
   if (await tableExists("children")) {
     const scope = childScope(conds);
+    // Only children of a COMPLETED family, matching the fast path.
+    const completedFamily =
+      "EXISTS (SELECT 1 FROM signups s WHERE s.family_id = children.family_id AND (s.extra->>'notified') = 'true')";
+    const cw = scope ? `WHERE ${scope} AND ${completedFamily}` : `WHERE ${completedFamily}`;
     children = await safeQuery(async () => {
       const rows = (await sql.query(
-        `SELECT count(*)::int AS c FROM children ${scope ? `WHERE ${scope}` : ""}`,
+        `SELECT count(*)::int AS c FROM children ${cw}`,
         params,
       )) as Array<{ c: number }>;
       return rows[0]?.c ?? 0;
