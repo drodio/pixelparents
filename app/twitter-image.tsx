@@ -1,4 +1,17 @@
-// Twitter card = the same DYNAMIC card as the Open Graph image. Re-export the
-// opengraph-image route so both stay in sync and there is a single source of
-// truth for the design + the live family count.
-export { runtime, dynamic, revalidate, alt, size, contentType, default } from "./opengraph-image";
+import { renderOgCard } from "@/lib/og-card";
+
+// Twitter card. Standalone route (NOT a re-export of opengraph-image — Next's
+// metadata-route analyzer can't trace the route-segment config through a
+// re-export, which breaks the Turbopack build). Shares only the render fn.
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
+export const alt = "Pixel Parents — Parents helping OHS students build what they wish existed.";
+export const size = { width: 1200, height: 630 };
+export const contentType = "image/png";
+
+export default function Image() {
+  return renderOgCard();
+}
