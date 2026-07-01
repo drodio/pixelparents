@@ -21,6 +21,7 @@ import { RequestForm } from "./request-form";
 import { AccountSettings } from "./account-settings";
 import { ConnectedAppsPanel } from "./connected-apps-panel";
 import { getConnectedApps } from "./connected-apps-actions";
+import { LinkedinPanel } from "./linkedin-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -116,7 +117,33 @@ export default async function AccountPage() {
     <DashboardShell firstName={firstName} email={email} status={approvalStatus} isAdmin={isAdmin}>
       <AccountHeader />
 
-      <section id="settings" className="mb-8 flex scroll-mt-8 flex-col gap-4">
+      {/* OHS Families / sharing preferences lead the page (moved above Account
+          settings on Daniel's feedback — it was easy to overlook at the bottom).
+          The LinkedIn editor sits with it so a parent's connected profile is
+          part of this "who other OHS families see" area. */}
+      {signup && (
+        <section id="ohs-families" className="mb-8 flex flex-col gap-4">
+          <div>
+            <h2 className="text-xl font-semibold tracking-tight">OHS Families</h2>
+            <p className="mt-1 text-sm text-white/55">
+              Choose whether other OHS families can find your profile, and what
+              they see. Add your LinkedIn so families you connect with can reach you.
+            </p>
+          </div>
+          <LinkedinPanel initialUrl={signup.linkedinUrl?.trim() || null} />
+          <ShareSettings
+            signupId={signup.id}
+            initialVisibility={coerceShareVisibility(signup.shareVisibility)}
+            initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
+            initialFields={shareFieldsOrDefault(signup.shareFields)}
+          />
+        </section>
+      )}
+
+      <section
+        id="settings"
+        className="mb-8 flex scroll-mt-8 flex-col gap-4 border-t border-white/10 pt-8"
+      >
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Account settings</h2>
           <p className="mt-1 text-sm text-white/55">
@@ -224,22 +251,6 @@ export default async function AccountPage() {
         </section>
       )}
 
-      {signup && (
-        <section className="mt-8 flex flex-col gap-4 border-t border-white/10 pt-8">
-          <div>
-            <h2 className="text-xl font-semibold tracking-tight">Your family profile</h2>
-            <p className="mt-1 text-sm text-white/55">
-              Share what you submitted with specific people via a secret link.
-            </p>
-          </div>
-          <ShareSettings
-            signupId={signup.id}
-            initialVisibility={coerceShareVisibility(signup.shareVisibility)}
-            initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
-            initialFields={shareFieldsOrDefault(signup.shareFields)}
-          />
-        </section>
-      )}
     </DashboardShell>
   );
 }
