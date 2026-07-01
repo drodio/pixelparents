@@ -33,6 +33,7 @@ const KIND_TABS: { value: KindFilter; label: string }[] = [
 
 const STATUS_TABS: { value: StatusFilter; label: string }[] = [
   { value: "open", label: "Open" },
+  { value: "matched", label: "Matched" },
   { value: "resolved", label: "Resolved" },
   { value: "all", label: "All" },
 ];
@@ -374,11 +375,13 @@ export function ExchangeBoardClient({
               const expired = isExpired(p);
               const soon = !expired && isExpiringSoon(p);
               const resolved = p.status === "resolved";
+              const matched = p.status === "matched";
               // 3px left accent border by kind so the board is scannable at a
               // glance: Ask = amber, Offer = violet.
               const accent = p.kind === "offer" ? "border-l-violet-400/70" : "border-l-amber-400/70";
               // Dim ONLY the title/body on resolved/expired posts so the status
-              // pill (Resolved / Expired) stays at full opacity and legible.
+              // pill (Resolved / Expired) stays at full opacity and legible. A
+              // matched post is NOT dimmed — it's still an active connection.
               const dim = expired || resolved;
               return (
                 <MotionLink
@@ -398,6 +401,11 @@ export function ExchangeBoardClient({
                     {resolved && (
                       <span className="inline-flex items-center gap-1 rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[11px] text-emerald-200">
                         <IconCircleCheck className="h-3 w-3" /> Resolved
+                      </span>
+                    )}
+                    {matched && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-sky-400/30 bg-sky-400/10 px-2 py-0.5 text-[11px] text-sky-200">
+                        <IconUsers className="h-3 w-3" /> Matched
                       </span>
                     )}
                     {expired ? (

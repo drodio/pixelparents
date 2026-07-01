@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useReducedMotion, motion } from "framer-motion";
@@ -23,6 +23,7 @@ import {
   POLL_MAX_OPTIONS,
 } from "@/lib/exchange-thread-validate";
 import { Linkify } from "@/lib/linkify";
+import { applyOptimisticVote, type PollTally } from "@/lib/exchange";
 import {
   replyToResponseAction,
   proposeEventAction,
@@ -92,17 +93,26 @@ function relativeTime(iso: string | null): string {
   return new Date(then).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-// Render a proposed event's when/where from LOCAL getters. All-day events show the
-// calendar day only (no time) to match the events page's timezone-correct display.
+// Render a proposed event's when/where. TIMED events render in the viewer's local
+// zone. ALL-DAY events are stored at UTC midnight, so their calendar day MUST be
+// read back with timeZone:"UTC" (mirroring the events page — event-bits.tsx) or a
+// west-of-UTC viewer sees UTC midnight as the previous evening and the day drifts
+// one earlier.
 function formatEventWhen(p: NonNullable<ThreadMessage["proposedEvent"]>): string {
   const start = new Date(p.startsAt);
   if (!Number.isFinite(start.getTime())) return "";
   if (p.allDay) {
-    const d = start.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" });
+    const utcDateOpts: Intl.DateTimeFormatOptions = {
+      weekday: "short",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    };
+    const d = start.toLocaleDateString(undefined, utcDateOpts);
     if (p.endsAt) {
       const end = new Date(p.endsAt);
       if (Number.isFinite(end.getTime()) && end.getTime() !== start.getTime()) {
-        return `${d} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric" })} · all day`;
+        return `${d} – ${end.toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })} · all day`;
       }
     }
     return `${d} · all day`;
@@ -167,6 +177,41 @@ export function ResponseThread({
         </p>
       )}
     </div>
+  );
+}
+
+// Public poll surface — the "public voting" side of polls. A poll lives on a
+// private response, but the copy promises "anyone viewing this post can vote", so
+// the post page renders EVERY poll here for NON-party verified viewers (parties
+// already see the poll inline in their own response thread). Only polls (always
+// public by construction) reach this component — never comments, private notes, or
+// event proposals — so no response-private content leaks. viewerIsParty is false
+// here (a non-party can't close a poll), but ANY verified member can vote.
+export function PublicPollList({ polls }: { polls: ThreadMessage[] }) {
+  const router = useRouter();
+  const reduce = useReducedMotion();
+  if (polls.length === 0) return null;
+  return (
+    <section className="mt-10">
+      <h2 className="mb-1 text-sm font-semibold uppercase tracking-[0.1em] text-white/40">
+        {polls.length === 1 ? "Community poll" : "Community polls"}
+      </h2>
+      <p className="mb-3 text-xs text-white/40">
+        Anyone in the community can vote — tap an option below.
+      </p>
+      <ul className="flex flex-col gap-2.5">
+        {polls.map((m) => (
+          <li key={m.id}>
+            <PollCard
+              message={m}
+              viewerIsParty={false}
+              onChange={() => router.refresh()}
+              reduce={Boolean(reduce)}
+            />
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -249,6 +294,19 @@ function EventProposalCard({
   const declined = message.eventStatus === "declined";
   const canDecide = viewerIsParty && !message.isProposer && message.eventStatus === "proposed";
 
+  const remove = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await deleteResponseMessageAction({ messageId: message.id });
+        if (res.ok) onChange();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong. Please refresh and try again.");
+      }
+    });
+  };
+
   const act = (kind: "accept" | "decline") => {
     setError(null);
     startTransition(async () => {
@@ -288,6 +346,17 @@ function EventProposalCard({
             </span>
           )}
           <span className="text-[11px] text-white/40">{relativeTime(message.createdAt)}</span>
+          {message.isOwn && (
+            <button
+              type="button"
+              onClick={remove}
+              disabled={pending}
+              aria-label="Delete proposal"
+              className="text-white/30 transition hover:text-red-300 disabled:opacity-50"
+            >
+              <IconTrash className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -296,7 +365,27 @@ function EventProposalCard({
         <IconClock className="h-3 w-3 text-white/40" /> {formatEventWhen(p)}
       </p>
       <p className="mt-0.5 text-xs text-white/55">
-        {p.isOnline ? (p.onlineUrl ? "Online" : "Online") : p.location ? `In person · ${p.location}` : "In person"}
+        {p.isOnline ? (
+          p.onlineUrl ? (
+            <>
+              Online ·{" "}
+              <a
+                href={p.onlineUrl}
+                target="_blank"
+                rel="noopener noreferrer nofollow"
+                className="break-all text-amber-300 underline decoration-amber-300/40 underline-offset-2 hover:text-amber-200"
+              >
+                {p.onlineUrl}
+              </a>
+            </>
+          ) : (
+            "Online"
+          )
+        ) : p.location ? (
+          `In person · ${p.location}`
+        ) : (
+          "In person"
+        )}
       </p>
       {message.body && (
         <p className="mt-1.5 whitespace-pre-wrap text-sm text-white/70">
@@ -358,20 +447,53 @@ function PollCard({
 }) {
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
+  const [pendingIndex, setPendingIndex] = useState<number | null>(null);
   const poll = message.poll!;
   const closed = poll.closed;
-  const total = poll.total;
+
+  // Server-truth tally for this poll.
+  const serverTally: PollTally = {
+    counts: poll.counts,
+    total: poll.total,
+    viewerOptionIndex: poll.viewerOptionIndex,
+  };
+  // Optimistic override — applied the instant a member taps, cleared once fresh
+  // server props arrive (keyed on the server signature) or on error rollback.
+  const [optimistic, setOptimistic] = useState<PollTally | null>(null);
+  const serverSig = `${poll.counts.join(",")}|${poll.total}|${poll.viewerOptionIndex}`;
+  const lastSig = useRef(serverSig);
+  useEffect(() => {
+    if (lastSig.current !== serverSig) {
+      lastSig.current = serverSig;
+      setOptimistic(null); // reconcile: the refresh's real counts win
+    }
+  }, [serverSig]);
+
+  const view = optimistic ?? serverTally;
+  const total = view.total;
 
   const vote = (optionIndex: number) => {
     if (closed) return;
     setError(null);
+    // Optimistically reflect the toggle immediately so the bar/count/checkmark
+    // move without waiting for the server round-trip (feels responsive on slow
+    // connections). Roll back to server truth on error.
+    setOptimistic(applyOptimisticVote(view, optionIndex));
+    setPendingIndex(optionIndex);
     startTransition(async () => {
       try {
         const res = await votePollAction({ messageId: message.id, optionIndex });
-        if (res.ok) onChange();
-        else setError(res.error);
+        if (res.ok) {
+          onChange(); // refresh → fresh props → optimistic cleared by the effect
+        } else {
+          setOptimistic(null);
+          setError(res.error);
+        }
       } catch {
+        setOptimistic(null);
         setError("Something went wrong — your vote may not have been recorded. Refresh to check.");
+      } finally {
+        setPendingIndex(null);
       }
     });
   };
@@ -381,6 +503,19 @@ function PollCard({
     startTransition(async () => {
       try {
         const res = await closePollAction({ messageId: message.id });
+        if (res.ok) onChange();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong. Please refresh and try again.");
+      }
+    });
+  };
+
+  const remove = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await deleteResponseMessageAction({ messageId: message.id });
         if (res.ok) onChange();
         else setError(res.error);
       } catch {
@@ -401,23 +536,38 @@ function PollCard({
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-200">
           <IconChart className="h-3.5 w-3.5" /> Poll
         </span>
-        <span className="text-[11px] text-white/40">{relativeTime(message.createdAt)}</span>
+        <div className="flex items-center gap-2">
+          <span className="text-[11px] text-white/40">{relativeTime(message.createdAt)}</span>
+          {message.isOwn && (
+            <button
+              type="button"
+              onClick={remove}
+              disabled={pending}
+              aria-label="Delete poll"
+              className="text-white/30 transition hover:text-red-300 disabled:opacity-50"
+            >
+              <IconTrash className="h-3.5 w-3.5" />
+            </button>
+          )}
+        </div>
       </div>
 
       <h4 className="mt-1.5 text-sm font-semibold text-white">{poll.question}</h4>
 
       <ul className="mt-3 flex flex-col gap-2">
         {poll.options.map((opt, i) => {
-          const count = poll.counts[i] ?? 0;
+          const count = view.counts[i] ?? 0;
           const pct = total > 0 ? Math.round((count / total) * 100) : 0;
-          const chosen = poll.viewerOptionIndex === i;
+          const chosen = view.viewerOptionIndex === i;
+          const isPending = pendingIndex === i;
           return (
             <li key={i}>
               <button
                 type="button"
                 onClick={() => vote(i)}
-                disabled={pending || closed}
+                disabled={closed}
                 aria-pressed={chosen}
+                aria-busy={isPending}
                 className={`group relative w-full overflow-hidden rounded-lg border px-3 py-2 text-left transition disabled:cursor-default ${
                   chosen
                     ? "border-amber-400/60 bg-amber-400/[0.06]"
@@ -434,7 +584,11 @@ function PollCard({
                 />
                 <span className="relative flex items-center justify-between gap-2">
                   <span className="flex items-center gap-1.5 text-sm text-white/85">
-                    {chosen && <IconCheck className="h-3.5 w-3.5 text-amber-300" />}
+                    {isPending ? (
+                      <IconClock className="h-3.5 w-3.5 animate-pulse text-amber-300" />
+                    ) : (
+                      chosen && <IconCheck className="h-3.5 w-3.5 text-amber-300" />
+                    )}
                     {opt}
                   </span>
                   <span className="shrink-0 text-xs tabular-nums text-white/55">

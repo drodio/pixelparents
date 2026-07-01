@@ -27,7 +27,7 @@ export type ExchangePost = {
 };
 
 export type KindFilter = "all" | AskKind;
-export type StatusFilter = "open" | "resolved" | "all";
+export type StatusFilter = "open" | "matched" | "resolved" | "all";
 export type SortKey = "recency" | "urgency";
 export type SortDir = "asc" | "desc";
 
@@ -82,10 +82,16 @@ export function filterAndSortPosts(
     out = out.filter((p) => p.kind === filters.kind);
   }
 
-  // Status facet. 'open' shows only open; 'resolved' only resolved; 'all' shows
-  // everything the server returned (open + resolved + matched).
+  // Status facet. 'open' shows only open; 'matched' only matched (a connection
+  // was made but not yet marked resolved); 'resolved' only resolved; 'all' shows
+  // everything the server returned (open + matched + resolved). NOTE: 'matched'
+  // MUST get its own bucket — it's the normal end state of the core flow, and if
+  // it fell through only to 'all' a successfully-connected post would silently
+  // vanish from the default board (the author would think it was deleted).
   if (filters.status === "open") {
     out = out.filter((p) => p.status === "open");
+  } else if (filters.status === "matched") {
+    out = out.filter((p) => p.status === "matched");
   } else if (filters.status === "resolved") {
     out = out.filter((p) => p.status === "resolved");
   }
@@ -128,6 +134,45 @@ export function filterAndSortPosts(
   });
 
   return out;
+}
+
+// --- Poll optimistic voting ---------------------------------------------------
+
+// A poll's displayed tally: per-option counts, the total, and the viewer's own
+// current choice (null = not voted). Shared by the thread UI + tests.
+export type PollTally = {
+  counts: number[];
+  total: number;
+  viewerOptionIndex: number | null;
+};
+
+// Apply a vote toggle LOCALLY for optimistic UI, mirroring the server's castVote
+// rules so the on-screen counts move the instant a member taps:
+//   • tapping the current choice again → RETRACT (remove the vote)
+//   • tapping a different option        → MOVE the vote
+//   • no prior vote                     → ADD the vote
+// Pure + immutable (never mutates the input). An out-of-range index is a no-op.
+// The real counts reconcile on the next server refresh; on error the caller rolls
+// back by simply dropping this optimistic tally.
+export function applyOptimisticVote(tally: PollTally, optionIndex: number): PollTally {
+  const counts = tally.counts.slice();
+  if (optionIndex < 0 || optionIndex >= counts.length) return tally;
+  const prior = tally.viewerOptionIndex;
+
+  if (prior === optionIndex) {
+    // Retract.
+    counts[optionIndex] = Math.max(0, counts[optionIndex] - 1);
+    return { counts, total: Math.max(0, tally.total - 1), viewerOptionIndex: null };
+  }
+  if (prior !== null && prior >= 0 && prior < counts.length) {
+    // Move: -1 from the old option, +1 to the new one (total unchanged).
+    counts[prior] = Math.max(0, counts[prior] - 1);
+    counts[optionIndex] += 1;
+    return { counts, total: tally.total, viewerOptionIndex: optionIndex };
+  }
+  // Add.
+  counts[optionIndex] += 1;
+  return { counts, total: tally.total + 1, viewerOptionIndex: optionIndex };
 }
 
 // Distinct tags across posts, deduped case-insensitively (first-seen label kept),

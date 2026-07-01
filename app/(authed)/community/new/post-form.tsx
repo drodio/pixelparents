@@ -69,6 +69,9 @@ export function PostForm({
   );
   const [tags, setTags] = useState<string[]>(initial?.tags ?? []);
   const [tagInput, setTagInput] = useState("");
+  // Set when a topic chip couldn't be selected because the expertise-tag cap was
+  // hit — surfaces a small hint so the tap isn't a silent no-op.
+  const [tagCapHit, setTagCapHit] = useState(false);
   const [urgency, setUrgency] = useState<AskUrgency>(initial?.urgency ?? "normal");
   const [validUntil, setValidUntil] = useState(initial?.validUntil ?? "");
   const [error, setError] = useState<string | null>(null);
@@ -80,11 +83,22 @@ export function PostForm({
   // the body themselves we stop overwriting it.
   const onToggleTopic = (topic: string) => {
     if (!connect) return;
+    const key = topic.toLowerCase();
+    const isSelected = selectedTopics.some((t) => t.toLowerCase() === key);
+    // Adding a NEW topic when the tag cap is already full would select the chip
+    // and reshape the message but silently drop the tag — an inconsistent partial
+    // action. Instead, block the selection and surface the cap hint. Removing an
+    // already-selected topic (and any toggle when there's room) proceeds normally.
+    if (!isSelected && tags.length >= ASK_TAGS_MAX) {
+      setTagCapHit(true);
+      return;
+    }
+    setTagCapHit(false);
     const next = toggleTopic(connect.topics, selectedTopics, topic);
     setSelectedTopics(next);
     setTags((prev) => {
-      const has = prev.some((t) => t.toLowerCase() === topic.toLowerCase());
-      if (has) return prev.filter((t) => t.toLowerCase() !== topic.toLowerCase());
+      const has = prev.some((t) => t.toLowerCase() === key);
+      if (has) return prev.filter((t) => t.toLowerCase() !== key);
       if (prev.length >= ASK_TAGS_MAX) return prev;
       return [...prev, topic];
     });
@@ -211,6 +225,11 @@ export function PostForm({
               );
             })}
           </div>
+          {tagCapHit && (
+            <p className="text-xs text-amber-200/80">
+              You can tag up to {ASK_TAGS_MAX} topics — remove one to add another.
+            </p>
+          )}
         </div>
       )}
 

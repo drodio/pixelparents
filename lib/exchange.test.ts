@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  applyOptimisticVote,
   distinctTags,
   filterAndSortPosts,
   isExpired,
   isExpiringSoon,
   type ExchangeFilters,
   type ExchangePost,
+  type PollTally,
 } from "@/lib/exchange";
 
 const NOW = Date.parse("2026-06-30T12:00:00.000Z");
@@ -133,6 +135,33 @@ describe("filterAndSortPosts — status + expiry handling", () => {
       "done",
     ]);
   });
+  it("default open status hides MATCHED posts (they're not open)", () => {
+    const posts = [post({ id: "open", status: "open" }), post({ id: "m", status: "matched" })];
+    expect(filterAndSortPosts(posts, filters(), NOW).map((p) => p.id)).toEqual(["open"]);
+  });
+  it("status=matched shows ONLY matched — so a connected post never vanishes", () => {
+    // Regression for finding #1: an accepted post flips to 'matched' and was
+    // dropped from Open AND Resolved, only reappearing under All. It must have its
+    // own bucket so the author/helpers can still find it.
+    const posts = [
+      post({ id: "open", status: "open" }),
+      post({ id: "m", status: "matched" }),
+      post({ id: "done", status: "resolved" }),
+    ];
+    expect(filterAndSortPosts(posts, filters({ status: "matched" }), NOW).map((p) => p.id)).toEqual([
+      "m",
+    ]);
+  });
+  it("status=all includes matched alongside open + resolved", () => {
+    const posts = [
+      post({ id: "open", status: "open" }),
+      post({ id: "m", status: "matched" }),
+      post({ id: "done", status: "resolved" }),
+    ];
+    expect(
+      filterAndSortPosts(posts, filters({ status: "all" }), NOW).map((p) => p.id).sort(),
+    ).toEqual(["done", "m", "open"]);
+  });
   it("hides expired posts by default but shows them when showExpired", () => {
     const posts = [
       post({ id: "live", validUntil: new Date(NOW + DAY).toISOString() }),
@@ -173,6 +202,64 @@ describe("filterAndSortPosts — tag + my-posts facets", () => {
       NOW,
     );
     expect(out).toEqual([]);
+  });
+});
+
+describe("applyOptimisticVote", () => {
+  const tally = (over: Partial<PollTally> = {}): PollTally => ({
+    counts: [0, 0, 0],
+    total: 0,
+    viewerOptionIndex: null,
+    ...over,
+  });
+
+  it("adds a first vote (no prior choice)", () => {
+    const out = applyOptimisticVote(tally({ counts: [2, 1, 0], total: 3 }), 2);
+    expect(out.counts).toEqual([2, 1, 1]);
+    expect(out.total).toBe(4);
+    expect(out.viewerOptionIndex).toBe(2);
+  });
+
+  it("retracts when tapping the current choice again", () => {
+    const out = applyOptimisticVote(
+      tally({ counts: [1, 3, 0], total: 4, viewerOptionIndex: 1 }),
+      1,
+    );
+    expect(out.counts).toEqual([1, 2, 0]);
+    expect(out.total).toBe(3);
+    expect(out.viewerOptionIndex).toBeNull();
+  });
+
+  it("moves the vote when tapping a different option (total unchanged)", () => {
+    const out = applyOptimisticVote(
+      tally({ counts: [1, 3, 0], total: 4, viewerOptionIndex: 1 }),
+      2,
+    );
+    expect(out.counts).toEqual([1, 2, 1]);
+    expect(out.total).toBe(4);
+    expect(out.viewerOptionIndex).toBe(2);
+  });
+
+  it("is a no-op for an out-of-range option", () => {
+    const t = tally({ counts: [1, 0], total: 1, viewerOptionIndex: 0 });
+    expect(applyOptimisticVote(t, 5)).toBe(t);
+    expect(applyOptimisticVote(t, -1)).toBe(t);
+  });
+
+  it("does not mutate its input", () => {
+    const t = tally({ counts: [1, 2, 3], total: 6, viewerOptionIndex: 0 });
+    const snapshot = JSON.parse(JSON.stringify(t));
+    applyOptimisticVote(t, 1);
+    expect(t).toEqual(snapshot);
+  });
+
+  it("never drives a count below zero", () => {
+    const out = applyOptimisticVote(
+      tally({ counts: [0, 0], total: 0, viewerOptionIndex: 0 }),
+      0,
+    );
+    expect(out.counts.every((c) => c >= 0)).toBe(true);
+    expect(out.total).toBeGreaterThanOrEqual(0);
   });
 });
 

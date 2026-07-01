@@ -112,6 +112,14 @@ export default async function NewExchangePostPage({
   // their topics as chips). Null when there's no/invalid connect param.
   const connect = await resolveConnectTarget(sp, viewerSignup!.id);
 
+  // Distinguish "no connect intent" from "connect intent that couldn't resolve"
+  // (stale/unverified/un-mentionable target). When a connect param WAS supplied
+  // but resolved to null, we show an explicit notice instead of silently dumping
+  // the user on the blank generic composer.
+  const connectRequested =
+    typeof sp.connect === "string" && UUID_RE.test(sp.connect) && sp.connect !== viewerSignup!.id;
+  const connectUnavailable = connectRequested && !connect;
+
   return shell(
     <>
       <header className="mb-8">
@@ -127,7 +135,9 @@ export default async function NewExchangePostPage({
               Connect with {connect.name}
             </h1>
             <p className="mt-1 text-sm text-white/55">
-              Pick what you&apos;d like to connect about and send a quick note.{" "}
+              {connect.topics.length > 0
+                ? "Pick what you'd like to connect about and send a quick note. "
+                : "Send a quick note and post it. "}
               <span className="text-amber-300">{connect.name}</span> is @-mentioned, so they&apos;ll
               be notified when you post.
             </p>
@@ -143,6 +153,16 @@ export default async function NewExchangePostPage({
           </>
         )}
       </header>
+      {connectUnavailable && (
+        <div className="mb-6 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60">
+          We couldn&apos;t set up a connection with that member — they may not be available right now.
+          You can still post to the whole community below, or{" "}
+          <Link href="/directory" className="text-amber-300 hover:text-amber-200">
+            browse the directory
+          </Link>{" "}
+          to find someone else.
+        </div>
+      )}
       <PostForm suggestedTags={suggestedTags} connect={connect} />
     </>,
   );

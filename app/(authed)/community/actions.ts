@@ -42,6 +42,7 @@ import {
   formatSlot,
   sanitizeAttachNote,
 } from "@/lib/community-schedule";
+import { isExpired } from "@/lib/exchange";
 import { mentionTargets, normalizeMentions } from "@/lib/mentions";
 import {
   searchMentionableMembers,
@@ -385,6 +386,11 @@ export async function respondToAskAction(input: {
   const ask = await getAskById(input.askId);
   if (!ask) return { ok: false, error: "Unknown post." };
   if (ask.status !== "open") return { ok: false, error: "This post is no longer open." };
+  // Expiry is date-based (no job flips status), so an expired-but-'open' post must
+  // still be rejected here — mirrors the detail page hiding the form on expiry.
+  if (isExpired({ validUntil: ask.validUntil ? new Date(ask.validUntil).toISOString() : null })) {
+    return { ok: false, error: "This post is no longer accepting responses." };
+  }
   if (ask.authorSignupId === caller.user.id) {
     return { ok: false, error: "You can't respond to your own post." };
   }

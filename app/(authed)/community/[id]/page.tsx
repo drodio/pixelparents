@@ -45,7 +45,7 @@ import { OfferHelpForm } from "./offer-help-form";
 import { ResponseDecision } from "./response-decision";
 import { PostControls } from "./post-controls";
 import { ConnectedCard, type ConnectedCardData, type ConnectedMethod } from "./connected-card";
-import { ResponseThread, type ThreadMessage } from "./response-thread";
+import { ResponseThread, PublicPollList, type ThreadMessage } from "./response-thread";
 import { listMessagesForResponses, getPollResults } from "@/lib/db/exchange-thread";
 import { EngagementBar } from "./engagement-bar";
 import { CommunityBody } from "../community-body";
@@ -437,6 +437,25 @@ export default async function ExchangePostPage({
     threadByResponseId.set(m.responseId, list);
   }
 
+  // PUBLIC POLLS: a poll lives inside a private response, but "public voting" is
+  // the whole point — the copy promises anyone viewing the post can vote. Parties
+  // see a response's polls inline in that response's thread; for responses the
+  // viewer is NOT a party to (whose cards don't render for them), we surface those
+  // polls in a standalone "Community polls" section so any verified member can
+  // actually vote. Polls are always public by construction (addPoll), so this
+  // never leaks private response content. De-duped by message id defensively.
+  const seenPollIds = new Set<string>();
+  const publicPolls: ThreadMessage[] = [];
+  for (const [responseId, list] of threadByResponseId) {
+    if (viewerIsPartyByResponseId.get(responseId) === true) continue; // shown inline
+    for (const m of list) {
+      if (m.kind === "poll" && m.poll && !seenPollIds.has(m.id)) {
+        seenPollIds.add(m.id);
+        publicPolls.push(m);
+      }
+    }
+  }
+
   // Display cards for members who attached ("I'd join this too"). Coarsened name +
   // a profile link only when they share one — same privacy gate as everywhere.
   const joiners: { signupId: string; name: string; token: string | null; isStudent: boolean }[] =
@@ -457,6 +476,20 @@ export default async function ExchangePostPage({
       });
     }
   }
+
+  // The viewer's OWN response (if any), so we can reflect its real status — not
+  // just a status-agnostic "you responded" boolean. A DECLINED responder must not
+  // keep seeing the reassuring "the poster will let you know" banner.
+  const viewerOwnResponse =
+    responses.find(
+      (r) => r.responderSignupId === viewerSignupId || r.responderClerkId === viewer.id,
+    ) ?? null;
+  const viewerResponseStatus = viewerOwnResponse?.status ?? null;
+
+  // Whether this post can still accept a NEW response: open AND not expired.
+  // Expiry is date-based (no job flips status), so an expired-but-open post must
+  // NOT show a working response form (the server also rejects — respondToAskAction).
+  const acceptingResponses = ask.status === "open" && !expired;
 
   const responsesLabel = isOffer
     ? responses.length === 1
@@ -601,9 +634,10 @@ export default async function ExchangePostPage({
             {isAuthor && <PostControls id={ask.id} resolved={resolved} />}
           </article>
 
-          {/* Response form — for anyone who isn't the author, on an open post who
-              hasn't yet responded. Wording flips with direction. */}
-          {viewerCanRespond && ask.status === "open" && !alreadyResponded && (
+          {/* Response form — for anyone who isn't the author, on a post that's
+              still accepting responses (open AND not expired), who hasn't yet
+              responded. Wording flips with direction. */}
+          {viewerCanRespond && acceptingResponses && !alreadyResponded && (
             <section className="mt-8">
               <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.1em] text-white/40">
                 {isOffer ? "Request this" : "Offer to help"}
@@ -611,14 +645,39 @@ export default async function ExchangePostPage({
               <OfferHelpForm askId={ask.id} kind={kind} />
             </section>
           )}
-          {viewerCanRespond && alreadyResponded && (
-            <p className="mt-6 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-200">
-              {isOffer
-                ? "You've requested this. The poster will let you know."
-                : "You've offered to help. The poster will let you know."}
+          {/* The viewer already responded — reflect their response's REAL status.
+              Accepted → connected (the ConnectedCard shows below in their response);
+              declined → a neutral "wasn't taken up"; still pending ("offered") →
+              the reassuring banner. */}
+          {viewerCanRespond && alreadyResponded && viewerResponseStatus === "declined" && (
+            <p className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60">
+              Your offer wasn&apos;t taken up this time. You&apos;re welcome to explore other posts on
+              the Community.
             </p>
           )}
-          {isAuthor && ask.status === "open" && (
+          {viewerCanRespond && alreadyResponded && viewerResponseStatus !== "declined" && (
+            <p className="mt-6 rounded-xl border border-emerald-400/25 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-200">
+              {viewerResponseStatus === "accepted"
+                ? "You're connected — see the details below."
+                : isOffer
+                  ? "You've requested this. The poster will let you know."
+                  : "You've offered to help. The poster will let you know."}
+            </p>
+          )}
+          {/* Non-author who hasn't responded, on a post that's NOT accepting new
+              responses — explain why there's no form instead of a silent dead-end. */}
+          {viewerCanRespond && !alreadyResponded && !acceptingResponses && (
+            <p className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-white/60">
+              {expired
+                ? "This post has expired — it's no longer accepting new responses."
+                : ask.status === "matched"
+                  ? `This post has been matched — it's no longer accepting new ${isOffer ? "requests" : "offers"}.`
+                  : resolved
+                    ? "This post has been resolved — it's no longer accepting new responses."
+                    : "This post is no longer accepting new responses."}
+            </p>
+          )}
+          {isAuthor && acceptingResponses && (
             <p className="mt-6 text-sm text-white/45">
               This is your post. {isOffer ? "Interested members" : "Helpers"} can respond below.
             </p>
@@ -737,6 +796,10 @@ export default async function ExchangePostPage({
               </div>
             )}
           </section>
+
+          {/* Public polls the viewer can vote on but isn't a party to (party
+              polls are shown inline above). Empty → renders nothing. */}
+          <PublicPollList polls={publicPolls} />
         </div>
 
         {/* Right column: author profile card + suggestions */}
