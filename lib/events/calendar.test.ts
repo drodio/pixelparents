@@ -164,6 +164,51 @@ describe("splitUpcomingPast", () => {
     const { upcoming } = splitUpcomingPast([ongoing], now);
     expect(upcoming.map((x) => x.id)).toEqual(["o"]);
   });
+
+  // Regression: an all-day event dated TODAY (stored at UTC midnight) must stay
+  // Upcoming even when the local clock is well past midnight — otherwise a viewer
+  // west of UTC (all of the US) sees "First Day of Class" on the calendar for
+  // today yet filed under Past. `now` here is 8am LOCAL on the same calendar day
+  // as the event's UTC day, so utcDayKey(event) === localDayKey(now).
+  it("keeps a today-dated all-day event upcoming despite its UTC-midnight instant", () => {
+    const now = new Date(2026, 7, 19, 8, 0); // Aug 19, 08:00 local
+    const firstDay = ev({
+      id: "ohs-first-day",
+      title: "First Day of Class",
+      allDay: true,
+      source: "ohs",
+      startsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+      endsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+    });
+    const { upcoming, past } = splitUpcomingPast([firstDay], now);
+    expect(upcoming.map((x) => x.id)).toEqual(["ohs-first-day"]);
+    expect(past).toEqual([]);
+  });
+
+  it("classifies a yesterday-dated all-day event as past", () => {
+    const now = new Date(2026, 7, 19, 8, 0); // Aug 19 local
+    const yesterday = ev({
+      id: "past-allday",
+      allDay: true,
+      startsAt: new Date(Date.UTC(2026, 7, 18)).toISOString(),
+      endsAt: new Date(Date.UTC(2026, 7, 18)).toISOString(),
+    });
+    const { upcoming, past } = splitUpcomingPast([yesterday], now);
+    expect(upcoming).toEqual([]);
+    expect(past.map((x) => x.id)).toEqual(["past-allday"]);
+  });
+
+  it("keeps a multi-day all-day event upcoming while its inclusive end day is today or later", () => {
+    const now = new Date(2026, 9, 30, 14, 0); // Oct 30 local, last day of range
+    const conf = ev({
+      id: "ptc",
+      allDay: true,
+      startsAt: new Date(Date.UTC(2026, 9, 28)).toISOString(),
+      endsAt: new Date(Date.UTC(2026, 9, 30)).toISOString(), // inclusive
+    });
+    const { upcoming } = splitUpcomingPast([conf], now);
+    expect(upcoming.map((x) => x.id)).toEqual(["ptc"]);
+  });
 });
 
 describe("eventsThisWeek", () => {
@@ -173,5 +218,45 @@ describe("eventsThisWeek", () => {
     const outWindow = ev({ id: "b", startsAt: new Date(2026, 8, 30).toISOString() });
     const result = eventsThisWeek([inWindow, outWindow], now);
     expect(result.map((x) => x.id)).toEqual(["a"]);
+  });
+
+  // Regression: a today-dated all-day event (UTC midnight) must appear in the
+  // this-week strip on the day it happens, for viewers west of UTC. `now` is 8am
+  // local on the event's UTC calendar day.
+  it("includes a today-dated all-day event despite its UTC-midnight instant", () => {
+    const now = new Date(2026, 7, 19, 8, 0); // Aug 19 local
+    const firstDay = ev({
+      id: "ohs-first-day",
+      allDay: true,
+      startsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+      endsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+    });
+    expect(eventsThisWeek([firstDay], now).map((x) => x.id)).toEqual(["ohs-first-day"]);
+  });
+
+  it("includes an all-day event on the last (7th) day of the window but not the 8th", () => {
+    const now = new Date(2026, 7, 19, 8, 0); // Aug 19 local
+    const day7 = ev({
+      id: "day7",
+      allDay: true,
+      startsAt: new Date(Date.UTC(2026, 7, 25)).toISOString(), // Aug 25 = today + 6
+    });
+    const day8 = ev({
+      id: "day8",
+      allDay: true,
+      startsAt: new Date(Date.UTC(2026, 7, 26)).toISOString(), // Aug 26 = today + 7
+    });
+    const result = eventsThisWeek([day7, day8], now).map((x) => x.id);
+    expect(result).toEqual(["day7"]);
+  });
+
+  it("excludes a yesterday-dated all-day event from the strip", () => {
+    const now = new Date(2026, 7, 19, 8, 0);
+    const yesterday = ev({
+      id: "past-allday",
+      allDay: true,
+      startsAt: new Date(Date.UTC(2026, 7, 18)).toISOString(),
+    });
+    expect(eventsThisWeek([yesterday], now)).toEqual([]);
   });
 });

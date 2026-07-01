@@ -112,9 +112,20 @@ function validateEventForm(input: EventFormInput):
     allDay ? "" : input.startTime,
     allDay ? 0 : input.tzOffsetMinutes,
   );
-  const end = input.endDate
+  // The form sends endDate === null when no end was requested, but an empty (or
+  // otherwise unparseable) string when the user checked "Add an end" and left the
+  // date blank. Distinguish the two: a requested-but-blank end is a user error, not
+  // a silent "no end" — otherwise the event saves with no end window and no notice.
+  const endRequested = input.endDate !== null && input.endDate !== undefined;
+  const end = endRequested
     ? resolveInstant(input.endDate, allDay ? "" : input.endTime, allDay ? 0 : input.tzOffsetMinutes)
     : null;
+  if (endRequested && !end) {
+    return {
+      ok: false,
+      error: allDay ? "Add an end date, or uncheck it." : "Add an end date and time, or uncheck it.",
+    };
+  }
   const range = validateRange(start, end, allDay);
   if (!range.ok) return { ok: false, error: range.error };
 

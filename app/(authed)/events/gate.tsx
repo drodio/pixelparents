@@ -30,7 +30,7 @@ export async function gateEvents(): Promise<GateResult> {
     return {
       gated: (
         <DashboardShell authed={false} firstName={null} email={null} status={null}>
-          <SignedOutPanel area="community" />
+          <SignedOutPanel area="events" />
         </DashboardShell>
       ),
     };

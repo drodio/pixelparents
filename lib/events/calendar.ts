@@ -130,8 +130,25 @@ export function buildMonthGrid(
   return cells;
 }
 
+// Is an ALL-DAY event still upcoming (or ongoing) relative to `now`?
+//
+// All-day events are stored at UTC midnight of the calendar day the user meant,
+// so their raw instant is already "past" for most of the local day in any zone
+// west of UTC — comparing .getTime() to now wrongly buckets a today-dated all-day
+// event as past. Instead compare CALENDAR DAYS: the event's inclusive UTC end-day
+// (or start-day if there's no end) against today's LOCAL day key. It's upcoming
+// while that end-day is >= today.
+function allDayNotPast(ev: CalendarEvent, now: Date): boolean {
+  const todayKey = localDayKey(now);
+  const startKey = utcDayKey(new Date(ev.startsAt));
+  const endKey = ev.endsAt ? utcDayKey(new Date(ev.endsAt)) : startKey;
+  return endKey >= todayKey;
+}
+
 // Partition events into upcoming (end/start >= now) and past, each sorted. An
-// event with an end uses its end to decide "past"; otherwise its start.
+// event with an end uses its end to decide "past"; otherwise its start. All-day
+// events are classified by their UTC calendar day vs today's local day (see
+// allDayNotPast) so a today-dated all-day event doesn't fall into Past.
 export function splitUpcomingPast(
   events: CalendarEvent[],
   now: Date = new Date(),
@@ -140,8 +157,10 @@ export function splitUpcomingPast(
   const upcoming: CalendarEvent[] = [];
   const past: CalendarEvent[] = [];
   for (const ev of events) {
-    const ref = ev.endsAt ? new Date(ev.endsAt).getTime() : new Date(ev.startsAt).getTime();
-    if (ref >= nowMs) upcoming.push(ev);
+    const notPast = ev.allDay
+      ? allDayNotPast(ev, now)
+      : (ev.endsAt ? new Date(ev.endsAt).getTime() : new Date(ev.startsAt).getTime()) >= nowMs;
+    if (notPast) upcoming.push(ev);
     else past.push(ev);
   }
   upcoming.sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
@@ -149,16 +168,28 @@ export function splitUpcomingPast(
   return { upcoming, past };
 }
 
-// Events that start within the next 7 days (inclusive of today) — drives the
-// "happening this week" highlight strip.
+// Events that overlap the next 7 days (inclusive of today) — drives the
+// "happening this week" highlight strip. Timed events use their instant overlap
+// against the local [today, +7d) window; all-day events use a UTC calendar-day
+// overlap against the same window's day keys so a today-dated all-day event isn't
+// dropped for viewers west of UTC.
 export function eventsThisWeek(
   events: CalendarEvent[],
   now: Date = new Date(),
 ): CalendarEvent[] {
   const start = startOfDay(now).getTime();
   const end = start + 7 * 24 * 60 * 60 * 1000;
+  const todayKey = localDayKey(now);
+  // Local day key of the last day (inclusive) in the 7-day window.
+  const lastDayKey = localDayKey(new Date(start + 6 * 24 * 60 * 60 * 1000));
   return events
     .filter((ev) => {
+      if (ev.allDay) {
+        const startKey = utcDayKey(new Date(ev.startsAt));
+        const endKey = ev.endsAt ? utcDayKey(new Date(ev.endsAt)) : startKey;
+        // The event's inclusive UTC day range overlaps [today, +6d].
+        return startKey <= lastDayKey && endKey >= todayKey;
+      }
       const s = new Date(ev.startsAt).getTime();
       const e = ev.endsAt ? new Date(ev.endsAt).getTime() : s;
       // Overlaps the [today, +7d) window.

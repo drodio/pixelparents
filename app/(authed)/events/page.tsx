@@ -57,7 +57,7 @@ export default async function EventsPage() {
   if (!viewer) {
     return (
       <DashboardShell authed={false} firstName={null} email={null} status={null}>
-        <SignedOutPanel area="community" />
+        <SignedOutPanel area="events" />
       </DashboardShell>
     );
   }

@@ -427,9 +427,13 @@ function CalendarGrid({
                       />
                     ))}
                     {extra > 0 && (
-                      <span className="pointer-events-none px-1.5 text-[11px] text-white/45">
+                      <button
+                        type="button"
+                        onClick={() => onPickDay(key)}
+                        className="w-fit rounded px-1.5 text-left text-[11px] text-white/45 transition hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-amber-400/50"
+                      >
                         +{extra} more
-                      </span>
+                      </button>
                     )}
                   </div>
                 </div>
