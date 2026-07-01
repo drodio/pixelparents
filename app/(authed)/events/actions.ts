@@ -115,7 +115,7 @@ function validateEventForm(input: EventFormInput):
   const end = input.endDate
     ? resolveInstant(input.endDate, allDay ? "" : input.endTime, allDay ? 0 : input.tzOffsetMinutes)
     : null;
-  const range = validateRange(start, end);
+  const range = validateRange(start, end, allDay);
   if (!range.ok) return { ok: false, error: range.error };
 
   const isOnline = Boolean(input.isOnline);

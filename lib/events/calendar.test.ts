@@ -5,6 +5,7 @@ import {
   splitUpcomingPast,
   eventsThisWeek,
   localDayKey,
+  utcDayKey,
   type CalendarEvent,
 } from "./calendar";
 
@@ -30,6 +31,68 @@ function ev(partial: Partial<CalendarEvent> & { id: string; startsAt: string }):
 describe("localDayKey", () => {
   it("formats a local date as YYYY-MM-DD", () => {
     expect(localDayKey(new Date(2026, 8, 1))).toBe("2026-09-01");
+  });
+});
+
+describe("utcDayKey", () => {
+  it("reads a UTC-midnight instant back as its own calendar day", () => {
+    // This is exactly how all-day events are stored (see ohs-parser utcDay).
+    expect(utcDayKey(new Date(Date.UTC(2026, 7, 19)))).toBe("2026-08-19");
+  });
+});
+
+// All-day placement/rendering must use the event's UTC calendar day, NOT the
+// viewer's local day. These fixtures use Date.UTC(...) — the actual DB storage
+// shape — so the west-of-UTC regression ("First Day of Class 8/19" landing on
+// Aug 18) can't come back. Because the all-day path reads UTC getters, the
+// assertions hold in EVERY timezone the suite runs under.
+describe("all-day events (UTC-midnight storage)", () => {
+  it("places a single-day all-day event on its stored UTC day, not one earlier", () => {
+    const firstDay = ev({
+      id: "ohs-first-day",
+      title: "First Day of Class",
+      allDay: true,
+      source: "ohs",
+      // 8/19 stored at UTC midnight (Date.UTC month is 0-based → 7).
+      startsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+      endsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+    });
+    // A local calendar cell for Aug 19 overlaps; Aug 18 does NOT.
+    expect(eventOverlapsDay(firstDay, new Date(2026, 7, 19))).toBe(true);
+    expect(eventOverlapsDay(firstDay, new Date(2026, 7, 18))).toBe(false);
+    expect(eventOverlapsDay(firstDay, new Date(2026, 7, 20))).toBe(false);
+  });
+
+  it("spans a multi-day all-day range inclusively across its UTC days", () => {
+    const conf = ev({
+      id: "ptc",
+      title: "Parent-Teacher Conferences",
+      allDay: true,
+      source: "ohs",
+      startsAt: new Date(Date.UTC(2026, 9, 28)).toISOString(), // 10/28
+      endsAt: new Date(Date.UTC(2026, 9, 30)).toISOString(), // 10/30 inclusive
+    });
+    expect(eventOverlapsDay(conf, new Date(2026, 9, 27))).toBe(false);
+    expect(eventOverlapsDay(conf, new Date(2026, 9, 28))).toBe(true);
+    expect(eventOverlapsDay(conf, new Date(2026, 9, 29))).toBe(true);
+    expect(eventOverlapsDay(conf, new Date(2026, 9, 30))).toBe(true);
+    expect(eventOverlapsDay(conf, new Date(2026, 9, 31))).toBe(false);
+  });
+
+  it("buckets a UTC-midnight all-day event onto the correct grid cell", () => {
+    const firstDay = ev({
+      id: "ohs-first-day",
+      title: "First Day of Class",
+      allDay: true,
+      source: "ohs",
+      startsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+      endsAt: new Date(Date.UTC(2026, 7, 19)).toISOString(),
+    });
+    const grid = buildMonthGrid(new Date(2026, 7, 1), [firstDay], new Date(2026, 7, 1));
+    const aug19 = grid.find((c) => localDayKey(c.date) === "2026-08-19");
+    const aug18 = grid.find((c) => localDayKey(c.date) === "2026-08-18");
+    expect(aug19?.events.map((e) => e.id)).toEqual(["ohs-first-day"]);
+    expect(aug18?.events).toEqual([]);
   });
 });
 

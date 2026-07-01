@@ -7,7 +7,9 @@ import type { CalendarEvent } from "@/lib/events/calendar";
 import { rsvpAction } from "./actions";
 
 // Format an event's date/time window for display, respecting all-day vs timed and
-// single vs multi-day. All in the viewer's local zone.
+// single vs multi-day. TIMED events render in the viewer's local zone; ALL-DAY
+// events are stored at UTC midnight and MUST render with UTC getters + timeZone:
+// 'UTC' so the stored calendar day reads back as itself (no west-of-UTC drift).
 export function formatEventWhen(ev: CalendarEvent): string {
   const start = new Date(ev.startsAt);
   const end = ev.endsAt ? new Date(ev.endsAt) : null;
@@ -15,17 +17,24 @@ export function formatEventWhen(ev: CalendarEvent): string {
   const dateOpts: Intl.DateTimeFormatOptions = { weekday: "short", month: "short", day: "numeric" };
   const timeOpts: Intl.DateTimeFormatOptions = { hour: "numeric", minute: "2-digit" };
 
+  if (ev.allDay) {
+    // Compare + format all-day days in UTC.
+    const utcDateOpts: Intl.DateTimeFormatOptions = { ...dateOpts, timeZone: "UTC" };
+    const sameUtcDay =
+      end != null &&
+      start.getUTCFullYear() === end.getUTCFullYear() &&
+      start.getUTCMonth() === end.getUTCMonth() &&
+      start.getUTCDate() === end.getUTCDate();
+    const startStr = start.toLocaleDateString(undefined, utcDateOpts);
+    if (!end || sameUtcDay) return `${startStr} · All day`;
+    return `${startStr} – ${end.toLocaleDateString(undefined, utcDateOpts)}`;
+  }
+
   const sameDay =
     end != null &&
     start.getFullYear() === end.getFullYear() &&
     start.getMonth() === end.getMonth() &&
     start.getDate() === end.getDate();
-
-  if (ev.allDay) {
-    const startStr = start.toLocaleDateString(undefined, dateOpts);
-    if (!end || sameDay) return `${startStr} · All day`;
-    return `${startStr} – ${end.toLocaleDateString(undefined, dateOpts)}`;
-  }
 
   const startStr = `${start.toLocaleDateString(undefined, dateOpts)}, ${start.toLocaleTimeString(undefined, timeOpts)}`;
   if (!end) return startStr;

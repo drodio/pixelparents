@@ -17,13 +17,24 @@ export const metadata: Metadata = {
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-// Split a UTC instant into the local YYYY-MM-DD + HH:MM the form's date/time
-// inputs expect. For an all-day event the time is dropped. We compute from the
-// stored UTC instant in the SERVER's zone; the form re-resolves with the client
-// offset on save, so a same-day round-trip is stable in practice.
-function localParts(iso: string): { date: string; time: string } {
+// Split a stored instant into the YYYY-MM-DD + HH:MM the form's date/time inputs
+// expect.
+//
+// ALL-DAY events are stored at UTC midnight of the calendar day the author picked,
+// so we must read them back with UTC getters (allDay=true) — otherwise a
+// non-UTC server (local dev west of UTC, or any future region change) prefills the
+// date one day early and saving persists the wrong day. TIMED events keep the
+// existing local-getter behavior; the form re-resolves them with the client offset
+// on save.
+function eventParts(iso: string, allDay: boolean): { date: string; time: string } {
   const d = new Date(iso);
   const p = (n: number) => String(n).padStart(2, "0");
+  if (allDay) {
+    return {
+      date: `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`,
+      time: `${p(d.getUTCHours())}:${p(d.getUTCMinutes())}`,
+    };
+  }
   return {
     date: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`,
     time: `${p(d.getHours())}:${p(d.getMinutes())}`,
@@ -48,12 +59,15 @@ export default async function EditEventPage({
     notFound();
   }
 
-  const start = localParts(
+  const allDay = Boolean(row.allDay);
+  const start = eventParts(
     (row.startsAt instanceof Date ? row.startsAt : new Date(row.startsAt as unknown as string)).toISOString(),
+    allDay,
   );
   const end = row.endsAt
-    ? localParts(
+    ? eventParts(
         (row.endsAt instanceof Date ? row.endsAt : new Date(row.endsAt as unknown as string)).toISOString(),
+        allDay,
       )
     : null;
 

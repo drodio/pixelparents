@@ -98,8 +98,11 @@ export function filterAndSortPosts(
     });
   }
 
-  // "My posts" facet.
-  if (filters.myPostIds && filters.myPostIds.size > 0 && filters.mineSignupId) {
+  // "My posts" facet. NOTE: no `.size > 0` guard — when the viewer has posted
+  // nothing, an empty id set must still filter (yielding zero posts + the empty
+  // state), not silently fall through and show the whole board as if the toggle
+  // did nothing.
+  if (filters.myPostIds && filters.mineSignupId) {
     out = out.filter((p) => filters.myPostIds!.has(p.id));
   }
 

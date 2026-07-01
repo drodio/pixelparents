@@ -1,8 +1,16 @@
 // PURE, DB-free helpers that turn a flat list of events into a month-grid + the
 // list views the calendar UI renders. Shared by the client component and the unit
-// tests. All date math is done in the VIEWER's local time (the client passes a
-// `now` and the Date objects are already local-rendered), so a multi-day event
-// lands on every local day it overlaps.
+// tests.
+//
+// TIMEZONE MODEL (must stay coherent with the display components + .ics export):
+//   - TIMED events are stored as real UTC instants and placed/rendered in the
+//     VIEWER's local time (a 6pm meeting shows at the viewer's 6pm).
+//   - ALL-DAY events (every OHS school-year date + user all-day events) are stored
+//     at UTC midnight of the calendar day the user meant. They must be read back by
+//     their UTC calendar day (UTC getters), NOT the viewer's local day — otherwise
+//     a date stored as 2026-08-19T00:00:00Z renders as Aug 18 for any viewer west
+//     of UTC (all of the US). So all-day placement/comparison uses utcDayKey.
+//   - "today" / the current month are computed from the viewer's LOCAL time.
 
 export type CalendarEvent = {
   id: string;
@@ -35,10 +43,18 @@ export type DayCell = {
 };
 
 // A local YYYY-MM-DD key for a Date (viewer-local, not UTC) — used to bucket
-// events onto days without timezone drift.
+// TIMED events + day cells onto days without timezone drift.
 export function localDayKey(d: Date): string {
   const p = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+// A UTC YYYY-MM-DD key for a Date — used to bucket ALL-DAY events, which are
+// stored at UTC midnight of the calendar day the user picked. Reading them with
+// UTC getters means the stored calendar day renders back as itself in every zone.
+export function utcDayKey(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}`;
 }
 
 // Midnight (local) at the start of the given day.
@@ -46,15 +62,26 @@ function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());
 }
 
-// True if an event overlaps the local calendar day `day` (midnight→midnight).
+// True if an event overlaps the calendar day `day`.
+//
+// For ALL-DAY events we compare by UTC calendar day: the event covers every day
+// from its UTC start-day through its (inclusive) UTC end-day, and `day`'s calendar
+// date (its Y/M/D as shown in the grid) is checked against that inclusive range.
+// For TIMED events we keep the local midnight→midnight instant overlap.
 export function eventOverlapsDay(ev: CalendarEvent, day: Date): boolean {
+  if (ev.allDay) {
+    // The grid cell represents a calendar date; its Y/M/D is its local key.
+    const cellKey = localDayKey(day);
+    const startKey = utcDayKey(new Date(ev.startsAt));
+    const endKey = ev.endsAt ? utcDayKey(new Date(ev.endsAt)) : startKey;
+    return cellKey >= startKey && cellKey <= endKey;
+  }
   const dayStart = startOfDay(day).getTime();
   const dayEnd = dayStart + 24 * 60 * 60 * 1000;
   const start = new Date(ev.startsAt).getTime();
   // For an event with no end, treat it as instantaneous (placed on its start day).
   const end = ev.endsAt ? new Date(ev.endsAt).getTime() : start;
-  // Overlap if [start, end] intersects [dayStart, dayEnd). An all-day event whose
-  // end is stored as the inclusive last day still overlaps that day.
+  // Overlap if [start, end] intersects [dayStart, dayEnd).
   return start < dayEnd && end >= dayStart;
 }
 

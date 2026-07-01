@@ -95,9 +95,23 @@ export function sanitizeAttachNote(input: unknown): string | null {
   return clean || null;
 }
 
+// The OHS community's canonical scheduling zone. Proposed meeting times are
+// rendered in THIS zone (with a "short" tz label like "PDT") rather than the
+// server's zone. formatSlot runs both server-side (building the intro email +
+// the community post page, both server components) and, on Vercel, the server
+// runs in UTC — so without an explicit zone a slot a parent picked as 3:00 PM
+// Pacific was emailed/shown as "10:00 PM UTC" to both parties. Pinning the zone
+// makes the displayed time match what the proposer actually meant.
+export const OHS_SCHEDULE_TZ = "America/Los_Angeles";
+
 // Human label for a proposed slot in the intro email / UI. Locale-aware date +
-// time. Falls back to the raw ISO if the Date is somehow invalid.
-export function formatSlot(value: Date | string, locale?: string): string {
+// time, formatted in `timeZone` (defaults to the OHS Pacific zone) with a short
+// tz label. Falls back to the raw ISO if the Date is somehow invalid.
+export function formatSlot(
+  value: Date | string,
+  locale?: string,
+  timeZone: string = OHS_SCHEDULE_TZ,
+): string {
   const d = value instanceof Date ? value : new Date(value);
   if (!Number.isFinite(d.getTime())) return String(value);
   return d.toLocaleString(locale, {
@@ -106,6 +120,7 @@ export function formatSlot(value: Date | string, locale?: string): string {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+    timeZone,
     timeZoneName: "short",
   });
 }

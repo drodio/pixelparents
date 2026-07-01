@@ -98,4 +98,22 @@ describe("validateRange", () => {
   it("rejects a null start", () => {
     expect(validateRange(null, null).ok).toBe(false);
   });
+  it("allows a same-day all-day event (end === start) as an inclusive last day", () => {
+    // Regression: a single-day all-day event with a matching end date resolves to
+    // start === end (both UTC midnight) and was rejected with a timed-event error.
+    const day = new Date(Date.UTC(2026, 7, 19)); // 8/19 UTC midnight
+    const r = validateRange(day, day, true);
+    expect(r.ok).toBe(true);
+    expect(r.ok && r.value.endsAt?.getTime()).toBe(day.getTime());
+  });
+  it("still rejects an all-day end BEFORE start with day-oriented copy", () => {
+    const start = new Date(Date.UTC(2026, 7, 19));
+    const end = new Date(Date.UTC(2026, 7, 18));
+    const r = validateRange(start, end, true);
+    expect(r.ok).toBe(false);
+    expect(!r.ok && r.error).toMatch(/on or after/i);
+  });
+  it("timed events still require end strictly after start", () => {
+    expect(validateRange(start, start, false).ok).toBe(false);
+  });
 });

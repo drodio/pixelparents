@@ -118,8 +118,16 @@ export function validateUrgency(input: unknown): Result<AskUrgency> {
 
 // Optional expiry. Empty/absent → no expiry (null). A provided value must parse
 // as a date AND be in the future (a post can't expire in the past). Accepts an
-// ISO string or a date-only "YYYY-MM-DD" (interpreted at end-of-day local-ish via
-// Date parsing). `now` is injectable for deterministic tests.
+// ISO string (full timestamp) or a date-only "YYYY-MM-DD".
+//
+// A date-only value is the calendar day the poster meant the post to stay valid
+// THROUGH, so we anchor it to LOCAL end-of-day (23:59:59.999) rather than letting
+// Date.parse treat a bare date as UTC midnight. UTC-midnight parsing made a post
+// "valid until June 30" render as "Jun 29" and expire ~a day early for any viewer
+// west of UTC (all US zones), because the board/detail render validUntil with
+// toLocaleDateString in the viewer's local zone. `now` is injectable for tests.
+const DATE_ONLY_RE = /^\d{4}-\d{2}-\d{2}$/;
+
 export function validateValidUntil(
   input: unknown,
   now: number = Date.now(),
@@ -130,7 +138,10 @@ export function validateValidUntil(
   }
   const trimmed = input.trim();
   if (!trimmed) return { ok: true, value: null };
-  const ms = Date.parse(trimmed);
+  // Date-only → local end-of-day so the whole picked day counts as valid and it
+  // renders back as the same calendar day the poster typed.
+  const parseInput = DATE_ONLY_RE.test(trimmed) ? `${trimmed}T23:59:59.999` : trimmed;
+  const ms = Date.parse(parseInput);
   if (!Number.isFinite(ms)) {
     return { ok: false, error: "Enter a valid date.", field: "validUntil" };
   }

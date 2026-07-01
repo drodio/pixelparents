@@ -163,6 +163,17 @@ describe("filterAndSortPosts — tag + my-posts facets", () => {
     );
     expect(out.map((p) => p.id)).toEqual(["mine"]);
   });
+  it("'my posts' with an EMPTY id set yields zero posts (not the whole board)", () => {
+    // Regression: a viewer who has posted nothing toggling "My posts" must see an
+    // empty result, not every post as if the toggle did nothing.
+    const posts = [post({ id: "a" }), post({ id: "b" })];
+    const out = filterAndSortPosts(
+      posts,
+      filters({ mineSignupId: "me", myPostIds: new Set<string>() }),
+      NOW,
+    );
+    expect(out).toEqual([]);
+  });
 });
 
 describe("distinctTags", () => {

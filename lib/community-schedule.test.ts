@@ -113,4 +113,24 @@ describe("formatSlot", () => {
   it("falls back to the raw value for an invalid date", () => {
     expect(formatSlot("garbage")).toBe("garbage");
   });
+
+  it("renders a slot in the OHS Pacific zone by default (not the server's UTC)", () => {
+    // Regression: with no explicit timeZone, a 3pm-Pacific slot was formatted in
+    // the server's zone (UTC on Vercel) → "10:00 PM UTC" to both recipients. The
+    // instant below is 3:00 PM PDT on 2026-07-07 (22:00 UTC). It must render in
+    // Pacific with a Pacific label — never "UTC".
+    const instant = new Date(Date.UTC(2026, 6, 7, 22, 0, 0)); // 22:00Z = 3pm PDT
+    const s = formatSlot(instant, "en-US");
+    expect(s).toContain("3:00");
+    expect(s).toContain("PM");
+    expect(s).toMatch(/P[DS]T/); // Pacific label
+    expect(s).not.toContain("UTC");
+  });
+
+  it("honors an explicit timeZone override", () => {
+    const instant = new Date(Date.UTC(2026, 6, 7, 22, 0, 0));
+    const s = formatSlot(instant, "en-US", "UTC");
+    expect(s).toContain("10:00");
+    expect(s).toContain("UTC");
+  });
 });

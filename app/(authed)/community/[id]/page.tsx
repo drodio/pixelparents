@@ -508,9 +508,14 @@ export default async function ExchangePostPage({
                       </span>
                     );
                     return j.token ? (
-                      <Link key={j.signupId} href={`/directory/${j.token}`} className="hover:opacity-90">
-                        {chip}
-                      </Link>
+                      // Wrap the linked chip in an <li> too — an <a> as a direct
+                      // child of <ul> is invalid HTML and breaks list semantics for
+                      // assistive tech (the count wouldn't match the enumerated list).
+                      <li key={j.signupId} className="list-none">
+                        <Link href={`/directory/${j.token}`} className="hover:opacity-90">
+                          {chip}
+                        </Link>
+                      </li>
                     ) : (
                       <li key={j.signupId} className="list-none">
                         {chip}

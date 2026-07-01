@@ -112,11 +112,16 @@ export function resolveInstant(
   return Number.isFinite(out.getTime()) ? out : null;
 }
 
-// Validate a resolved start/end pair. End is optional; when present it must be
-// after start. Both must be finite dates.
+// Validate a resolved start/end pair. End is optional. Both must be finite dates.
+//
+// For a TIMED event the end must be strictly AFTER the start. For an ALL-DAY event
+// the end is the INCLUSIVE last calendar day, so a single-day all-day event with a
+// matching start/end date (both resolve to the same UTC midnight) is valid — we
+// allow end >= start and use day-oriented error copy.
 export function validateRange(
   start: Date | null,
   end: Date | null,
+  allDay = false,
 ): Result<{ startsAt: Date; endsAt: Date | null }> {
   if (!start || !Number.isFinite(start.getTime())) {
     return { ok: false, error: "Choose a valid start date and time.", field: "startsAt" };
@@ -125,7 +130,11 @@ export function validateRange(
     if (!Number.isFinite(end.getTime())) {
       return { ok: false, error: "Choose a valid end date and time.", field: "endsAt" };
     }
-    if (end.getTime() <= start.getTime()) {
+    if (allDay) {
+      if (end.getTime() < start.getTime()) {
+        return { ok: false, error: "The end date must be on or after the start date.", field: "endsAt" };
+      }
+    } else if (end.getTime() <= start.getTime()) {
       return { ok: false, error: "The end time must be after the start time.", field: "endsAt" };
     }
   }
