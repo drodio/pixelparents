@@ -7,6 +7,7 @@ import { usePathname } from "next/navigation";
 import type { ApprovalStatus } from "@/lib/approval";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { NotificationBell } from "@/components/notification-bell";
+import { FeedbackWidget } from "@/components/feedback-widget";
 import {
   IconGrid,
   IconHome,
@@ -170,6 +171,12 @@ export function DashboardShell({
   const accountBlock = (mobile = false) =>
     authed ? (
       <>
+        {/* "Send feedback" pinned DIRECTLY ABOVE the account chip (Daniel's note:
+            the old landing feedback link was too hard to find). Reachable both on
+            the desktop rail and in the mobile More drawer. */}
+        <div className="mb-1">
+          <FeedbackWidget variant={mobile ? "drawer" : "sidebar"} />
+        </div>
         {mobile ? (
           <div className="mb-2">
             <VerifiedBadge status={status} />
@@ -187,6 +194,7 @@ export function DashboardShell({
         <Link
           href="/account"
           title="Account settings"
+          data-tour="account"
           onClick={mobile ? () => setDrawerOpen(false) : undefined}
           className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-white/5"
         >
@@ -253,8 +261,13 @@ export function DashboardShell({
 
         <nav className="flex flex-1 flex-col gap-1 px-2 py-3 md:px-3">
           {/* Notification bell — only for authed users. Self-fetches its own
-              unread count, so no count prop has to be threaded through callers. */}
-          {authed && <NotificationBell />}
+              unread count, so no count prop has to be threaded through callers.
+              Wrapped with data-tour so the walkthrough can spotlight it. */}
+          {authed && (
+            <span data-tour="notifications" className="block">
+              <NotificationBell />
+            </span>
+          )}
           {items.map((item) => navLink(item))}
         </nav>
 

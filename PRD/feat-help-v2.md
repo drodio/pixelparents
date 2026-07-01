@@ -1,5 +1,33 @@
 # feat/help-v2 — Help + Onboarding + Feedback surface
 
+## Progress Update as of [June 30, 2026 — 8:52 PM Pacific]
+
+### Summary of changes since last update
+Built the FEEDBACK WIDGET and wired it + walkthrough `data-tour` anchors into the
+app shell and dashboard. The "Send feedback" entry is now pinned directly above
+the account chip on the desktop rail and inside the mobile More drawer.
+
+### Detail of changes made:
+- `components/feedback-widget.tsx` — `FeedbackComposer` (textarea + Send +
+  "Thanks — sent!" confirmation; captures window.location.pathname at submit,
+  maxLength = MAX_FEEDBACK_MESSAGE, calls submitFeedbackAction) and
+  `FeedbackWidget` (a compact trigger opening a popover with the composer;
+  Escape + click-outside dismiss; `variant` "sidebar" | "drawer"). Carries
+  `data-tour="feedback"` for the walkthrough.
+- `components/dashboard-shell.tsx` — imported + rendered `<FeedbackWidget>`
+  directly above the account chip in `accountBlock` (both desktop + drawer);
+  wrapped the NotificationBell in `data-tour="notifications"`; added
+  `data-tour="account"` to the account settings Link.
+- `app/(authed)/dashboard/page.tsx` — `LinkCard` gained an optional `tourId` →
+  `data-tour`; the six Explore cards now carry `explore-community`,
+  `explore-directory`, `explore-events`, `explore-resources`, `explore-family`,
+  `explore-developers` (reordered to the tour sequence). Grid already had all
+  six items — no card was missing.
+
+### Potential concerns to address:
+- The help (?) button, help menu, GitHub dialog, FAQ, and walkthrough tour are
+  the next commits; the tour will consume the data-tour anchors added here.
+
 ## Progress Update as of [June 30, 2026 — 8:43 PM Pacific]
 
 ### Summary of changes since last update

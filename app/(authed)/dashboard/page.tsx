@@ -59,17 +59,22 @@ function LinkCard({
   desc,
   Icon,
   external = false,
+  tourId,
 }: {
   href: string;
   title: string;
   desc: string;
   Icon: (p: { className?: string }) => React.ReactElement;
   external?: boolean;
+  // When set, the card carries a data-tour attribute so the walkthrough tour can
+  // spotlight it one at a time.
+  tourId?: string;
 }) {
   return (
     <Link
       href={href}
       {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+      {...(tourId ? { "data-tour": tourId } : {})}
       className="group flex items-start gap-4 rounded-2xl border border-white/10 bg-white/[0.03] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-amber-400/40 hover:bg-white/[0.05] hover:shadow-lg hover:shadow-amber-400/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-0)] active:translate-y-0 active:scale-[0.99] motion-reduce:transition-none motion-reduce:hover:translate-y-0"
     >
       <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl bg-amber-400/15 text-amber-300">
@@ -203,36 +208,42 @@ export default async function DashboardPage() {
               title="Community"
               desc="The two-way help board — post an Ask when you need a hand or an Offer when you can give one, and get matched."
               Icon={IconHeart}
-            />
-            <LinkCard
-              href="/events"
-              title="Events"
-              desc="The shared OHS calendar — community-created events alongside the school-year calendar."
-              Icon={IconCalendar}
+              tourId="explore-community"
             />
             <LinkCard
               href="/directory"
               title="Directory"
               desc="Browse OHS families and students who are sharing, plus a map of where we're building."
               Icon={IconUsers}
+              tourId="explore-directory"
+            />
+            <LinkCard
+              href="/events"
+              title="Events"
+              desc="The shared OHS calendar — community-created events alongside the school-year calendar."
+              Icon={IconCalendar}
+              tourId="explore-events"
             />
             <LinkCard
               href="/resources"
               title="Resources"
               desc="Community resource boards — OHS-only, upvotable collections of links, files, and notes."
               Icon={IconBook}
+              tourId="explore-resources"
             />
             <LinkCard
               href="/family"
               title="Family"
               desc="Manage your family profile and your verified OHS students."
               Icon={IconHome}
+              tourId="explore-family"
             />
             <LinkCard
               href="/dashboard/developers"
               title="Developers"
               desc="Build on the Pixel Parents API — request a key and read the docs."
               Icon={IconCode}
+              tourId="explore-developers"
             />
           </div>
         </section>
