@@ -45,6 +45,8 @@ import { OfferHelpForm } from "./offer-help-form";
 import { ResponseDecision } from "./response-decision";
 import { PostControls } from "./post-controls";
 import { ConnectedCard, type ConnectedCardData, type ConnectedMethod } from "./connected-card";
+import { ResponseThread, type ThreadMessage } from "./response-thread";
+import { listMessagesForResponses } from "@/lib/db/exchange-thread";
 import { EngagementBar } from "./engagement-bar";
 import { CommunityBody } from "../community-body";
 import { extractMentionIds } from "@/lib/mentions";
@@ -366,6 +368,56 @@ export default async function ExchangePostPage({
   // Proposed scheduling slots per response (shown to the author + the responder).
   const slotsForResponses = await slotsByResponse(responses.map((r) => r.id));
 
+  // --- Exchange thread: the back-and-forth on each response --------------------
+  // A viewer is a PARTY to a response if they authored the post OR they authored
+  // that response. This flag drives BOTH the private-message visibility filter
+  // (private messages only reach parties) and whether the composer renders. It is
+  // computed here server-side — never trusted from the client.
+  const viewerSignupId = viewerSignup!.id;
+  const viewerIsPartyByResponseId = new Map<string, boolean>();
+  for (const r of responses) {
+    viewerIsPartyByResponseId.set(
+      r.id,
+      isAuthor || r.responderSignupId === viewerSignupId,
+    );
+  }
+  const threadMessages = await listMessagesForResponses(
+    responses.map((r) => r.id),
+    viewerSignupId,
+    viewerIsPartyByResponseId,
+  );
+  // Coarsened display label for a message author (student = first name only).
+  // Message authors are always parties, so their rows are already loaded (author
+  // row + responder rows); fall back to a generic label if a row is missing.
+  const messageAuthorLabel = (signupId: string): string => {
+    if (authorRow && signupId === authorRow.id) return authorName;
+    const row = responderRowById.get(signupId);
+    if (!row) return "A community member";
+    return isStudentAccount(row)
+      ? row.firstName
+      : [row.firstName, row.lastName].filter(Boolean).join(" ");
+  };
+  // Group + project messages per response into the client thread shape.
+  const threadByResponseId = new Map<string, ThreadMessage[]>();
+  for (const m of threadMessages) {
+    const list = threadByResponseId.get(m.responseId) ?? [];
+    list.push({
+      id: m.id,
+      createdAt: m.createdAt ? m.createdAt.toISOString() : null,
+      authorSignupId: m.authorSignupId,
+      authorName: messageAuthorLabel(m.authorSignupId),
+      isOwn: m.authorSignupId === viewerSignupId,
+      kind: m.kind,
+      visibility: m.visibility,
+      body: m.body,
+      proposedEvent: m.proposedEvent,
+      eventId: m.eventId,
+      eventStatus: m.eventStatus,
+      isProposer: m.authorSignupId === viewerSignupId,
+    });
+    threadByResponseId.set(m.responseId, list);
+  }
+
   // Display cards for members who attached ("I'd join this too"). Coarsened name +
   // a profile link only when they share one — same privacy gate as everywhere.
   const joiners: { signupId: string; name: string; token: string | null; isStudent: boolean }[] =
@@ -650,6 +702,16 @@ export default async function ExchangePostPage({
                             />
                           );
                         })()}
+
+                      {/* The conversation thread on this response. A viewer who is
+                          a party (post author or this responder) gets the composer
+                          + any private messages; others see the public thread only.
+                          The server already filtered private messages to parties. */}
+                      <ResponseThread
+                        responseId={r.id}
+                        viewerIsParty={viewerIsPartyByResponseId.get(r.id) === true}
+                        messages={threadByResponseId.get(r.id) ?? []}
+                      />
                     </div>
                   );
                 })}

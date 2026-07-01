@@ -141,6 +141,10 @@ function TypeIcon({ type }: { type: string }) {
       return <HeartGlyph />;
     case "community_mention":
       return <AtGlyph />;
+    case "community_reply":
+      return <ChatGlyph />;
+    case "community_event":
+      return <CalendarGlyph />;
     case "event_rsvp":
       return <CalendarGlyph />;
     case "board_contribution":
