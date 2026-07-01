@@ -20,7 +20,16 @@ export const changelogEntries = pgTable(
     bullets: jsonb("bullets").$type<string[]>().default([]).notNull(),
     changeType: text("change_type").notNull(), // feature | enhancement | bug_fix
     categories: jsonb("categories").$type<string[]>().default([]).notNull(),
-    commitSha: text("commit_sha"), // idempotency key for the generator
+    // The commit author(s) an entry credits: display name + GitHub login (login
+    // may be null for commits not linked to a GH account — then show just name).
+    authors: jsonb("authors")
+      .$type<{ name: string; login: string | null }[]>()
+      .default([])
+      .notNull(),
+    commitSha: text("commit_sha"), // representative (newest) sha for the entry
+    // Every commit sha this entry aggregates — the dedupe key so overlapping
+    // cron windows never re-post the same commits under a new entry.
+    commitShas: jsonb("commit_shas").$type<string[]>().default([]).notNull(),
     notifiedAt: timestamp("notified_at", { withTimezone: true }), // email sent?
     createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
   },

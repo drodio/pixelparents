@@ -22,10 +22,16 @@ export async function sendChangelogEmail(
   const unsubscribeUrl = unsubscribeToken
     ? `${base}/api/changelog/unsubscribe?token=${encodeURIComponent(unsubscribeToken)}`
     : `${base}/api/changelog/unsubscribe?email=${encodeURIComponent(to)}`;
+  // Credit the shipper(s): "Name (login)" — login present only when linked to a
+  // GH account. Empty for seeded/historical entries (no line rendered).
+  const byline = entry.authors?.length
+    ? entry.authors.map((a) => (a.login ? `${a.name} (${a.login})` : a.name)).join(", ")
+    : "";
   const text = [
     `New on Pixel Parents:`,
     ``,
     entry.title,
+    ...(byline ? [`by ${byline}`] : []),
     ``,
     entry.summary,
     ...(entry.bullets?.length ? ["", ...entry.bullets.map((b) => `• ${b}`)] : []),
