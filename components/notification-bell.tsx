@@ -44,6 +44,16 @@ export function NotificationBell({ showLabel = false }: { showLabel?: boolean } 
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
+  // Reconcile in the SAME viewport after an in-page mark-read. The notifications
+  // center dispatches "notifications:changed" once a mark-one / mark-all persists;
+  // router.refresh() alone doesn't change our deps, so without this the badge
+  // would keep showing the old count next to a list that reads zero unread.
+  useEffect(() => {
+    const onChanged = () => refresh();
+    window.addEventListener("notifications:changed", onChanged);
+    return () => window.removeEventListener("notifications:changed", onChanged);
+  }, [refresh]);
+
   // Both the corner badge and the inline label pill derive from the SAME source
   // of truth (formatUnreadBadge) so they never disagree on the same value. They
   // cap differently on purpose: the corner badge sits on the 16px icon rail and

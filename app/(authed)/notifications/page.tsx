@@ -4,7 +4,7 @@ import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
-import { listNotifications } from "@/lib/db/notifications";
+import { listNotifications, unreadCount } from "@/lib/db/notifications";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import { NotificationsClient } from "./notifications-client";
@@ -42,12 +42,17 @@ export default async function NotificationsPage() {
     ? readApprovalStatus((signup.extra ?? {}) as Record<string, unknown>)
     : null;
 
-  // Load the caller's notifications (empty when they have no signup row yet).
-  const notifications = signup ? await listNotifications(signup.id) : [];
+  // Load the caller's notifications (empty when they have no signup row yet). The
+  // list is capped at 50 rows, so we ALSO fetch the true unread COUNT(*) — the
+  // same source the bell uses — so the header subtitle can't understate unread
+  // when a recipient has more than a windowful.
+  const [notifications, unreadTotal] = signup
+    ? await Promise.all([listNotifications(signup.id), unreadCount(signup.id)])
+    : [[], 0];
 
   return (
     <DashboardShell firstName={firstName} email={email} status={status} isAdmin={isAdmin}>
-      <NotificationsClient initial={notifications} />
+      <NotificationsClient initial={notifications} unreadTotal={unreadTotal} />
     </DashboardShell>
   );
 }

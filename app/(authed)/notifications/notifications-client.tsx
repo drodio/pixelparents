@@ -15,30 +15,81 @@ import {
 // it feeling polished. All identity/authorization lives server-side in actions.ts;
 // this component only renders data it was handed and calls the scoped actions.
 
-type Props = { initial: NotificationRow[] };
+// The list caps at `listNotifications`' 50-row window, so the count of unread
+// rows we hold in memory can UNDERSTATE how many unread the recipient truly has
+// (a parent with 60 unread only sees 50 rows). page.tsx passes the server-side
+// COUNT(*) as `unreadTotal` so the subtitle and the bell agree; we fall back to
+// counting the loaded rows only when it isn't supplied.
+type Props = { initial: NotificationRow[]; unreadTotal?: number };
 
-export function NotificationsClient({ initial }: Props) {
+// Broadcast that the caller's notifications changed so the sidebar bell (which
+// fetches its own unread count independently) can reconcile in the same viewport
+// instead of showing a stale badge until the tab is refocused or navigated away.
+function announceNotificationsChanged() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("notifications:changed"));
+  }
+}
+
+export function NotificationsClient({ initial, unreadTotal }: Props) {
   const router = useRouter();
   const [items, setItems] = useState<NotificationRow[]>(initial);
   const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
 
-  const unread = items.filter((n) => !n.read).length;
+  // Unread in the loaded window; `serverUnread` corrects for the 50-row cap once
+  // rows have been cleared (it can't go below what's actually visible-unread).
+  const loadedUnread = items.filter((n) => !n.read).length;
+  const unread =
+    typeof unreadTotal === "number" ? Math.max(loadedUnread, unreadTotal) : loadedUnread;
 
   function open(n: NotificationRow) {
     // Optimistically mark read in the UI, persist in the background, then navigate.
     if (!n.read) {
       setItems((prev) => prev.map((x) => (x.id === n.id ? { ...x, read: true } : x)));
-      void markNotificationReadAction({ id: n.id });
+      // Persist and reconcile: on failure roll the row back and surface the error
+      // so the list reflects reality instead of a false "read".
+      void markNotificationReadAction({ id: n.id })
+        .then((res) => {
+          if (!res.ok) {
+            setItems((prev) =>
+              prev.map((x) => (x.id === n.id ? { ...x, read: false } : x)),
+            );
+            setError(res.error);
+          } else {
+            announceNotificationsChanged();
+          }
+        })
+        .catch(() => {
+          setItems((prev) =>
+            prev.map((x) => (x.id === n.id ? { ...x, read: false } : x)),
+          );
+          setError("Couldn't update that notification.");
+        });
     }
     if (n.link) router.push(n.link);
     else router.refresh();
   }
 
   function markAll() {
+    setError(null);
+    // Snapshot so we can roll back if the server rejects/throws.
+    const snapshot = items;
     setItems((prev) => prev.map((x) => ({ ...x, read: true })));
     startTransition(async () => {
-      await markAllNotificationsReadAction();
-      router.refresh();
+      try {
+        const res = await markAllNotificationsReadAction();
+        if (!res.ok) {
+          setItems(snapshot);
+          setError(res.error);
+          return;
+        }
+        announceNotificationsChanged();
+        router.refresh();
+      } catch {
+        setItems(snapshot);
+        setError("Couldn't update your notifications.");
+      }
     });
   }
 
@@ -62,6 +113,15 @@ export function NotificationsClient({ initial }: Props) {
           </button>
         )}
       </header>
+
+      {error && (
+        <p
+          role="alert"
+          className="mb-4 rounded-lg border border-red-400/30 bg-red-400/[0.07] px-4 py-2 text-sm text-red-300"
+        >
+          {error}
+        </p>
+      )}
 
       {items.length === 0 ? (
         <EmptyState />
@@ -124,8 +184,10 @@ function EmptyState() {
       </span>
       <p className="text-sm font-medium text-white/70">No notifications yet</p>
       <p className="mt-1 max-w-xs text-sm text-white/45">
-        When someone responds to your Community post, accepts a connection, or RSVPs to an event you
-        organize, you&apos;ll see it here.
+        {/* Single source of truth: the same "no notifications yet" copy the header
+            subtitle uses (notificationsSubtitle with 0/0), so the empty state can
+            never promise fewer sources than the app actually emits. */}
+        {notificationsSubtitle(0, 0)}
       </p>
     </div>
   );
