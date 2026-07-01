@@ -87,7 +87,15 @@ function CopyableSecret({ label, value, tone }: { label: string; value: string; 
   );
 }
 
+// Wrapper that lets the reveal card reset back to a fresh, empty form. useActionState
+// can't clear its own state, so "Register another app" bumps a key to remount the
+// inner form with a clean slate.
 function RegisterForm() {
+  const [instance, setInstance] = useState(0);
+  return <RegisterFormInner key={instance} onReset={() => setInstance((n) => n + 1)} />;
+}
+
+function RegisterFormInner({ onReset }: { onReset: () => void }) {
   const [state, action, pending] = useActionState<RegisterState, FormData>(registerOAuthApp, {});
 
   if (state.reveal) {
@@ -101,6 +109,48 @@ function RegisterForm() {
         </p>
         <CopyableSecret label="Client ID" value={state.reveal.clientId} tone="id" />
         <CopyableSecret label="Client secret (shown once)" value={state.reveal.clientSecret} tone="secret" />
+
+        {/* Echo back exactly what was saved so the developer can confirm the config
+            (e.g. a typo'd redirect URI dropped by validation). */}
+        <div className="flex flex-col gap-2 rounded-md border border-white/10 bg-black/40 p-3">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40">
+            Saved redirect URIs
+          </span>
+          {state.reveal.redirectUris.length ? (
+            <ul className="flex flex-col gap-1">
+              {state.reveal.redirectUris.map((u) => (
+                <li key={u} className="break-all font-mono text-xs text-white/80">
+                  {u}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <span className="text-xs text-white/50">None saved.</span>
+          )}
+        </div>
+        <div className="flex flex-col gap-2">
+          <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-white/40">
+            Saved scopes
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {state.reveal.scopes.map((s) => (
+              <span
+                key={s}
+                className="rounded-full border border-white/10 px-2 py-0.5 font-mono text-[11px] text-white/60"
+              >
+                {s}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onReset}
+          className="self-start rounded-full border border-white/15 px-4 py-1.5 text-xs font-semibold text-white/80 transition hover:bg-white/5"
+        >
+          Register another app
+        </button>
       </div>
     );
   }
@@ -154,7 +204,8 @@ function RegisterForm() {
         ))}
         <p className="mt-1 text-xs text-white/40">
           Apps that request scopes about OHS students (marked{" "}
-          <span className="text-amber-300/80">minor data</span>) get extra review.
+          <span className="text-amber-300/80">minor data</span>) are flagged to an
+          admin for review, who can revoke access at any time.
         </p>
       </fieldset>
 

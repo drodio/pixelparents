@@ -52,11 +52,18 @@ const STEPS: Array<[string, string]> = [
   ["3. Build", "Once approved, reveal your API key and start calling the endpoints."],
 ];
 
-const CLAUDE_MCP_CONFIG = `{
+// Claude Desktop reads claude_desktop_config.json, which only understands stdio
+// servers (command/args) — it does NOT accept a raw remote { url, headers } entry.
+// Bridge to the remote server with mcp-remote so the stdio config is valid.
+const CLAUDE_DESKTOP_CONFIG = `{
   "mcpServers": {
     "pixel-parents": {
-      "url": "https://pixelparents.org/api/mcp",
-      "headers": { "Authorization": "Bearer YOUR_KEY" }
+      "command": "npx",
+      "args": [
+        "-y", "mcp-remote",
+        "https://pixelparents.org/api/mcp",
+        "--header", "Authorization: Bearer YOUR_KEY"
+      ]
     }
   }
 }`;
@@ -94,7 +101,7 @@ export default function DevelopersPage() {
             PII like names, emails, phones, or photos.
           </p>
           <Link
-            href="/sign-in?redirect_url=/account"
+            href="/sign-in?redirect_url=/dashboard/developers"
             className="rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
           >
             Request API access →
@@ -193,17 +200,25 @@ export default function DevelopersPage() {
             <p className="text-sm text-white/70">
               The API also speaks <span className="font-semibold text-white/90">MCP</span> (Model
               Context Protocol), so you can ask Claude (or any AI agent) about the community in plain
-              language. Point your MCP client at:
+              language.
             </p>
-            <pre className="mt-3 overflow-x-auto rounded-lg border border-white/10 bg-black/60 p-3 font-mono text-xs text-emerald-200">
+            <p className="mt-4 text-sm text-white/60">
+              <span className="font-semibold text-white/80">Remote MCP clients</span> (Claude.ai
+              custom connectors, and other clients that accept a server URL) — paste this URL and add{" "}
+              <code className="font-mono text-xs text-white/80">Authorization: Bearer YOUR_KEY</code>{" "}
+              as a header:
+            </p>
+            <pre className="mt-2 overflow-x-auto rounded-lg border border-white/10 bg-black/60 p-3 font-mono text-xs text-emerald-200">
 https://pixelparents.org/api/mcp
             </pre>
             <p className="mt-4 text-sm text-white/60">
-              For Claude Desktop, add this to your{" "}
+              <span className="font-semibold text-white/80">Claude Desktop</span> only speaks stdio,
+              so bridge to the remote server with{" "}
+              <code className="font-mono text-xs text-white/80">mcp-remote</code>. Add this to your{" "}
               <code className="font-mono text-xs text-white/80">claude_desktop_config.json</code>:
             </p>
             <pre className="mt-2 overflow-x-auto rounded-lg border border-white/10 bg-black/60 p-3 font-mono text-xs leading-relaxed text-white/80">
-{CLAUDE_MCP_CONFIG}
+{CLAUDE_DESKTOP_CONFIG}
             </pre>
             <p className="mt-3 text-xs text-white/45">
               Discovery (listing tools) is open; calling a tool needs your approved key. Tools:{" "}
@@ -224,7 +239,7 @@ https://pixelparents.org/api/mcp
             Create an account, tell us what you&apos;re building, and we&apos;ll review your request.
           </p>
           <Link
-            href="/sign-in?redirect_url=/account"
+            href="/sign-in?redirect_url=/dashboard/developers"
             className="rounded-full bg-emerald-500 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-emerald-400"
           >
             Request API access →

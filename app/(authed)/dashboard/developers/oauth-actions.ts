@@ -2,7 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { currentUser } from "@clerk/nextjs/server";
-import { SUPPORTED_SCOPES, type SupportedScope } from "@/lib/oauth/config";
+import {
+  SUPPORTED_SCOPES,
+  requestsMinorData,
+  type SupportedScope,
+} from "@/lib/oauth/config";
 import { validateRedirectUris } from "@/lib/oauth/redirect";
 import {
   registerClient,
@@ -11,6 +15,7 @@ import {
 } from "@/lib/oauth/store";
 import { developerFacingStatus, type DeveloperFacingStatus } from "@/lib/oauth/gating";
 import { ownerApiAccessApproved } from "@/lib/oauth/owner-approval";
+import { notifyAdminNewOAuthApp } from "@/lib/oauth/notify";
 
 // Server actions backing the Developers-tab "Sign in with Pixel Parents" app
 // registration. Self-serve for MVP (any signed-in user can register an app);
@@ -21,7 +26,16 @@ import { ownerApiAccessApproved } from "@/lib/oauth/owner-approval";
 export type RegisterState = {
   error?: string;
   // The one-time reveal — present only immediately after a successful register.
-  reveal?: { clientId: string; clientSecret: string; name: string };
+  // Echoes back the saved redirect URIs + scopes so the developer can confirm the
+  // app was stored exactly as intended (e.g. that a typo'd redirect URI wasn't
+  // silently dropped by validation).
+  reveal?: {
+    clientId: string;
+    clientSecret: string;
+    name: string;
+    redirectUris: string[];
+    scopes: string[];
+  };
 };
 
 export async function registerOAuthApp(
@@ -63,8 +77,24 @@ export async function registerOAuthApp(
       allowedScopes: scopes,
       createdBy: user.id,
     });
+    // Alert an admin about the new app so the "extra review" the UI promises for
+    // minor-data apps actually happens. Best-effort: never blocks registration.
+    await notifyAdminNewOAuthApp({
+      name: client.name,
+      scopes,
+      minorData: requestsMinorData(scopes),
+      ownerId: user.id,
+    });
     revalidatePath("/dashboard/developers");
-    return { reveal: { clientId: client.client_id, clientSecret, name: client.name } };
+    return {
+      reveal: {
+        clientId: client.client_id,
+        clientSecret,
+        name: client.name,
+        redirectUris: client.redirect_uris,
+        scopes: client.allowed_scopes,
+      },
+    };
   } catch (e) {
     console.error("registerOAuthApp failed:", e);
     return { error: "Couldn't register the app. Please try again." };
