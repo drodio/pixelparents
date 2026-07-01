@@ -8,3 +8,4 @@ export * from "./admins";
 export * from "./changelog";
 export * from "./asks";
 export * from "./events";
+export * from "./feedback";
