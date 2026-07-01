@@ -46,5 +46,16 @@ export function validateLinkedinUrl(input: unknown): LinkedinResult {
   if (!parsed.hostname || !parsed.hostname.includes(".")) {
     return { ok: false, error: "That doesn't look like a valid link." };
   }
+  // The field is labeled "LinkedIn" and its saved value is surfaced to other OHS
+  // families as this parent's LinkedIn, so require an actual linkedin.com host
+  // (allowing www. and country subdomains like ca.linkedin.com). Anything else —
+  // an accidentally-pasted unrelated URL — would be mislabeled to the community.
+  const host = parsed.hostname.toLowerCase();
+  if (host !== "linkedin.com" && !host.endsWith(".linkedin.com")) {
+    return {
+      ok: false,
+      error: "Please enter a LinkedIn profile URL (linkedin.com/in/…).",
+    };
+  }
   return { ok: true, value: parsed.toString() };
 }

@@ -9,7 +9,17 @@ import { updateLinkedin, type LinkedinState } from "./actions";
 // file; this is the only place they can fill it in without an admin. Display +
 // edit live in one panel: the saved link (or a "not added yet" hint) is always
 // visible, and an inline form appears when they choose to add/change it.
-export function LinkedinPanel({ initialUrl }: { initialUrl: string | null }) {
+export function LinkedinPanel({
+  initialUrl,
+  // Whether a saved LinkedIn would actually be visible to other OHS families
+  // right now: it requires share visibility "OHS Families" AND the "links" share
+  // field enabled (both live in ShareSettings below). When either is off we tell
+  // the parent after a save so "families can reach you" isn't a false promise.
+  visibleToFamilies = false,
+}: {
+  initialUrl: string | null;
+  visibleToFamilies?: boolean;
+}) {
   const [editing, setEditing] = useState(false);
   const [state, formAction, pending] = useActionState<LinkedinState, FormData>(
     updateLinkedin,
@@ -65,7 +75,11 @@ export function LinkedinPanel({ initialUrl }: { initialUrl: string | null }) {
             <input
               id="linkedin_url"
               name="linkedin_url"
-              type="url"
+              // type="text" (not "url"): the native URL constraint rejects the
+              // scheme-less "linkedin.com/in/you" value the placeholder implies
+              // and the server validator explicitly upgrades to https. Let the
+              // server (linkedin.ts) do the parsing/upgrading it was built for.
+              type="text"
               inputMode="url"
               defaultValue={saved ?? ""}
               placeholder="https://linkedin.com/in/you"
@@ -94,9 +108,23 @@ export function LinkedinPanel({ initialUrl }: { initialUrl: string | null }) {
           </p>
           {state.error && <p className="text-sm text-red-400">{state.error}</p>}
           {state.ok && (
-            <p className="text-sm font-medium text-emerald-300">
-              Saved. Your LinkedIn is up to date.
-            </p>
+            <>
+              <p className="text-sm font-medium text-emerald-300">
+                Saved. Your LinkedIn is up to date.
+              </p>
+              {/* Only promise reachability when it's actually true. A saved
+                  LinkedIn is shown to other families only if visibility is "OHS
+                  Families" AND the "LinkedIn & GitHub links" share field is on
+                  (both below, and off by default). Otherwise say so plainly. */}
+              {state.url && !visibleToFamilies && (
+                <p className="text-xs text-amber-300/90">
+                  It&apos;s saved but not yet visible to other families. To let
+                  them reach you, set visibility to &ldquo;OHS Families&rdquo; and
+                  turn on &ldquo;LinkedIn &amp; GitHub links&rdquo; in the sharing
+                  controls below.
+                </p>
+              )}
+            </>
           )}
         </form>
       )}

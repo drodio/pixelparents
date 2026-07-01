@@ -127,10 +127,17 @@ export default async function AccountPage() {
             <h2 className="text-xl font-semibold tracking-tight">OHS Families</h2>
             <p className="mt-1 text-sm text-white/55">
               Choose whether other OHS families can find your profile, and what
-              they see. Add your LinkedIn so families you connect with can reach you.
+              they see. Add your LinkedIn, then turn on link sharing below so
+              families you connect with can reach you.
             </p>
           </div>
-          <LinkedinPanel initialUrl={signup.linkedinUrl?.trim() || null} />
+          <LinkedinPanel
+            initialUrl={signup.linkedinUrl?.trim() || null}
+            visibleToFamilies={
+              coerceShareVisibility(signup.shareVisibility) === "ohs" &&
+              shareFieldsOrDefault(signup.shareFields).includes("links")
+            }
+          />
           <ShareSettings
             signupId={signup.id}
             initialVisibility={coerceShareVisibility(signup.shareVisibility)}

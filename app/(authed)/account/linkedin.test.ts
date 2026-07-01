@@ -46,4 +46,20 @@ describe("validateLinkedinUrl", () => {
     const r = validateLinkedinUrl("http://linkedin.com/in/x");
     expect(r.ok).toBe(true);
   });
+
+  it("accepts www. and country linkedin subdomains", () => {
+    expect(validateLinkedinUrl("https://www.linkedin.com/in/x").ok).toBe(true);
+    expect(validateLinkedinUrl("https://ca.linkedin.com/in/x").ok).toBe(true);
+    expect(validateLinkedinUrl("linkedin.com/in/x").ok).toBe(true);
+  });
+
+  it("rejects a non-LinkedIn host (field is labeled/shared as LinkedIn)", () => {
+    expect(validateLinkedinUrl("https://example.com/in/x").ok).toBe(false);
+    expect(validateLinkedinUrl("github.com/jane").ok).toBe(false);
+    // Not a subdomain of linkedin.com — a lookalike host must not pass.
+    expect(validateLinkedinUrl("https://linkedin.com.evil.com/in/x").ok).toBe(
+      false,
+    );
+    expect(validateLinkedinUrl("https://notlinkedin.com/in/x").ok).toBe(false);
+  });
 });
