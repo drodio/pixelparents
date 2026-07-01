@@ -9,7 +9,6 @@ import { isAdminEmail } from "@/lib/admin";
 import {
   getSignupCount,
   getChildrenCount,
-  getInterestsCount,
   getBuilderCounts,
   getStudentBuilderCount,
 } from "@/lib/db/signups";
@@ -25,16 +24,14 @@ const cornerBtnCls =
 export default async function Home() {
   let count = 0;
   let kidsCount = 0;
-  let interestsCount = 0;
   let interests: string[] = [];
   let builders = { technical: 0, curious: 0 };
   let studentBuilders = 0;
   try {
-    [count, kidsCount, interestsCount, interests, builders, studentBuilders] =
+    [count, kidsCount, interests, builders, studentBuilders] =
       await Promise.all([
         getSignupCount(),
         getChildrenCount(),
-        getInterestsCount(),
         getInterestPool(),
         getBuilderCounts(),
         getStudentBuilderCount(),
@@ -42,11 +39,15 @@ export default async function Home() {
   } catch {
     count = 0;
     kidsCount = 0;
-    interestsCount = 0;
     interests = [];
     builders = { technical: 0, curious: 0 };
     studentBuilders = 0;
   }
+  // Headline count derives from the SAME distinct pool that feeds the animated
+  // mosaic (InterestTiles), so the number a visitor reads can never be smaller
+  // than the set of interests actually swirling on screen. getInterestPool()
+  // already unions parent_interests + children.interests and de-dupes.
+  const interestsCount = interests.length;
 
   // Read auth server-side so the public splash never loads Clerk JS. auth() is a
   // cheap cookie read; only fetch the full user (a Clerk API call) when signed

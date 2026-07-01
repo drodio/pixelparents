@@ -97,3 +97,37 @@ describe("canonicalizeInterests", () => {
     ]);
   });
 });
+
+// The landing hero's "N shared interests" headline is now derived from
+// getInterestPool().length — the SAME distinct pool that feeds the InterestTiles
+// mosaic — instead of a separate child-only count query that under-counted by
+// omitting parent interests the mosaic shows. getInterestPool() is DB-bound, but
+// its distinct set is built by buildCanonicalMap over the parent+child union;
+// this locks in that the derived count equals the number of distinct on-screen
+// tiles, so the headline can never read smaller than the tiles a visitor sees.
+describe("hero interests count = distinct pool size (parent + child union)", () => {
+  // Mirrors getInterestPool: union every spelling from parents AND children,
+  // collapse case-variants, and count the distinct canonical values.
+  function poolSize(parentInterests: string[], childInterests: string[]): number {
+    const canonical = buildCanonicalMap([...parentInterests, ...childInterests]);
+    return new Set(canonical.values()).size;
+  }
+
+  it("counts a parent-only interest that a child-only count would miss", () => {
+    // "Woodworking" exists only on a parent — the old child-only query dropped
+    // it, so the headline read one lower than the mosaic. The pool-derived count
+    // includes it.
+    const size = poolSize(["Woodworking", "Chess"], ["Chess", "Robotics"]);
+    expect(size).toBe(3); // Woodworking, Chess, Robotics
+  });
+
+  it("collapses case-variants across the parent/child boundary into one", () => {
+    // Parent typed "Chess", child typed "chess" — one distinct interest, so the
+    // tiles show one tile and the headline counts one.
+    expect(poolSize(["Chess"], ["chess"])).toBe(1);
+  });
+
+  it("is empty when nobody has entered an interest", () => {
+    expect(poolSize([], [])).toBe(0);
+  });
+});

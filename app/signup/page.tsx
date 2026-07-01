@@ -6,7 +6,6 @@ import InterestTiles from "./interest-tiles";
 import {
   getSignupCount,
   getChildrenCount,
-  getInterestsCount,
 } from "@/lib/db/signups";
 import { getInterestPool } from "@/lib/interests";
 import { sanitizeRefToken, REFERRAL_PARAM, REFERRAL_AS_PARAM } from "@/lib/referral";
@@ -40,21 +39,21 @@ export default async function SignupPage({
 
   let count = 0;
   let kidsCount = 0;
-  let interestsCount = 0;
   let interests: string[] = [];
   try {
-    [count, kidsCount, interestsCount, interests] = await Promise.all([
+    [count, kidsCount, interests] = await Promise.all([
       getSignupCount(),
       getChildrenCount(),
-      getInterestsCount(),
       getInterestPool(),
     ]);
   } catch {
     count = 0;
     kidsCount = 0;
-    interestsCount = 0;
     interests = [];
   }
+  // Keep the "N shared interests" headline in lockstep with the InterestTiles
+  // mosaic by deriving it from the same distinct pool (see app/page.tsx).
+  const interestsCount = interests.length;
 
   return (
     <main className="relative min-h-dvh overflow-hidden bg-black px-6 py-12 text-white">

@@ -114,36 +114,54 @@ export async function familyIdForEmail(email: string): Promise<string | null> {
   return row?.familyId ?? null;
 }
 
-// Total number of parents who have signed up. Used on /signup to show
-// "Join N other Pixel Parents" as social proof.
+// The "this signup is finished" predicate. The signup flow inserts a DRAFT row
+// on first interaction (empty firstName/email); completeSignup only stamps
+// extra.notified=true once the required fields validate + the DROdio email
+// fires. Social-proof counts must mirror THAT semantics — otherwise abandoned
+// drafts, in-progress rows, and never-completed co-parent drafts inflate the
+// headline numbers. Exported so the count queries below (and their test) share
+// one source of truth for "completed". Matches completeSignup's marker in
+// app/signup/actions.ts.
+//
+// NOTE: submitSignup (the no-JS fallback POST) inserts a fully-filled row but
+// does NOT set extra.notified. That legacy path is currently unused by the live
+// autosave UI; if it is ever re-enabled it must stamp notified=true on insert to
+// be counted here — kept intentionally strict so the count means "completed".
+export const COMPLETED_SIGNUP_SQL = sql`(${signups.extra}->>'notified') = 'true'`;
+
+// Total number of parents who have COMPLETED signup. Used on /signup to show
+// "Join N other Pixel Parents" as social proof — drafts are excluded.
 export async function getSignupCount(): Promise<number> {
   const [row] = await getDb()
     .select({ c: sql<number>`count(*)::int` })
-    .from(signups);
+    .from(signups)
+    .where(COMPLETED_SIGNUP_SQL);
   return row?.c ?? 0;
 }
 
-// Total number of kids (children) registered across all signups. Used on
-// /signup ("Helping connect N OHS kids IRL").
+// Total number of kids (children) registered across COMPLETED signups. Used on
+// /signup ("Helping connect N OHS kids IRL"). A child belongs to a family, so
+// count only children whose family has at least one completed parent — drafts
+// that added a child but never finished don't inflate the number.
 export async function getChildrenCount(): Promise<number> {
   const [row] = await getDb()
     .select({ c: sql<number>`count(*)::int` })
-    .from(children);
+    .from(children)
+    .where(
+      sql`EXISTS (
+        SELECT 1 FROM ${signups}
+        WHERE ${signups.familyId} = ${children.familyId}
+          AND ${COMPLETED_SIGNUP_SQL}
+      )`,
+    );
   return row?.c ?? 0;
 }
 
-// Number of DISTINCT interests logged across all children (e.g. "K-pop",
-// "chess"). Used on /signup ("around N shared interests IRL"). Case-insensitive
-// and trimmed so "Chess" and "chess " count once.
-export async function getInterestsCount(): Promise<number> {
-  const sql = getSql();
-  const rows = (await sql`
-    SELECT count(DISTINCT lower(trim(i)))::int AS c
-    FROM children, unnest(children.interests) AS i
-    WHERE trim(i) <> ''
-  `) as Array<{ c: number }>;
-  return rows[0]?.c ?? 0;
-}
+// NOTE: the "N shared interests" headline is derived on the page from
+// getInterestPool().length (lib/interests.ts) — the SAME distinct pool that
+// feeds the InterestTiles mosaic — so the count and the on-screen tiles stay in
+// lockstep. A child-only count query used to live here; it under-counted by
+// omitting parent_interests that the mosaic DOES show, so it was removed.
 
 // Counts of parents by builder interest (stored in extra.builderInterest):
 // "builder" = technical, "aspiring" = non-technical learning to build.
@@ -154,6 +172,7 @@ export async function getBuilderCounts(): Promise<{ technical: number; curious: 
       count(*) FILTER (WHERE extra->>'builderInterest' = 'builder')::int AS technical,
       count(*) FILTER (WHERE extra->>'builderInterest' = 'aspiring')::int AS curious
     FROM signups
+    WHERE extra->>'notified' = 'true'
   `) as Array<{ technical: number; curious: number }>;
   return { technical: rows[0]?.technical ?? 0, curious: rows[0]?.curious ?? 0 };
 }
