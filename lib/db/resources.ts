@@ -617,12 +617,22 @@ export async function setContributionPinned(input: {
   pinned: boolean;
 }): Promise<boolean> {
   await ensureBoardsTables();
-  const rows = (await getSql()`
-    UPDATE board_contributions
-    SET pinned_at = ${input.pinned ? "now()" : null}::timestamptz
-    WHERE id = ${input.contributionId} AND board_id = ${input.boardId}
-    RETURNING id
-  `) as unknown as { id: string }[];
+  // `now()` must be real SQL, not a bound param — passing the string "now()" and
+  // casting it (`'now()'::timestamptz`) throws "invalid input syntax". Branch the
+  // statement so pin uses the SQL now() function and unpin sets NULL directly.
+  const rows = (await (input.pinned
+    ? getSql()`
+        UPDATE board_contributions
+        SET pinned_at = now()
+        WHERE id = ${input.contributionId} AND board_id = ${input.boardId}
+        RETURNING id
+      `
+    : getSql()`
+        UPDATE board_contributions
+        SET pinned_at = NULL
+        WHERE id = ${input.contributionId} AND board_id = ${input.boardId}
+        RETURNING id
+      `)) as unknown as { id: string }[];
   return rows.length > 0;
 }
 

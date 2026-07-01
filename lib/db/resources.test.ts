@@ -128,8 +128,10 @@ describe("setContributionPinned", () => {
 
     const upd = lastCallMatching(/UPDATE board_contributions SET pinned_at/);
     expect(upd).toBeTruthy();
-    // now() is passed as a value (string) cast to timestamptz; both ids in WHERE.
-    expect(upd!.values).toContain("now()");
+    // now() must be real SQL, not a bound value (a bound "now()" cast to
+    // timestamptz throws). The ids are still bound and both appear in the WHERE.
+    expect(upd!.sql).toMatch(/SET pinned_at = now\(\)/);
+    expect(upd!.values).not.toContain("now()");
     expect(upd!.values).toContain("c1");
     expect(upd!.values).toContain("b1");
     expect(upd!.sql).toMatch(/WHERE id = \? AND board_id = \?/);
@@ -139,7 +141,8 @@ describe("setContributionPinned", () => {
     queue = [[{ id: "c1" }]];
     await setContributionPinned({ contributionId: "c1", boardId: "b1", pinned: false });
     const upd = lastCallMatching(/UPDATE board_contributions SET pinned_at/);
-    expect(upd!.values).toContain(null);
+    // NULL is inline SQL, not a bound value.
+    expect(upd!.sql).toMatch(/SET pinned_at = NULL/);
     expect(upd!.values).not.toContain("now()");
   });
 
