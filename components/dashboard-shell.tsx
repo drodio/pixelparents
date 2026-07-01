@@ -61,7 +61,7 @@ const NAV: NavItem[] = [
 // On phones the bottom tab bar can only fit a handful of destinations, so it
 // shows the four primary tabs (the rest — Family, Developers, Admin, Account —
 // live in the slide-in "More" drawer). These hrefs MUST exist in `items`.
-const MOBILE_PRIMARY_HREFS = ["/dashboard", "/community", "/events", "/directory"];
+const MOBILE_PRIMARY_HREFS = ["/dashboard", "/community", "/resources", "/directory"];
 
 // Persistent app shell. Desktop (md+): a fixed left sidebar — an icon rail that
 // expands to labelled at md. Mobile (<md): a top bar (logo + bell + account) and
@@ -280,7 +280,7 @@ export function DashboardShell({
       {/* ---- Mobile top bar (<md only) -------------------------------------
           Logo + (authed) notification bell + account avatar. Keeps the bell and
           account reachable without opening the drawer. */}
-      <header className="fixed inset-x-0 top-0 z-30 flex h-14 items-center justify-between border-b border-white/10 bg-zinc-950/85 px-3 backdrop-blur md:hidden">
+      <header className="pt-safe h-safe-top fixed inset-x-0 top-0 z-30 flex items-center justify-between border-b border-white/10 bg-zinc-950/85 px-3 backdrop-blur md:hidden">
         <Link
           href="/dashboard"
           className="flex items-center gap-2"
@@ -386,7 +386,7 @@ export function DashboardShell({
             role="dialog"
             aria-modal="true"
             aria-label="Navigation menu"
-            className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-white/10 bg-zinc-950 shadow-2xl"
+            className="pt-safe absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-white/10 bg-zinc-950 shadow-2xl"
           >
             <div className="flex h-14 items-center justify-between border-b border-white/10 px-4">
               <span className="text-base font-semibold tracking-tight">Menu</span>
@@ -410,7 +410,7 @@ export function DashboardShell({
 
       {/* Content. Desktop: offset by the sidebar. Mobile: offset by the top bar
           and leave room at the bottom for the tab bar (+ home-indicator inset). */}
-      <div className="pt-14 md:pl-60 md:pt-0">
+      <div className="pt-safe-nav md:pl-60 md:pt-0">
         <div className="pb-mobile-nav mx-auto w-full max-w-6xl px-5 py-8 sm:px-8 sm:py-10 md:pb-8">
           {children}
         </div>

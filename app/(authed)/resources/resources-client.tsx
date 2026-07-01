@@ -243,8 +243,8 @@ function BoardCardItem({
         <span className="sr-only">{board.title}</span>
       </Link>
 
-      <div className="relative z-10 flex items-start justify-between gap-3">
-        <div className="pointer-events-none min-w-0">
+      <div className="pointer-events-none relative z-10 flex items-start justify-between gap-3">
+        <div className="min-w-0">
           <div className="flex items-center gap-2">
             {board.pinned && (
               <span

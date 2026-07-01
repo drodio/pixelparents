@@ -32,6 +32,7 @@ const KIND_TABS: { value: KindFilter; label: string }[] = [
 ];
 
 const STATUS_TABS: { value: StatusFilter; label: string }[] = [
+  { value: "active", label: "Active" },
   { value: "open", label: "Open" },
   { value: "matched", label: "Matched" },
   { value: "resolved", label: "Resolved" },
@@ -106,7 +107,7 @@ export function ExchangeBoardClient({
 }) {
   const reduce = useReducedMotion();
   const [kind, setKind] = useState<KindFilter>("ask");
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("open");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("active");
   const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
   const [sortKey, setSortKey] = useState<SortKey>("recency");
   const [sortDir, setSortDir] = useState<SortDir>("asc"); // oldest first default
@@ -129,7 +130,7 @@ export function ExchangeBoardClient({
   // Count of active secondary filters for the mobile Filters badge.
   const activeFilterCount =
     selectedTags.size +
-    (statusFilter !== "open" ? 1 : 0) +
+    (statusFilter !== "active" ? 1 : 0) +
     (sortKey !== "recency" || sortDir !== "asc" ? 1 : 0) +
     (showExpired ? 1 : 0) +
     (mineOnly ? 1 : 0);
@@ -326,7 +327,7 @@ export function ExchangeBoardClient({
               <button
                 type="button"
                 onClick={() => {
-                  setStatusFilter("open");
+                  setStatusFilter("active");
                   setSelectedTags(new Set());
                   setSortKey("recency");
                   setSortDir("asc");

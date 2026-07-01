@@ -27,7 +27,7 @@ export type ExchangePost = {
 };
 
 export type KindFilter = "all" | AskKind;
-export type StatusFilter = "open" | "matched" | "resolved" | "all";
+export type StatusFilter = "active" | "open" | "matched" | "resolved" | "all";
 export type SortKey = "recency" | "urgency";
 export type SortDir = "asc" | "desc";
 
@@ -82,13 +82,17 @@ export function filterAndSortPosts(
     out = out.filter((p) => p.kind === filters.kind);
   }
 
-  // Status facet. 'open' shows only open; 'matched' only matched (a connection
-  // was made but not yet marked resolved); 'resolved' only resolved; 'all' shows
-  // everything the server returned (open + matched + resolved). NOTE: 'matched'
-  // MUST get its own bucket — it's the normal end state of the core flow, and if
-  // it fell through only to 'all' a successfully-connected post would silently
-  // vanish from the default board (the author would think it was deleted).
-  if (filters.status === "open") {
+  // Status facet. 'active' (the board default) shows everything still LIVE —
+  // open + matched — so a board with only matched posts never reads as empty;
+  // 'open' shows only open; 'matched' only matched (a connection was made but not
+  // yet marked resolved); 'resolved' only resolved; 'all' shows everything the
+  // server returned (open + matched + resolved). NOTE: 'matched' MUST get its own
+  // bucket — it's the normal end state of the core flow, and if it fell through
+  // only to 'all' a successfully-connected post would silently vanish from a
+  // non-default view (the author would think it was deleted).
+  if (filters.status === "active") {
+    out = out.filter((p) => p.status === "open" || p.status === "matched");
+  } else if (filters.status === "open") {
     out = out.filter((p) => p.status === "open");
   } else if (filters.status === "matched") {
     out = out.filter((p) => p.status === "matched");

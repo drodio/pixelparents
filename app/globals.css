@@ -92,6 +92,21 @@ samp {
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom);
 }
+/* Top padding that clears the iOS notch / camera — for the fixed mobile top bar,
+   so its logo + controls sit BELOW the status bar rather than under the camera. */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+/* Grows the fixed top bar so its 3.5rem of chrome sits fully below the notch
+   (pair with .pt-safe, which pushes the content down into that grown box). */
+.h-safe-top {
+  height: calc(3.5rem + env(safe-area-inset-top));
+}
+/* Offsets the scrolling content below the grown top bar (top-bar height + inset)
+   so the first row is never hidden behind the fixed bar or the camera. */
+.pt-safe-nav {
+  padding-top: calc(3.5rem + env(safe-area-inset-top));
+}
 /* Adds the bottom safe-area inset on top of an existing height (used to grow the
    fixed bottom nav so its tap targets sit above the home indicator). */
 .h-safe-nav {

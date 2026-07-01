@@ -162,6 +162,19 @@ describe("filterAndSortPosts — status + expiry handling", () => {
       filterAndSortPosts(posts, filters({ status: "all" }), NOW).map((p) => p.id).sort(),
     ).toEqual(["done", "m", "open"]);
   });
+  it("status=active (the board default) shows open + matched but NOT resolved", () => {
+    // The board defaults to 'active' so a community whose only post is 'matched'
+    // never reads as an empty board — matched connections are still live, resolved
+    // ones are done and drop out.
+    const posts = [
+      post({ id: "open", status: "open" }),
+      post({ id: "m", status: "matched" }),
+      post({ id: "done", status: "resolved" }),
+    ];
+    expect(
+      filterAndSortPosts(posts, filters({ status: "active" }), NOW).map((p) => p.id).sort(),
+    ).toEqual(["m", "open"]);
+  });
   it("hides expired posts by default but shows them when showExpired", () => {
     const posts = [
       post({ id: "live", validUntil: new Date(NOW + DAY).toISOString() }),
