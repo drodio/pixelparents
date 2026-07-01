@@ -6,6 +6,8 @@
 // self-contained: inline styles + an inline <style> for the animation. Still
 // on-brand: black background, amber accent.
 
+import { ErrorReportButton } from "@/components/error-report-button";
+
 export default function GlobalError({
   error,
   reset,
@@ -78,22 +80,36 @@ export default function GlobalError({
           </p>
         </div>
 
-        <button
-          type="button"
-          onClick={() => reset()}
+        <div
           style={{
-            borderRadius: 999,
-            background: "#fbbf24",
-            color: "#000",
-            border: "none",
-            padding: "0.65rem 1.5rem",
-            fontSize: "0.875rem",
-            fontWeight: 600,
-            cursor: "pointer",
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "0.75rem",
           }}
         >
-          Reload
-        </button>
+          <button
+            type="button"
+            onClick={() => reset()}
+            style={{
+              borderRadius: 999,
+              background: "#fbbf24",
+              color: "#000",
+              border: "none",
+              padding: "0.65rem 1.5rem",
+              fontSize: "0.875rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              fontFamily: "inherit",
+            }}
+          >
+            Reload
+          </button>
+          {/* Self-contained report button (plain fetch, no providers needed) —
+              safe to render in this bare root-layout-replacement tree. */}
+          <ErrorReportButton error={error} />
+        </div>
 
         {error?.digest && (
           <p
