@@ -131,30 +131,41 @@ export function WorldMap({ markers, accent = "#fbbf24" }: { markers: Marker[]; a
         })}
       </svg>
 
-      {/* Hover/tap tooltip — positioned over the active pin. */}
+      {/* Hover/tap tooltip — positioned over the active pin. High-latitude pins
+          (Canada, UK, Norway, Alaska…) sit only ~12px from the top edge, so a
+          tooltip rendered ABOVE the pin gets cropped by the wrapper's
+          overflow-hidden. When the pin is near the top, flip the tooltip to
+          render BELOW the marker instead so its label always stays visible. */}
       <AnimatePresence>
-        {active && (
-          <motion.div
-            key={active.name}
-            initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.95 }}
-            transition={{ duration: 0.14 }}
-            className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-lg border border-white/15 bg-[#1d1d21] px-2.5 py-1.5 text-xs shadow-lg shadow-black/40"
-            style={{
-              left: `${(active.x / W) * 100}%`,
-              top: `${(active.y / H) * 100}%`,
-              marginTop: -8,
-            }}
-          >
-            <span className="font-semibold text-white">{active.name}</span>
-            <span className="text-white/55">
-              {" "}
-              — {active.count.toLocaleString()}{" "}
-              {active.count === 1 ? "family" : "families"}
-            </span>
-          </motion.div>
-        )}
+        {active &&
+          (() => {
+            const flipBelow = active.y < 40;
+            return (
+              <motion.div
+                key={active.name}
+                initial={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={reduce ? { opacity: 0 } : { opacity: 0, y: 4, scale: 0.95 }}
+                transition={{ duration: 0.14 }}
+                className={`pointer-events-none absolute z-10 -translate-x-1/2 whitespace-nowrap rounded-lg border border-white/15 bg-[#1d1d21] px-2.5 py-1.5 text-xs shadow-lg shadow-black/40 ${
+                  flipBelow ? "" : "-translate-y-full"
+                }`}
+                style={{
+                  left: `${(active.x / W) * 100}%`,
+                  top: `${(active.y / H) * 100}%`,
+                  // Above: nudge up off the pin. Below: nudge down past its radius.
+                  marginTop: flipBelow ? active.r + 8 : -8,
+                }}
+              >
+                <span className="font-semibold text-white">{active.name}</span>
+                <span className="text-white/55">
+                  {" "}
+                  — {active.count.toLocaleString()}{" "}
+                  {active.count === 1 ? "family" : "families"}
+                </span>
+              </motion.div>
+            );
+          })()}
       </AnimatePresence>
     </div>
   );

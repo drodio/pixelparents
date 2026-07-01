@@ -118,7 +118,8 @@ export default function DevelopersPage() {
         <section className="flex flex-col gap-3">
           <h2 className="text-2xl font-bold">Endpoints</h2>
           <p className="text-sm text-white/50">
-            Every endpoint requires an approved key. Authenticate with{" "}
+            Most endpoints require an approved key (the discovery, health, and OpenAPI
+            endpoints are public). Authenticate with{" "}
             <code className="font-mono text-xs text-white/70">Authorization: Bearer &lt;your-key&gt;</code>.
           </p>
           <div className="divide-y divide-white/10 rounded-lg border border-white/10 bg-white/[0.02] text-sm">

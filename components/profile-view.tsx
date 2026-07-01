@@ -409,7 +409,7 @@ export async function ProfileView({
                       </span>
                     )}
                   </div>
-                  {kid.grade && (
+                  {kid.grade && kid.grade !== "Not an OHS child" && (
                     <div className="mt-0.5 text-sm font-semibold text-amber-400">{kid.grade}</div>
                   )}
                   {kidInterests.length > 0 && (

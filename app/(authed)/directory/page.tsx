@@ -252,7 +252,13 @@ export default async function CommunityPage() {
       : null;
 
   // Map + condensed stats (gracefully degrade if the aggregates aren't ready).
-  const hasStats = stats.database !== "pending";
+  // stats and breakdowns are two INDEPENDENT caches with independent fallbacks —
+  // gate the whole "Where we're building" section on BOTH being ready, so we
+  // never render a StatStrip with real numbers next to an empty, pin-less map
+  // (breakdowns degraded while stats is fresh). Markers still come from
+  // breakdowns, so require it explicitly.
+  const hasStats =
+    stats.database !== "pending" && breakdowns.database !== "pending";
   const markers = hasStats
     ? buildMarkers(breakdowns.signups_by_state, breakdowns.signups_by_country)
     : [];
@@ -271,12 +277,14 @@ export default async function CommunityPage() {
         {/* Compact map widget + condensed stats strip */}
         {hasStats && (
           <section className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)] lg:items-stretch">
-            <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
-              <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
-                Where we&apos;re building
+            {markers.length > 0 && (
+              <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-3">
+                <div className="mb-2 px-1 text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
+                  Where we&apos;re building
+                </div>
+                <WorldMap markers={markers} accent={AMBER} />
               </div>
-              <WorldMap markers={markers} accent={AMBER} />
-            </div>
+            )}
             <div className="flex flex-col justify-center gap-3">
               <StatStrip
                 families={stats.total_families ?? 0}

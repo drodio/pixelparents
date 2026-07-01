@@ -458,7 +458,9 @@ function ChildCard({
             className={inputCls}
           >
             <option value="">Select…</option>
-            {Array.from({ length: 25 }, (_, i) => currentYear - 1 - i).map((y) => (
+            {/* Start at the current year so a newborn (age 0) is selectable —
+                families are invited to add non-OHS children including infants. */}
+            {Array.from({ length: 26 }, (_, i) => currentYear - i).map((y) => (
               <option key={y} value={y}>{y} — age {currentYear - y}</option>
             ))}
           </select>

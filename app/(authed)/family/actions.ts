@@ -123,21 +123,41 @@ async function authorizedTarget(
 // caller's family). Best-effort: the GitHub count never throws, and a 0 count
 // records the check timestamp/count WITHOUT setting the auto flag (so an existing
 // manual override is left intact). Returns the resulting effective status.
+//
+// The username is saved via a DEBOUNCED autosave in the UI, so the just-typed
+// value may not have landed in the DB when the user clicks "Check". To avoid
+// counting against a stale/empty username, the caller passes the current input
+// (`username`); we sanitize + persist it through the same authorized write, then
+// count against that value. Omitting it falls back to the persisted row value.
 export async function refreshBuilderStatus(
   targetSignupId: string,
+  username?: string,
 ): Promise<{ ok: boolean; status?: BuilderStatus }> {
   const target = await authorizedTarget(targetSignupId);
   if (!target) return { ok: false };
 
-  // Read the target's GitHub username off the authorized row.
-  const [row] = await getDb()
-    .select({ githubUsername: signups.githubUsername })
-    .from(signups)
-    .where(eq(signups.id, target.id))
-    .limit(1);
-  const username = row?.githubUsername ?? null;
+  // Prefer the caller-supplied (just-typed) username, sanitized identically to
+  // the autosave path (sanitizeSignupPatch trims + caps at 39, GitHub's max).
+  // Persisting it here means the check always counts against the SAME value the
+  // row will hold — no debounce race. When no username is passed, read the
+  // persisted row value (unchanged legacy behavior).
+  let effectiveUsername: string | null;
+  if (typeof username === "string") {
+    const set = await sanitizeSignupPatch(target.id, { githubUsername: username });
+    if (Object.keys(set).length > 0) {
+      await getDb().update(signups).set(set).where(eq(signups.id, target.id));
+    }
+    effectiveUsername = (set.githubUsername as string | undefined) ?? null;
+  } else {
+    const [row] = await getDb()
+      .select({ githubUsername: signups.githubUsername })
+      .from(signups)
+      .where(eq(signups.id, target.id))
+      .limit(1);
+    effectiveUsername = row?.githubUsername ?? null;
+  }
 
-  const contributions = await countUserCommits(username);
+  const contributions = await countUserCommits(effectiveUsername);
   const checkedAt = new Date().toISOString();
 
   // Read-modify-write so we never clobber sibling extra keys (notified,

@@ -31,31 +31,82 @@ export default async function ThanksPage({
 }) {
   const { id, admin } = await searchParams;
   const validId = id && UUID_RE.test(id) ? id : null;
+
+  // No usable signup id → don't fall through to a broken, no-op child form
+  // (FamilyForm with an empty signupId silently swallows every add/patch). Show
+  // an explicit "we couldn't find your signup" state instead.
+  if (!validId) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-black px-6 text-white">
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            We couldn&apos;t find your signup
+          </h1>
+          <p className="mt-3 text-white/60">
+            This link is missing or invalid. Start again and we&apos;ll bring you
+            right back here.
+          </p>
+          <Link
+            href="/signup"
+            className="mt-6 inline-block rounded-full bg-amber-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300"
+          >
+            Go to signup →
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   const [editData, interestPool, verifyState] = await Promise.all([
-    validId ? getSignupForEdit(validId) : Promise.resolve(null),
+    getSignupForEdit(validId),
     getInterestPool(),
-    validId ? getVerifyState(validId) : Promise.resolve(null),
+    getVerifyState(validId),
   ]);
 
-  const signup = editData?.signup ?? null;
-  const firstName = signup?.firstName ?? null;
-  const kids = editData?.kids ?? [];
+  // Valid-looking id but no matching row (e.g. a stale/deleted signup) → same
+  // not-found state rather than a form whose saves target a nonexistent row.
+  if (!editData) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-black px-6 text-white">
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
+            We couldn&apos;t find your signup
+          </h1>
+          <p className="mt-3 text-white/60">
+            This signup no longer exists. Start again and we&apos;ll bring you
+            right back here.
+          </p>
+          <Link
+            href="/signup"
+            className="mt-6 inline-block rounded-full bg-amber-400 px-6 py-2.5 text-sm font-semibold text-black transition hover:bg-amber-300"
+          >
+            Go to signup →
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
+  const signup = editData.signup;
+  const firstName = signup.firstName ?? null;
+  const kids = editData.kids;
 
   // Student accounts (extra.accountType === "student") get a DIFFERENT step-2:
   // "add your parent / guardian" instead of "add children". The parent path is
   // untouched. We fetch the family-link status only for student accounts.
-  const isStudent = signup ? isStudentAccount({ extra: signup.extra }) : false;
-  const studentLinkStatus =
-    validId && isStudent ? await getStudentParentLinkStatus(validId) : null;
+  const isStudent = isStudentAccount({ extra: signup.extra });
+  const studentLinkStatus = isStudent
+    ? await getStudentParentLinkStatus(validId)
+    : null;
 
   // Family-level photos are now collected on the first signup form; the thanks
   // page only needs whether any exist (to vary the heading), not their URLs.
-  const initialPhotos = signup?.photos ?? [];
+  const initialPhotos = signup.photos ?? [];
 
   // Light-touch growth CTA: once they've signed up, offer a shareable referral
   // link so they can pull in another OHS family. Reuses the family's existing
   // inviteToken (no new secret, no PII). Resolved server-side from the family id.
-  const inviteToken = signup ? await getInviteTokenForFamily(signup.familyId) : null;
+  const inviteToken = await getInviteTokenForFamily(signup.familyId);
   const familyReferralUrl = inviteToken ? familyReferralLinkFor(inviteToken) : null;
 
   // Presign each child's photos too, keyed by child id — all children in
@@ -78,12 +129,11 @@ export default async function ThanksPage({
   // marketing banner/intro, greet them as a returning editor, and surface the
   // share link up top.
   const hasExistingData = Boolean(
-    signup &&
-      (kids.length > 0 ||
-        initialPhotos.length > 0 ||
-        signup.city ||
-        signup.state ||
-        (signup.parentInterests?.length ?? 0) > 0),
+    kids.length > 0 ||
+      initialPhotos.length > 0 ||
+      signup.city ||
+      signup.state ||
+      (signup.parentInterests?.length ?? 0) > 0,
   );
 
   const greeting = firstName
@@ -92,15 +142,14 @@ export default async function ThanksPage({
       : `${firstName}, nice to meet you.`
     : "Nice to meet you.";
 
-  const sharePanel =
-    validId && signup ? (
-      <ShareSettings
-        signupId={validId}
-        initialVisibility={coerceShareVisibility(signup.shareVisibility)}
-        initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
-        initialFields={shareFieldsOrDefault(signup.shareFields)}
-      />
-    ) : null;
+  const sharePanel = (
+    <ShareSettings
+      signupId={validId}
+      initialVisibility={coerceShareVisibility(signup.shareVisibility)}
+      initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
+      initialFields={shareFieldsOrDefault(signup.shareFields)}
+    />
+  );
 
   const subheading = (
     <h2 className="text-xl font-semibold text-white/90 sm:text-2xl">
@@ -133,7 +182,7 @@ export default async function ThanksPage({
 
         {hasExistingData ? (
           <>
-            {sharePanel && <div className="mt-6">{sharePanel}</div>}
+            <div className="mt-6">{sharePanel}</div>
             <div className="mt-8">{subheading}</div>
           </>
         ) : (
@@ -141,7 +190,7 @@ export default async function ThanksPage({
         )}
 
         <div className="mt-10">
-          {isStudent && validId && studentLinkStatus ? (
+          {isStudent && studentLinkStatus ? (
             // STUDENT path: the required step-2 action is "invite your parent /
             // guardian" (reusing the co-parent invite mechanism). Students do
             // NOT add children.
@@ -149,7 +198,7 @@ export default async function ThanksPage({
           ) : (
             // PARENT path: unchanged — add children + the existing UI.
             <FamilyForm
-              signupId={id ?? ""}
+              signupId={validId}
               suggestedInterests={interestPool}
               existingChildren={kids.map((k) => ({
                 id: k.id,
@@ -166,7 +215,7 @@ export default async function ThanksPage({
           )}
         </div>
 
-        {validId && signup && verifyState && (
+        {verifyState && (
           <div className="mt-10">
             <StudentVerify signupId={validId} initial={verifyState} />
             {verifyState.status !== "approved" && (
@@ -179,7 +228,7 @@ export default async function ThanksPage({
           </div>
         )}
 
-        {!hasExistingData && sharePanel && <div className="mt-12">{sharePanel}</div>}
+        {!hasExistingData && <div className="mt-12">{sharePanel}</div>}
 
         {familyReferralUrl && (
           <div className="mt-12">

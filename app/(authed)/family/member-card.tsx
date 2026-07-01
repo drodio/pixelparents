@@ -113,10 +113,15 @@ function BuilderStatusBlock({
   memberId,
   initialExtra,
   hasGithub,
+  githubUsername,
 }: {
   memberId: string;
   initialExtra: Record<string, unknown>;
   hasGithub: boolean;
+  // Current (possibly not-yet-saved) username from the field above. Passed to
+  // refreshBuilderStatus so the check runs against what the user just typed,
+  // not a stale DB value the debounced autosave hasn't persisted yet.
+  githubUsername: string;
 }) {
   const init = builderStatusOf(initialExtra);
   const [isBuilder, setIsBuilder] = useState(init.isBuilder);
@@ -129,7 +134,7 @@ function BuilderStatusBlock({
     setChecking(true);
     setMsg(null);
     try {
-      const r = await refreshBuilderStatus(memberId);
+      const r = await refreshBuilderStatus(memberId, githubUsername);
       if (r.ok && r.status) {
         setIsBuilder(r.status.isBuilder);
         setContributions(r.status.contributions);
@@ -148,7 +153,7 @@ function BuilderStatusBlock({
     } finally {
       setChecking(false);
     }
-  }, [memberId]);
+  }, [memberId, githubUsername]);
 
   const onToggleManual = useCallback(
     async (next: boolean) => {
@@ -399,6 +404,7 @@ export function MemberCard({
             memberId={member.id}
             initialExtra={(member.extra ?? {}) as Record<string, unknown>}
             hasGithub={Boolean(v.githubUsername.trim())}
+            githubUsername={v.githubUsername}
           />
         </div>
         <div className="sm:col-span-2">
