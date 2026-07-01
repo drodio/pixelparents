@@ -33,7 +33,9 @@ export default async function Home() {
       await Promise.all([
         getSignupCount(),
         getChildrenCount(),
-        getInterestPool(),
+        // Completed-only so the "N shared interests" headline (and the mosaic it
+        // feeds) matches the other completed-only counts — drafts don't inflate it.
+        getInterestPool({ completedOnly: true }),
         getBuilderCounts(),
         getStudentBuilderCount(),
       ]);

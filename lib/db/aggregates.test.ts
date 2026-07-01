@@ -17,19 +17,20 @@ describe("aggregates (no DB → pending)", () => {
     expect(K_ANON).toBe(5);
   });
 
-  it("COMPLETED predicate matches only welcome-fired (notified) signups", () => {
+  it("COMPLETED predicate keys on the minted share_token (+ name/email), not the drifted notified flag", () => {
     // The map / breakdowns must share the SAME completed-only predicate getStats
-    // uses, so their numbers never disagree with the Families/Parents chips.
-    expect(COMPLETED).toBe("(extra->>'notified') = 'true'");
+    // uses. share_token is completeSignup's durable artifact; notified drifted.
+    expect(COMPLETED).toBe("(share_token IS NOT NULL AND btrim(first_name) <> '' AND btrim(email) <> '')");
+    expect(COMPLETED).not.toContain("notified");
   });
 
-  it("completedFamily scopes a child table to completed families via the shared predicate", () => {
+  it("completedFamily scopes a child table to completed families via the shared, alias-qualified predicate", () => {
     const frag = completedFamily("ch");
-    // Correlates the child table's family_id to a completed signup, and reuses
-    // the COMPLETED predicate (single source of truth) — no divergent copy.
     expect(frag).toContain("ch.family_id");
     expect(frag).toContain("FROM signups s");
-    expect(frag).toContain(`s.${COMPLETED}`);
+    // The predicate columns are qualified to the correlated alias `s`.
+    expect(frag).toContain("s.share_token IS NOT NULL");
+    expect(frag).toContain("btrim(s.first_name)");
     expect(frag.startsWith("EXISTS (SELECT 1")).toBe(true);
   });
 

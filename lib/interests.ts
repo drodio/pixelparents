@@ -94,18 +94,29 @@ export async function canonicalizeAgainstPool(input: string[]): Promise<string[]
   }
 }
 
-// Distinct union of all interests entered so far (parents + children), used to
-// seed the pill picker. Case-variants are collapsed to one canonical spelling
-// (the most-used one) so the picker never shows "Mountain Biking" twice.
-// Degrades to [] if the table doesn't exist yet.
-export async function getInterestPool(): Promise<string[]> {
+// Distinct union of interests entered so far (parents + children). Case-variants
+// are collapsed to one canonical spelling (the most-used one) so it never shows a
+// duplicate. Degrades to [] if the table doesn't exist yet.
+//
+// `completedOnly` scopes to COMPLETED signups/families (share_token minted + name
+// /email) — used for the landing hero + mosaic so the "N shared interests" number
+// matches the other completed-only headline counts (drafts don't inflate it). The
+// pill PICKER calls it WITHOUT the flag: it legitimately wants every spelling
+// anyone has typed, including in-progress rows, for autocomplete + canonicalization.
+export async function getInterestPool(opts?: { completedOnly?: boolean }): Promise<string[]> {
+  const signupWhere = opts?.completedOnly
+    ? sql`WHERE share_token IS NOT NULL AND btrim(first_name) <> '' AND btrim(email) <> ''`
+    : sql``;
+  const childWhere = opts?.completedOnly
+    ? sql`WHERE EXISTS (SELECT 1 FROM signups s WHERE s.family_id = children.family_id AND s.share_token IS NOT NULL AND btrim(s.first_name) <> '' AND btrim(s.email) <> '')`
+    : sql``;
   try {
     const result = await getDb().execute(sql`
       SELECT t.i AS interest
       FROM (
-        SELECT unnest(parent_interests) AS i FROM signups
+        SELECT unnest(parent_interests) AS i FROM signups ${signupWhere}
         UNION ALL
-        SELECT unnest(interests) AS i FROM children
+        SELECT unnest(interests) AS i FROM children ${childWhere}
       ) t
       WHERE t.i IS NOT NULL AND t.i <> ''
     `);

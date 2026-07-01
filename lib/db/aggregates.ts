@@ -17,20 +17,23 @@ export type DbState = "ready" | "pending";
 // Filtered results never reveal a subpopulation smaller than this.
 export const K_ANON = 5;
 
-// Completed-signup predicate (welcome step fired → extra.notified='true'). Both
-// getStats and getBreakdowns count ONLY completed rows so the directory's map,
-// "N countries / M states represented" copy, and "Here to build" chip never
-// include abandoned/draft signups — otherwise those numbers visibly disagree
-// with the completed-only Families/Parents/Kids chips beside them. Applied as a
-// base condition on every signups query below (and, for children/skillset
-// breakdowns, scoped to completed families).
-export const COMPLETED = "(extra->>'notified') = 'true'";
+// Completed-signup predicate. A signup is COMPLETED when its share_token was
+// minted (+ required first_name/email) — completeSignup's durable side effect —
+// NOT extra.notified, which drifted across flow versions and marked only ~half of
+// real completions (see lib/db/signups.ts COMPLETED_SIGNUP_SQL). Both getStats and
+// getBreakdowns count ONLY completed rows so the directory's map, "N countries /
+// M states" copy, and "Here to build" chip never include abandoned/draft signups.
+// `alias` qualifies the columns for a correlated subquery ("" for a direct query).
+export function completedPredicate(alias = ""): string {
+  const p = alias ? `${alias}.` : "";
+  return `(${p}share_token IS NOT NULL AND btrim(${p}first_name) <> '' AND btrim(${p}email) <> '')`;
+}
+export const COMPLETED = completedPredicate();
 
-// Same predicate, correlated to an arbitrary signups alias, for use inside an
-// EXISTS subquery scoping a children (or other family-derived) query to families
-// whose signup completed.
+// The same predicate as an EXISTS subquery scoping a children (or other
+// family-derived) query to families whose signup completed.
 export function completedFamily(childTable: string): string {
-  return `EXISTS (SELECT 1 FROM signups s WHERE s.family_id = ${childTable}.family_id AND s.${COMPLETED})`;
+  return `EXISTS (SELECT 1 FROM signups s WHERE s.family_id = ${childTable}.family_id AND ${completedPredicate("s")})`;
 }
 
 async function tableExists(name: string): Promise<boolean> {
@@ -141,21 +144,19 @@ export async function getStats(filters: Filters = {}): Promise<Stats> {
   // robust path below on any error (e.g. a pre-families schema).
   if (hasDatabase() && !filtered) {
     try {
-      // Count ONLY completed signups (welcome step fired → extra.notified='true'),
-      // never abandoned/draft rows — otherwise the public headline stats inflate
-      // (e.g. 20 "parents" when only ~6 families actually finished), diverging from
-      // the landing hero which already counts completed-only. Children are counted
-      // only when they belong to a completed family.
+      // Count ONLY completed signups (share_token minted + name/email present),
+      // never abandoned/draft rows — otherwise the public headline stats inflate.
+      // Children are counted only when they belong to a completed family. The
+      // predicate is identical to completedPredicate()/completedFamily(); kept
+      // inline so this hot-path query stays a static tagged template.
       const rows = (await getSql()`
         SELECT
-          (SELECT count(*) FROM signups WHERE (extra->>'notified') = 'true')::int AS s,
-          (SELECT count(DISTINCT family_id) FROM signups WHERE (extra->>'notified') = 'true')::int AS f,
+          (SELECT count(*) FROM signups WHERE share_token IS NOT NULL AND btrim(first_name) <> '' AND btrim(email) <> '')::int AS s,
+          (SELECT count(DISTINCT family_id) FROM signups WHERE share_token IS NOT NULL AND btrim(first_name) <> '' AND btrim(email) <> '')::int AS f,
           (SELECT count(*) FROM children ch WHERE EXISTS (
-             SELECT 1 FROM signups s WHERE s.family_id = ch.family_id AND (s.extra->>'notified') = 'true'
+             SELECT 1 FROM signups s WHERE s.family_id = ch.family_id AND s.share_token IS NOT NULL AND btrim(s.first_name) <> '' AND btrim(s.email) <> ''
           ))::int AS c
       `) as Array<{ s: number; f: number; c: number }>;
-      // NOTE: kept inline (not the COMPLETED constant) so this hot-path query
-      // stays a static tagged template — the completed predicate is identical.
       const r = rows[0];
       if (r) {
         return {

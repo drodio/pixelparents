@@ -57,10 +57,14 @@ beforeEach(() => {
 });
 
 describe("COMPLETED_SIGNUP_SQL", () => {
-  it("filters on the same completion marker completeSignup stamps (extra.notified='true')", () => {
+  it("keys on completeSignup's durable share_token (+ name/email), not the drifted notified flag", () => {
     const compiled = compile(COMPLETED_SIGNUP_SQL);
-    expect(compiled).toContain("->>'notified'");
-    expect(compiled).toContain("'true'");
+    expect(compiled).toContain("share_token");
+    expect(compiled.toLowerCase()).toContain("is not null");
+    expect(compiled).toContain("first_name");
+    expect(compiled).toContain("email");
+    // The old, drifted marker must NOT be the gate anymore.
+    expect(compiled).not.toContain("notified");
   });
 });
 
@@ -69,7 +73,7 @@ describe("getSignupCount", () => {
     const c = await getSignupCount();
     expect(c).toBe(7);
     expect(whereClauses).toHaveLength(1);
-    expect(compile(whereClauses[0])).toContain("->>'notified'");
+    expect(compile(whereClauses[0])).toContain("share_token");
   });
 });
 
@@ -81,7 +85,7 @@ describe("getChildrenCount", () => {
     const compiled = compile(whereClauses[0]);
     // Correlated EXISTS against signups on family_id, gated on completion.
     expect(compiled).toMatch(/exists/i);
-    expect(compiled).toContain("->>'notified'");
+    expect(compiled).toContain("share_token");
     expect(compiled).toContain("family_id");
   });
 });
@@ -102,13 +106,15 @@ describe("student affiliations (lockstep with options)", () => {
   });
 });
 
-// Sanity: the marker string in the shared predicate matches what a JS reader of
-// a completed row's `extra` would see (extra.notified === true → '->>' yields
-// the text 'true'). Guards against drift between completeSignup and the counts.
+// Sanity: the shared predicate keys on completeSignup's durable side effect (a
+// minted share_token + required name/email), NOT the drifted extra.notified flag.
+// Guards against a future refactor silently reverting to the fragile marker.
 describe("completion marker string", () => {
-  it("uses the literal 'notified' key and 'true' value", () => {
+  it("keys on the share_token completion artifact, not extra.notified", () => {
     const compiled = compile(sql`${COMPLETED_SIGNUP_SQL}`);
-    expect(compiled).toContain("'notified'");
-    expect(compiled).toContain("'true'");
+    expect(compiled).toContain("share_token");
+    expect(compiled).toContain("first_name");
+    expect(compiled).toContain("email");
+    expect(compiled).not.toContain("notified");
   });
 });

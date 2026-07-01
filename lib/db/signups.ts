@@ -142,11 +142,16 @@ export async function familyIdForEmail(email: string): Promise<string | null> {
 // one source of truth for "completed". Matches completeSignup's marker in
 // app/signup/actions.ts.
 //
-// NOTE: submitSignup (the no-JS fallback POST) inserts a fully-filled row but
-// does NOT set extra.notified. That legacy path is currently unused by the live
-// autosave UI; if it is ever re-enabled it must stamp notified=true on insert to
-// be counted here — kept intentionally strict so the count means "completed".
-export const COMPLETED_SIGNUP_SQL = sql`(${signups.extra}->>'notified') = 'true'`;
+// COMPLETION MARKER: the minted share_token (+ required first_name/email), NOT
+// extra.notified. completeSignup mints a share_token as a durable side effect of
+// finishing the flow (it's kept even if the parent later turns sharing off), and
+// abandoned autosave drafts never get one. We moved off extra.notified because it
+// DRIFTED: an earlier version of the flow stamped extra.welcomed instead, so ~half
+// of genuinely-completed families lacked `notified` and were silently dropped from
+// every public count (landing hero read "6" when 12 families had completed).
+// Verified against production: token+core cleanly splits 12 completed / 8 blank
+// drafts, matching the admin panel's independent count.
+export const COMPLETED_SIGNUP_SQL = sql`(${signups.shareToken} IS NOT NULL AND btrim(${signups.firstName}) <> '' AND btrim(${signups.email}) <> '')`;
 
 // Total number of parents who have COMPLETED signup. Used on /signup to show
 // "Join N other Pixel Parents" as social proof — drafts are excluded.
@@ -191,7 +196,7 @@ export async function getBuilderCounts(): Promise<{ technical: number; curious: 
       count(*) FILTER (WHERE extra->>'builderInterest' = 'builder')::int AS technical,
       count(*) FILTER (WHERE extra->>'builderInterest' = 'aspiring')::int AS curious
     FROM signups
-    WHERE extra->>'notified' = 'true'
+    WHERE share_token IS NOT NULL AND btrim(first_name) <> '' AND btrim(email) <> ''
   `) as Array<{ technical: number; curious: number }>;
   return { technical: rows[0]?.technical ?? 0, curious: rows[0]?.curious ?? 0 };
 }
@@ -207,6 +212,7 @@ export async function getStudentBuilderCount(): Promise<number> {
     FROM signups
     WHERE ohs_affiliation = ANY(${STUDENT_AFFILIATIONS})
       AND extra->>'builderInterest' = 'builder'
+      AND share_token IS NOT NULL AND btrim(first_name) <> '' AND btrim(email) <> ''
   `) as Array<{ c: number }>;
   return rows[0]?.c ?? 0;
 }
