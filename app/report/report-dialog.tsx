@@ -111,7 +111,7 @@ export default function ReportDialog() {
 
       {open && (
         <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          className="fixed inset-0 z-50 flex items-stretch justify-center bg-black/70 sm:items-center sm:p-4"
           onClick={(e) => {
             if (e.target === e.currentTarget) setOpen(false);
           }}
@@ -122,13 +122,16 @@ export default function ReportDialog() {
             aria-modal="true"
             aria-labelledby={titleId}
             tabIndex={-1}
-            className="relative w-full max-w-md rounded-2xl border border-white/10 bg-zinc-950 p-6 text-left shadow-2xl outline-none"
+            // Mobile: near-fullscreen sheet that owns the whole viewport, scrolls
+            // internally, and pads its bottom for the iOS home indicator. sm+:
+            // the original centered, capped card — desktop is unchanged.
+            className="relative flex max-h-dvh w-full flex-col overflow-y-auto border border-white/10 bg-zinc-950 p-6 pb-[calc(1.5rem+env(safe-area-inset-bottom))] pt-[calc(1.5rem+env(safe-area-inset-top))] text-left shadow-2xl outline-none sm:max-h-[85dvh] sm:max-w-md sm:rounded-2xl sm:pb-6 sm:pt-6"
           >
             <button
               type="button"
               onClick={() => setOpen(false)}
               aria-label="Close"
-              className="absolute right-4 top-4 rounded-md p-1 text-white/50 transition-colors hover:bg-white/10 hover:text-white"
+              className="absolute right-4 top-[calc(1rem+env(safe-area-inset-top))] grid h-10 w-10 place-items-center rounded-md text-white/50 transition-colors hover:bg-white/10 hover:text-white sm:top-4"
             >
               <IconX className="h-5 w-5" />
             </button>

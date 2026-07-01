@@ -16,7 +16,7 @@ export default async function ChangelogPage() {
 
   return (
     <main className="min-h-dvh bg-black text-white">
-      <div className="mx-auto w-full max-w-3xl px-6 py-16">
+      <div className="mx-auto w-full max-w-3xl px-5 py-16 sm:px-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Changelog</h1>

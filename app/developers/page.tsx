@@ -63,7 +63,7 @@ const CLAUDE_MCP_CONFIG = `{
 
 export default function DevelopersPage() {
   return (
-    <div className="flex flex-1 flex-col bg-black px-6 py-16 text-white sm:py-24">
+    <div className="flex flex-1 flex-col bg-black px-5 py-16 text-white sm:px-6 sm:py-24">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-12">
         {/* Header */}
         <header className="flex flex-col items-center gap-6 text-center">

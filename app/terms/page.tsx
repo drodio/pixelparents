@@ -14,7 +14,7 @@ const linkCls =
 
 export default function TermsPage() {
   return (
-    <div className="flex flex-1 flex-col bg-black px-6 py-16 text-white sm:py-24">
+    <div className="flex flex-1 flex-col bg-black px-5 py-16 text-white sm:px-6 sm:py-24">
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
         <header className="flex flex-col gap-3">
           <Link href="/" className={`${linkCls} text-sm`}>

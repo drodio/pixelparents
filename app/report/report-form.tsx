@@ -52,7 +52,7 @@ export default function ReportForm({
 
   return (
     <form action={formAction} className="flex flex-col gap-4">
-      <div>
+      <div className="pr-10">
         <h2 id={titleId} className="text-lg font-semibold text-white">
           Report a bug or abuse
         </h2>
