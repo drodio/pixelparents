@@ -3,8 +3,11 @@
 import { currentUser } from "@clerk/nextjs/server";
 import { revalidatePath } from "next/cache";
 import { createRequest, revealOrRotateKey } from "@/lib/db/api-keys";
+import { getSignupByEmail, updateSignupLinkedin } from "@/lib/db/signups";
+import { primaryEmail } from "@/lib/clerk";
 import { notifyAdminNewApiRequest, notifyApiRequestReceived } from "@/lib/email";
 import { apiRequestSchema } from "@/lib/validation";
+import { validateLinkedinUrl } from "./linkedin";
 
 function identity(user: NonNullable<Awaited<ReturnType<typeof currentUser>>>) {
   const email = user.primaryEmailAddress?.emailAddress ?? "";
@@ -71,4 +74,41 @@ export async function regenerateKey(): Promise<RevealState> {
   if (!key) return { error: "Your request isn't approved." };
   revalidatePath("/account");
   return { raw: key.raw };
+}
+
+export type LinkedinState = { error?: string; url?: string | null; ok?: boolean };
+
+// Add/edit the signed-in parent's LinkedIn URL from the account page. Lets
+// accounts that predate the signup-form LinkedIn field fill it in themselves,
+// no admin needed. Authorization is fully server-derived (verifiedCaller-style):
+// the caller is resolved from the Clerk session → primary email → their own
+// signup row, so a user can only ever edit their OWN linkedin_url — no client
+// id is trusted. The URL is validated (http(s)-only) before it's persisted; an
+// empty submission clears the field.
+export async function updateLinkedin(
+  _prev: LinkedinState,
+  formData: FormData,
+): Promise<LinkedinState> {
+  const user = await currentUser();
+  if (!user) return { error: "You need to be signed in." };
+
+  const email = primaryEmail(user);
+  if (!email) return { error: "We couldn't find your account email." };
+
+  const signup = await getSignupByEmail(email);
+  if (!signup) {
+    return {
+      error:
+        "We couldn't find your family signup. Complete the signup form first, then add your LinkedIn here.",
+    };
+  }
+
+  const parsed = validateLinkedinUrl(formData.get("linkedin_url"));
+  if (!parsed.ok) return { error: parsed.error };
+
+  const saved = await updateSignupLinkedin(signup.id, parsed.value);
+  if (!saved) return { error: "Something went wrong saving your LinkedIn. Please try again." };
+
+  revalidatePath("/account");
+  return { ok: true, url: parsed.value };
 }

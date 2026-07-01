@@ -28,6 +28,25 @@ export async function getSignupByEmail(email: string): Promise<SignupRow | null>
   return row ?? null;
 }
 
+// Update a single parent's LinkedIn profile URL, scoped to their own signup id.
+// The account page's LinkedIn editor calls this via a server action that first
+// re-derives the caller from the Clerk session and matches signup.email, so the
+// signupId handed in here is always the caller's own row (authorization lives in
+// the action, not this helper). `url` is a pre-validated canonical href or null
+// (to clear the field). Returns false when no row matched.
+export async function updateSignupLinkedin(
+  signupId: string,
+  url: string | null,
+): Promise<boolean> {
+  await ensureFamiliesSchema();
+  const rows = await getDb()
+    .update(signups)
+    .set({ linkedinUrl: url })
+    .where(eq(signups.id, signupId))
+    .returning({ id: signups.id });
+  return rows.length > 0;
+}
+
 // Rows the Directory page needs, with the CHEAP visibility preconditions pushed
 // into SQL so a cold render reads a fraction of the table instead of every signup.
 //
