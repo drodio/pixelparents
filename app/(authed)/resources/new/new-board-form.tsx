@@ -21,12 +21,20 @@ export function NewBoardForm() {
   const submit = () => {
     setError(null);
     startTransition(async () => {
-      const res = await createBoardAction({ title, description });
-      if (res.ok && res.id) {
-        router.push(`/resources/${res.id}`);
-        router.refresh();
-      } else if (!res.ok) {
-        setError(res.error);
+      try {
+        const res = await createBoardAction({ title, description });
+        if (res.ok && res.id) {
+          router.push(`/resources/${res.id}`);
+          router.refresh();
+        } else if (!res.ok) {
+          setError(res.error);
+        }
+      } catch {
+        // A thrown action must not crash to the error boundary — the board may
+        // have been created. Show a recoverable notice.
+        setError(
+          "Something went wrong — your board may have been created. Refresh the Resources page to check.",
+        );
       }
     });
   };

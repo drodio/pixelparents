@@ -46,24 +46,32 @@ export function OfferHelpForm({ askId, kind }: { askId: string; kind: AskKind })
   const submit = () => {
     setError(null);
     startTransition(async () => {
-      const res = await respondToAskAction({
-        askId,
-        offer,
-        proposes,
-        // Convert each datetime-local value to an ISO instant so the server gets
-        // an unambiguous time. Blank rows are dropped server-side too.
-        slots: slots
-          .filter((s) => s.trim())
-          .map((s) => {
-            const d = new Date(s);
-            return Number.isFinite(d.getTime()) ? d.toISOString() : s;
-          }),
-        eaEmail: eaEmail.trim() || null,
-      });
-      if (res.ok) {
-        router.refresh();
-      } else {
-        setError(res.error);
+      try {
+        const res = await respondToAskAction({
+          askId,
+          offer,
+          proposes,
+          // Convert each datetime-local value to an ISO instant so the server gets
+          // an unambiguous time. Blank rows are dropped server-side too.
+          slots: slots
+            .filter((s) => s.trim())
+            .map((s) => {
+              const d = new Date(s);
+              return Number.isFinite(d.getTime()) ? d.toISOString() : s;
+            }),
+          eaEmail: eaEmail.trim() || null,
+        });
+        if (res.ok) {
+          router.refresh();
+        } else {
+          setError(res.error);
+        }
+      } catch {
+        // A thrown action must not crash to the error boundary — the response may
+        // have been recorded. Show a recoverable notice.
+        setError(
+          "Something went wrong while sending — your response may have gone through. Refresh to check.",
+        );
       }
     });
   };

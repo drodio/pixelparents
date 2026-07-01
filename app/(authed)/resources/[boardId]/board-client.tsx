@@ -25,6 +25,7 @@ import {
 } from "@/lib/resources-label";
 import { UpvoteButton } from "../upvote-button";
 import { ContributionMarkdown } from "../markdown";
+import { Linkify } from "@/lib/linkify";
 import {
   createContributionAction,
   deleteContributionAction,
@@ -149,7 +150,9 @@ export function BoardDetailClient({
             )}
             <h1 className="text-2xl font-semibold tracking-tight text-white">{header.title}</h1>
             {header.description && (
-              <p className="mt-2 whitespace-pre-line text-sm text-white/65">{header.description}</p>
+              <p className="mt-2 whitespace-pre-line text-sm text-white/65">
+                <Linkify>{header.description}</Linkify>
+              </p>
             )}
           </div>
           <div className="shrink-0">
@@ -511,24 +514,32 @@ function ContributionForm({ boardId, onDone }: { boardId: string; onDone: () => 
   const submit = () => {
     setError(null);
     startTransition(async () => {
-      const res = await createContributionAction({
-        boardId,
-        kind,
-        title,
-        url: kind === "link" ? url : undefined,
-        filePath: kind === "file" ? filePath ?? undefined : undefined,
-        fileName: kind === "file" ? fileName ?? undefined : undefined,
-        body: kind === "text" ? body : undefined,
-      });
-      if (res.ok) {
-        setTitle("");
-        setUrl("");
-        setBody("");
-        setFilePath(null);
-        setFileName(null);
-        onDone();
-      } else {
-        setError(res.error);
+      try {
+        const res = await createContributionAction({
+          boardId,
+          kind,
+          title,
+          url: kind === "link" ? url : undefined,
+          filePath: kind === "file" ? filePath ?? undefined : undefined,
+          fileName: kind === "file" ? fileName ?? undefined : undefined,
+          body: kind === "text" ? body : undefined,
+        });
+        if (res.ok) {
+          setTitle("");
+          setUrl("");
+          setBody("");
+          setFilePath(null);
+          setFileName(null);
+          onDone();
+        } else {
+          setError(res.error);
+        }
+      } catch {
+        // A thrown action must not crash to the error boundary — the
+        // contribution may have been saved. Show a recoverable notice.
+        setError(
+          "Something went wrong — your contribution may have been added. Refresh to check.",
+        );
       }
     });
   };
@@ -668,14 +679,18 @@ function BoardEditForm({
       .map((t) => t.trim())
       .filter(Boolean);
     startTransition(async () => {
-      const res = await updateBoardAction({
-        boardId: header.id,
-        title,
-        description,
-        tags: tagList,
-      });
-      if (res.ok) onDone();
-      else setError(res.error);
+      try {
+        const res = await updateBoardAction({
+          boardId: header.id,
+          title,
+          description,
+          tags: tagList,
+        });
+        if (res.ok) onDone();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong — your changes may have been saved. Refresh to check.");
+      }
     });
   };
 
@@ -771,15 +786,19 @@ function ContributionEditForm({
   const submit = () => {
     setError(null);
     startTransition(async () => {
-      const res = await updateContributionAction({
-        id: c.id,
-        kind: c.kind,
-        title,
-        url: c.kind === "link" ? url : undefined,
-        body: c.kind === "text" ? body : undefined,
-      });
-      if (res.ok) onDone();
-      else setError(res.error);
+      try {
+        const res = await updateContributionAction({
+          id: c.id,
+          kind: c.kind,
+          title,
+          url: c.kind === "link" ? url : undefined,
+          body: c.kind === "text" ? body : undefined,
+        });
+        if (res.ok) onDone();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong — your changes may have been saved. Refresh to check.");
+      }
     });
   };
 

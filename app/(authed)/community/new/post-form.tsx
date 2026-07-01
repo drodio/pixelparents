@@ -116,14 +116,22 @@ export function PostForm({
         urgency,
         validUntil: validUntil || null,
       };
-      const res = editing
-        ? await updateAskAction({ id: initial!.id, ...payload })
-        : await createAskAction(payload);
-      if (res.ok) {
-        router.push(res.id ? `/community/${res.id}` : "/community");
-        router.refresh();
-      } else {
-        setError(res.error);
+      try {
+        const res = editing
+          ? await updateAskAction({ id: initial!.id, ...payload })
+          : await createAskAction(payload);
+        if (res.ok) {
+          router.push(res.id ? `/community/${res.id}` : "/community");
+          router.refresh();
+        } else {
+          setError(res.error);
+        }
+      } catch {
+        // A THROWN action (network blip/timeout) must not crash to the error
+        // boundary — the post may have been created. Show a recoverable notice.
+        setError(
+          "Something went wrong while submitting — your post may have been saved. Refresh the Community page to check.",
+        );
       }
     });
   };
