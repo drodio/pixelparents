@@ -44,7 +44,12 @@ export function NotificationBell({ showLabel = false }: { showLabel?: boolean } 
     return () => window.removeEventListener("focus", onFocus);
   }, [refresh]);
 
+  // Both the corner badge and the inline label pill derive from the SAME source
+  // of truth (formatUnreadBadge) so they never disagree on the same value. They
+  // cap differently on purpose: the corner badge sits on the 16px icon rail and
+  // caps tight at 9+, while the roomier label pill caps at 99+.
   const badge = formatUnreadBadge(count);
+  const pill = formatUnreadBadge(count, 99);
   const label =
     count > 0 ? `Notifications — ${count} unread` : "Notifications";
 
@@ -73,13 +78,13 @@ export function NotificationBell({ showLabel = false }: { showLabel?: boolean } 
       {/* Label hidden on the desktop icon rail (shows at md+); the mobile drawer
           passes showLabel so it reads "Notifications" there too. */}
       <span className={showLabel ? "inline" : "hidden md:inline"}>Notifications</span>
-      {count > 0 && (
+      {pill.show && (
         <span
           className={`ml-auto rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[11px] font-semibold text-amber-300 ${
             showLabel ? "inline" : "hidden md:inline"
           }`}
         >
-          {count > 99 ? "99+" : count}
+          {pill.label}
         </span>
       )}
     </Link>

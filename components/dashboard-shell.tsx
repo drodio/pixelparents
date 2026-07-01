@@ -104,15 +104,21 @@ export function DashboardShell({
       .filter((i) => pathname === i.href || (pathname?.startsWith(`${i.href}/`) ?? false))
       .sort((a, b) => b.href.length - a.href.length)[0]?.href ?? null;
 
-  // Lock body scroll while the drawer is open so the page behind doesn't scroll
-  // under the overlay. (Drawer nav links close it via their own onClick, so no
-  // pathname-watching effect is needed.)
+  // While the drawer is open: lock body scroll so the page behind doesn't scroll
+  // under the overlay, and wire up Escape-to-close so keyboard/screen-reader users
+  // have a dismiss affordance (the drawer is a blocking modal dialog). Drawer nav
+  // links also close it via their own onClick.
   useEffect(() => {
     if (!drawerOpen) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDrawerOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
     return () => {
       document.body.style.overflow = prev;
+      window.removeEventListener("keydown", onKeyDown);
     };
   }, [drawerOpen]);
 
@@ -211,7 +217,7 @@ export function DashboardShell({
           <span className={mobile ? "inline" : "hidden md:inline"}>Sign in</span>
         </Link>
         <Link
-          href="/sign-in?redirect_url=/dashboard"
+          href="/signup"
           title="Create account"
           className={`${
             mobile ? "flex" : "hidden md:flex"
@@ -274,6 +280,9 @@ export function DashboardShell({
           <span className="text-base font-semibold tracking-tight">Pixel Parents</span>
         </Link>
         <div className="flex items-center gap-1">
+          {/* Notification bell in the persistent top chrome so the unread badge is
+              always visible on mobile (not buried in the "More" drawer). */}
+          {authed && <NotificationBell />}
           {authed && (
             <Link
               href="/account"
@@ -357,7 +366,12 @@ export function DashboardShell({
             onClick={() => setDrawerOpen(false)}
             className="absolute inset-0 bg-black/60 backdrop-blur-sm"
           />
-          <div className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-white/10 bg-zinc-950 shadow-2xl">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-label="Navigation menu"
+            className="absolute inset-y-0 right-0 flex w-72 max-w-[85vw] flex-col border-l border-white/10 bg-zinc-950 shadow-2xl"
+          >
             <div className="flex h-14 items-center justify-between border-b border-white/10 px-4">
               <span className="text-base font-semibold tracking-tight">Menu</span>
               <button
