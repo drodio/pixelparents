@@ -83,6 +83,7 @@ export function HelpMenu({
   onOpenFeedback,
   onOpenGithub,
   onNavigate,
+  canWalkthrough,
 }: {
   onBeginWalkthrough: () => void;
   onOpenFaq: () => void;
@@ -90,12 +91,17 @@ export function HelpMenu({
   onOpenGithub: () => void;
   // Called after a link strip is clicked so the parent can close the menu.
   onNavigate: () => void;
+  // The guided walkthrough only has targets on the md+ desktop layout, so the
+  // parent passes false on mobile / narrow windows to hide the entry entirely.
+  canWalkthrough: boolean;
 }) {
   return (
     <div className="flex flex-col gap-2">
-      <button type="button" onClick={onBeginWalkthrough} className={STRIP}>
-        <StripInner Icon={IconSparkles} label="Begin walkthrough" />
-      </button>
+      {canWalkthrough && (
+        <button type="button" onClick={onBeginWalkthrough} className={STRIP}>
+          <StripInner Icon={IconSparkles} label="Begin walkthrough" />
+        </button>
+      )}
       <button type="button" onClick={onOpenFaq} className={STRIP}>
         <StripInner Icon={HelpIcon} label="FAQ" />
       </button>

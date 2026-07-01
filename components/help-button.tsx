@@ -6,7 +6,7 @@ import { HelpMenu } from "@/components/help-menu";
 import { FaqDialog } from "@/components/faq-dialog";
 import { GithubDialog } from "@/components/github-dialog";
 import { FeedbackComposer } from "@/components/feedback-widget";
-import { startWalkthrough } from "@/components/walkthrough-tour";
+import { startWalkthrough, MIN_WALKTHROUGH_WIDTH } from "@/components/walkthrough-tour";
 
 type Overlay = null | "menu" | "faq" | "github" | "feedback";
 
@@ -16,8 +16,21 @@ type Overlay = null | "menu" | "faq" | "github" | "feedback";
 // pages, changelog, feedback composer, and the GitHub/community dialog.
 export function HelpButton() {
   const [overlay, setOverlay] = useState<Overlay>(null);
+  // The guided walkthrough only works on the md+ desktop layout (its spotlight
+  // targets live in the `hidden md:flex` sidebar). Track viewport width so the
+  // menu can hide the entry on mobile / narrow windows. Starts false so SSR and
+  // first paint never flash the option before the client resolves the width.
+  const [canWalkthrough, setCanWalkthrough] = useState(false);
 
   const close = useCallback(() => setOverlay(null), []);
+
+  useEffect(() => {
+    const mq = window.matchMedia(`(min-width: ${MIN_WALKTHROUGH_WIDTH}px)`);
+    const sync = () => setCanWalkthrough(mq.matches);
+    sync();
+    mq.addEventListener("change", sync);
+    return () => mq.removeEventListener("change", sync);
+  }, []);
 
   // Escape closes whatever's open (menu or a sub-dialog).
   useEffect(() => {
@@ -97,6 +110,7 @@ export function HelpButton() {
               onOpenFeedback={() => setOverlay("feedback")}
               onOpenGithub={() => setOverlay("github")}
               onNavigate={close}
+              canWalkthrough={canWalkthrough}
             />
           </div>
         </>

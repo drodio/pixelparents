@@ -16,11 +16,24 @@ import { IconX } from "@/components/icons";
 // off the tour. Exported so callers import the exact string.
 export const START_WALKTHROUGH_EVENT = "pp:start-walkthrough";
 
+// Minimum viewport width (px) at/above which the walkthrough is offered and can
+// run. Every spotlight target lives in the md+ desktop sidebar (`hidden md:flex`),
+// so below this width the tour has nothing to point at and just skips every step.
+// Matches Tailwind's `md` breakpoint — the exact width the sidebar appears at.
+export const MIN_WALKTHROUGH_WIDTH = 768;
+
+// Whether the current viewport can actually run the guided tour. SSR-safe:
+// returns false on the server (no window); the client re-checks after mount.
+export function canRunWalkthrough(): boolean {
+  return typeof window !== "undefined" && window.innerWidth >= MIN_WALKTHROUGH_WIDTH;
+}
+
 // Fire the tour from anywhere on the client (the help menu's "Begin walkthrough").
+// No-ops on mobile / narrow windows where the tour has no targets — belt-and-
+// suspenders alongside the help menu hiding the entry below this width.
 export function startWalkthrough(): void {
-  if (typeof window !== "undefined") {
-    window.dispatchEvent(new CustomEvent(START_WALKTHROUGH_EVENT));
-  }
+  if (!canRunWalkthrough()) return;
+  window.dispatchEvent(new CustomEvent(START_WALKTHROUGH_EVENT));
 }
 
 type Rect = { top: number; left: number; width: number; height: number };
@@ -68,6 +81,9 @@ export function WalkthroughTour() {
   // to /dashboard (the tour's home surface) so every target exists.
   useEffect(() => {
     const onStart = () => {
+      // Guard directly-dispatched events too: no targets exist below the desktop
+      // breakpoint, so starting the tour there would just skip every step.
+      if (!canRunWalkthrough()) return;
       setNoMotion(reducedMotion());
       setStep(0);
       setRect(null);
@@ -99,17 +115,26 @@ export function WalkthroughTour() {
     };
   }, [active]);
 
-  // Recompute the highlight rect on resize/scroll while active.
+  // Recompute the highlight rect on resize/scroll while active. If the window
+  // shrinks below the desktop breakpoint mid-tour, the spotlight targets vanish
+  // (they're `hidden md:flex`), so end the tour gracefully rather than spotlight
+  // nothing.
   useEffect(() => {
     if (!active) return;
-    const bump = () => setTick((t) => t + 1);
+    const bump = () => {
+      if (!canRunWalkthrough()) {
+        finish(false);
+        return;
+      }
+      setTick((t) => t + 1);
+    };
     window.addEventListener("resize", bump);
     window.addEventListener("scroll", bump, true);
     return () => {
       window.removeEventListener("resize", bump);
       window.removeEventListener("scroll", bump, true);
     };
-  }, [active]);
+  }, [active, finish]);
 
   // Resolve the current step's target rect. Runs whenever the step, route, or a
   // tick changes. Untargeted steps (intro/outro) → centered card (rect = null).
