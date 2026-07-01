@@ -18,6 +18,9 @@ import {
   declineEventProposal,
   deleteResponseMessage,
   countMessagesByAuthorSince,
+  addPoll,
+  castVote,
+  closePoll,
   type ProposedEvent,
 } from "@/lib/db/exchange-thread";
 import { getAskById } from "@/lib/db/asks";
@@ -25,6 +28,8 @@ import {
   validateReplyBody,
   validateProposalNote,
   validateVisibility,
+  validatePollQuestion,
+  validatePollOptions,
 } from "@/lib/exchange-thread-validate";
 import {
   validateEventTitle,
@@ -448,5 +453,145 @@ export async function deleteResponseMessageAction(input: {
   } catch (err) {
     console.error("deleteResponseMessageAction failed:", err);
     return { ok: false, error: "Couldn't delete this message. Please try again." };
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Polls — a party (post author or responder) creates a poll to gauge public
+// interest / gather input; ANY verified member may vote; results are public.
+// ---------------------------------------------------------------------------
+
+// Create a poll inside a response's thread. Caller must be a PARTY (post author or
+// responder). The post must not be closed. Polls are always PUBLIC. Notifies the
+// OTHER party via the existing community_reply type.
+export async function createPollAction(input: {
+  responseId: string;
+  question: string;
+  options: string[];
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.responseId)) return { ok: false, error: "Unknown response." };
+
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS family." };
+
+  const parties = await getResponseParties(input.responseId);
+  if (!parties) return { ok: false, error: "Unknown response." };
+
+  const role = partyRole(caller.user.id, parties);
+  if (!role.isParty) {
+    return { ok: false, error: "Only the two people in this conversation can create a poll." };
+  }
+  if (parties.askStatus === "closed") {
+    return { ok: false, error: "This post is closed — the conversation is locked." };
+  }
+
+  const question = validatePollQuestion(input.question);
+  if (!question.ok) return { ok: false, error: question.error };
+  const options = validatePollOptions(input.options);
+  if (!options.ok) return { ok: false, error: options.error };
+
+  const recent = await countMessagesByAuthorSince(caller.user.id, Date.now() - MSG_RATE_WINDOW_MS);
+  if (recent >= MSG_RATE_LIMIT) {
+    return { ok: false, error: "You've sent a lot of messages recently — please try again later." };
+  }
+
+  try {
+    await addPoll({
+      responseId: input.responseId,
+      askId: parties.askId,
+      authorSignupId: caller.user.id,
+      authorClerkId: caller.clerkId,
+      question: question.value,
+      options: options.value,
+    });
+    revalidatePath(`/community/${parties.askId}`);
+
+    const otherId = role.otherSignupId;
+    if (otherId) {
+      const label = notifyLabel(caller.user);
+      const askId = parties.askId;
+      const q = question.value;
+      after(async () => {
+        try {
+          await createNotification({
+            recipientSignupId: otherId,
+            type: "community_reply",
+            title: `${label} started a poll`,
+            body: `${label} started a poll: "${q}".`,
+            link: `/community/${askId}`,
+          });
+        } catch (err) {
+          console.error("community_reply poll notification failed:", err);
+        }
+      });
+    }
+    return { ok: true };
+  } catch (err) {
+    console.error("createPollAction failed:", err);
+    return { ok: false, error: "Couldn't create the poll. Please try again." };
+  }
+}
+
+// Vote on a poll — ANY verified member may vote (this is public input, not a
+// party-only action). Toggles/changes/retracts via castVote. No notification
+// (per-vote spam avoidance).
+export async function votePollAction(input: {
+  messageId: string;
+  optionIndex: number;
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.messageId)) return { ok: false, error: "Unknown poll." };
+
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS family." };
+
+  const res = await castVote({
+    messageId: input.messageId,
+    voterSignupId: caller.user.id,
+    optionIndex: input.optionIndex,
+  });
+  if (!res.ok) {
+    const msg =
+      res.error === "closed"
+        ? "This poll is closed."
+        : res.error === "bad_option"
+          ? "That isn't a valid option."
+          : "That poll no longer exists.";
+    return { ok: false, error: msg };
+  }
+
+  // Revalidate the post so the fresh counts render. We resolve the ask id from the
+  // message context (cheap join) so we hit the right path.
+  const ctx = await getMessageContext(input.messageId);
+  if (ctx) revalidatePath(`/community/${ctx.askId}`);
+  return { ok: true };
+}
+
+// Close a poll — PARTY-scoped (a party of the response the poll lives on). A
+// non-party or forged id matches 0 rows in the scoped UPDATE.
+export async function closePollAction(input: {
+  messageId: string;
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.messageId)) return { ok: false, error: "Unknown poll." };
+
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS family." };
+
+  const ctx = await getMessageContext(input.messageId);
+  if (!ctx) return { ok: false, error: "Unknown poll." };
+  if (ctx.message.kind !== "poll") return { ok: false, error: "That isn't a poll." };
+
+  const role = partyRole(caller.user.id, ctx);
+  if (!role.isParty) {
+    return { ok: false, error: "Only the two people in this conversation can close this poll." };
+  }
+
+  try {
+    const updated = await closePoll({ messageId: input.messageId, callerSignupId: caller.user.id });
+    revalidatePath(`/community/${ctx.askId}`);
+    if (!updated) return { ok: false, error: "Couldn't close the poll." };
+    return { ok: true };
+  } catch (err) {
+    console.error("closePollAction failed:", err);
+    return { ok: false, error: "Couldn't close the poll. Please try again." };
   }
 }

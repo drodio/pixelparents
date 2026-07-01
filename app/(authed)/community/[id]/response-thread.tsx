@@ -4,14 +4,33 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useReducedMotion, motion } from "framer-motion";
-import { IconLock, IconCalendar, IconCircleCheck, IconTrash, IconClock } from "@/components/icons";
-import { REPLY_BODY_MAX } from "@/lib/exchange-thread-validate";
+import {
+  IconLock,
+  IconCalendar,
+  IconCircleCheck,
+  IconTrash,
+  IconClock,
+  IconChart,
+  IconPlus,
+  IconX,
+  IconCheck,
+} from "@/components/icons";
+import {
+  REPLY_BODY_MAX,
+  POLL_QUESTION_MAX,
+  POLL_OPTION_MAX,
+  POLL_MIN_OPTIONS,
+  POLL_MAX_OPTIONS,
+} from "@/lib/exchange-thread-validate";
 import {
   replyToResponseAction,
   proposeEventAction,
   acceptEventProposalAction,
   declineEventProposalAction,
   deleteResponseMessageAction,
+  createPollAction,
+  votePollAction,
+  closePollAction,
 } from "./thread-actions";
 
 // A single thread message projected into a serializable shape for the client. The
@@ -23,7 +42,7 @@ export type ThreadMessage = {
   authorSignupId: string;
   authorName: string; // coarsened display label
   isOwn: boolean;
-  kind: "comment" | "event_proposal";
+  kind: "comment" | "event_proposal" | "poll";
   visibility: "public" | "private";
   body: string | null;
   proposedEvent: {
@@ -39,6 +58,16 @@ export type ThreadMessage = {
   eventStatus: "proposed" | "accepted" | "declined" | null;
   // Whether THIS viewer authored the proposal (they can't accept their own).
   isProposer: boolean;
+  // Poll payload + aggregated results (present only when kind === "poll"). Any
+  // verified viewer can vote; viewerOptionIndex is this viewer's current choice.
+  poll: {
+    question: string;
+    options: string[];
+    closed: boolean;
+    counts: number[];
+    total: number;
+    viewerOptionIndex: number | null;
+  } | null;
 };
 
 const controlCls =
@@ -119,6 +148,8 @@ export function ResponseThread({
             <li key={m.id}>
               {m.kind === "event_proposal" && m.proposedEvent ? (
                 <EventProposalCard message={m} viewerIsParty={viewerIsParty} onChange={() => router.refresh()} reduce={Boolean(reduce)} />
+              ) : m.kind === "poll" && m.poll ? (
+                <PollCard message={m} viewerIsParty={viewerIsParty} onChange={() => router.refresh()} reduce={Boolean(reduce)} />
               ) : (
                 <CommentBubble message={m} onDeleted={() => router.refresh()} />
               )}
@@ -131,7 +162,7 @@ export function ResponseThread({
       {!viewerIsParty && messages.length > 0 && (
         <p className="mt-3 text-[11px] text-white/35">
           You&apos;re viewing the public part of this conversation. Only the two people involved can
-          reply.
+          reply, but anyone can vote in a poll.
         </p>
       )}
     </div>
@@ -295,7 +326,131 @@ function EventProposalCard({
   );
 }
 
-type Mode = "comment" | "private" | "event";
+// A public-input poll. ANY verified viewer can vote (click an option to
+// vote/change; click your current choice again to retract). Results — a filled
+// bar + count + percentage per option — are visible to everyone. A party can close
+// the poll, which freezes voting.
+function PollCard({
+  message,
+  viewerIsParty,
+  onChange,
+  reduce,
+}: {
+  message: ThreadMessage;
+  viewerIsParty: boolean;
+  onChange: () => void;
+  reduce: boolean;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const poll = message.poll!;
+  const closed = poll.closed;
+  const total = poll.total;
+
+  const vote = (optionIndex: number) => {
+    if (closed) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await votePollAction({ messageId: message.id, optionIndex });
+      if (res.ok) onChange();
+      else setError(res.error);
+    });
+  };
+
+  const close = () => {
+    setError(null);
+    startTransition(async () => {
+      const res = await closePollAction({ messageId: message.id });
+      if (res.ok) onChange();
+      else setError(res.error);
+    });
+  };
+
+  return (
+    <motion.div
+      initial={reduce ? false : { opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      className={`rounded-xl border p-3 ${
+        closed ? "border-white/10 bg-white/[0.01]" : "border-amber-400/25 bg-amber-400/[0.04]"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.08em] text-amber-200">
+          <IconChart className="h-3.5 w-3.5" /> Poll
+        </span>
+        <span className="text-[11px] text-white/40">{relativeTime(message.createdAt)}</span>
+      </div>
+
+      <h4 className="mt-1.5 text-sm font-semibold text-white">{poll.question}</h4>
+
+      <ul className="mt-3 flex flex-col gap-2">
+        {poll.options.map((opt, i) => {
+          const count = poll.counts[i] ?? 0;
+          const pct = total > 0 ? Math.round((count / total) * 100) : 0;
+          const chosen = poll.viewerOptionIndex === i;
+          return (
+            <li key={i}>
+              <button
+                type="button"
+                onClick={() => vote(i)}
+                disabled={pending || closed}
+                aria-pressed={chosen}
+                className={`group relative w-full overflow-hidden rounded-lg border px-3 py-2 text-left transition disabled:cursor-default ${
+                  chosen
+                    ? "border-amber-400/60 bg-amber-400/[0.06]"
+                    : "border-white/10 bg-white/[0.02] hover:border-amber-400/40"
+                } ${closed ? "opacity-90" : ""}`}
+              >
+                {/* Filled bar showing the percentage. */}
+                <span
+                  aria-hidden
+                  className={`absolute inset-y-0 left-0 ${reduce ? "" : "transition-[width] duration-500"} ${
+                    chosen ? "bg-amber-400/25" : "bg-white/[0.06]"
+                  }`}
+                  style={{ width: `${pct}%` }}
+                />
+                <span className="relative flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-sm text-white/85">
+                    {chosen && <IconCheck className="h-3.5 w-3.5 text-amber-300" />}
+                    {opt}
+                  </span>
+                  <span className="shrink-0 text-xs tabular-nums text-white/55">
+                    {pct}% · {count}
+                  </span>
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="mt-2.5 flex items-center justify-between gap-2">
+        <p className="text-[11px] text-white/45">
+          {total} {total === 1 ? "vote" : "votes"} · by {message.authorName}
+          {closed && " · Poll closed"}
+        </p>
+        {viewerIsParty && !closed && (
+          <button
+            type="button"
+            onClick={close}
+            disabled={pending}
+            className="text-[11px] text-white/40 transition hover:text-white/70 disabled:opacity-50"
+          >
+            Close poll
+          </button>
+        )}
+      </div>
+      {!closed && (
+        <p className="mt-1 text-[11px] text-white/30">
+          Tap an option to vote — tap again to remove your vote.
+        </p>
+      )}
+      {error && <p className="mt-1.5 text-xs text-red-300">{error}</p>}
+    </motion.div>
+  );
+}
+
+type Mode = "comment" | "private" | "event" | "poll";
 
 function Composer({ responseId, onDone }: { responseId: string; onDone: () => void }) {
   const [mode, setMode] = useState<Mode>("comment");
@@ -318,6 +473,17 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
   const [onlineUrl, setOnlineUrl] = useState("");
   const [evPrivate, setEvPrivate] = useState(false);
 
+  // Poll fields — a question + dynamic option inputs (start with 2, up to 6).
+  const [pollQuestion, setPollQuestion] = useState("");
+  const [pollOptions, setPollOptions] = useState<string[]>(["", ""]);
+
+  const setPollOption = (i: number, value: string) =>
+    setPollOptions((opts) => opts.map((o, j) => (j === i ? value : o)));
+  const addPollOption = () =>
+    setPollOptions((opts) => (opts.length >= POLL_MAX_OPTIONS ? opts : [...opts, ""]));
+  const removePollOption = (i: number) =>
+    setPollOptions((opts) => (opts.length <= POLL_MIN_OPTIONS ? opts : opts.filter((_, j) => j !== i)));
+
   const reset = () => {
     setBody("");
     setEvTitle("");
@@ -325,6 +491,8 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
     setDate("");
     setLocation("");
     setOnlineUrl("");
+    setPollQuestion("");
+    setPollOptions(["", ""]);
   };
 
   const submit = () => {
@@ -335,6 +503,18 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
           responseId,
           body,
           visibility: mode === "private" ? "private" : "public",
+        });
+        if (res.ok) {
+          reset();
+          onDone();
+        } else setError(res.error);
+        return;
+      }
+      if (mode === "poll") {
+        const res = await createPollAction({
+          responseId,
+          question: pollQuestion,
+          options: pollOptions,
         });
         if (res.ok) {
           reset();
@@ -380,6 +560,7 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
             ["comment", "Comment"],
             ["private", "Private note"],
             ["event", "Propose event"],
+            ["poll", "Create poll"],
           ] as [Mode, string][]
         ).map(([value, label]) => (
           <button
@@ -518,6 +699,51 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
             Keep this proposal private (just the two of you)
           </label>
         </div>
+      ) : mode === "poll" ? (
+        <div className="mt-3 flex flex-col gap-3">
+          <p className="inline-flex items-center gap-1 text-[11px] text-amber-200/80">
+            <IconChart className="h-3 w-3" /> Ask a public question — anyone viewing this post can vote.
+          </p>
+          <input
+            value={pollQuestion}
+            onChange={(e) => setPollQuestion(e.target.value)}
+            maxLength={POLL_QUESTION_MAX}
+            placeholder="Poll question (e.g. Which time works best?)"
+            className={controlCls}
+          />
+          <div className="flex flex-col gap-2">
+            {pollOptions.map((opt, i) => (
+              <div key={i} className="flex items-center gap-2">
+                <input
+                  value={opt}
+                  onChange={(e) => setPollOption(i, e.target.value)}
+                  maxLength={POLL_OPTION_MAX}
+                  placeholder={`Option ${i + 1}`}
+                  className={controlCls}
+                />
+                {pollOptions.length > POLL_MIN_OPTIONS && (
+                  <button
+                    type="button"
+                    onClick={() => removePollOption(i)}
+                    aria-label={`Remove option ${i + 1}`}
+                    className="shrink-0 rounded-md border border-white/15 p-1.5 text-white/45 transition hover:border-red-400/40 hover:text-red-300"
+                  >
+                    <IconX className="h-3.5 w-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+          {pollOptions.length < POLL_MAX_OPTIONS && (
+            <button
+              type="button"
+              onClick={addPollOption}
+              className="inline-flex w-fit items-center gap-1.5 rounded-full border border-white/15 px-3 py-1 text-xs font-medium text-white/65 transition hover:bg-white/10"
+            >
+              <IconPlus className="h-3.5 w-3.5" /> Add option
+            </button>
+          )}
+        </div>
       ) : (
         <textarea
           value={body}
@@ -541,9 +767,11 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
             ? "Sending…"
             : mode === "event"
               ? "Propose event"
-              : mode === "private"
-                ? "Send private note"
-                : "Reply"}
+              : mode === "poll"
+                ? "Create poll"
+                : mode === "private"
+                  ? "Send private note"
+                  : "Reply"}
         </button>
       </div>
     </form>

@@ -3,7 +3,12 @@ import {
   validateReplyBody,
   validateProposalNote,
   validateVisibility,
+  validatePollQuestion,
+  validatePollOptions,
   REPLY_BODY_MAX,
+  POLL_QUESTION_MAX,
+  POLL_OPTION_MAX,
+  POLL_MAX_OPTIONS,
 } from "./exchange-thread-validate";
 
 describe("validateReplyBody", () => {
@@ -55,5 +60,68 @@ describe("validateVisibility", () => {
     expect(validateVisibility(undefined)).toBe("public");
     expect(validateVisibility(null)).toBe("public");
     expect(validateVisibility(1)).toBe("public");
+  });
+});
+
+describe("validatePollQuestion", () => {
+  it("rejects empty / whitespace / non-string", () => {
+    expect(validatePollQuestion("").ok).toBe(false);
+    expect(validatePollQuestion("   ").ok).toBe(false);
+    expect(validatePollQuestion(42).ok).toBe(false);
+  });
+
+  it("collapses internal whitespace/newlines and trims", () => {
+    const res = validatePollQuestion("  Which\n\ttime   works?  ");
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.value).toBe("Which time works?");
+  });
+
+  it("strips control chars", () => {
+    const res = validatePollQuestion("a\x00b");
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.value).toBe("ab");
+  });
+
+  it("caps at POLL_QUESTION_MAX", () => {
+    expect(validatePollQuestion("x".repeat(POLL_QUESTION_MAX)).ok).toBe(true);
+    expect(validatePollQuestion("x".repeat(POLL_QUESTION_MAX + 1)).ok).toBe(false);
+  });
+});
+
+describe("validatePollOptions", () => {
+  it("rejects a non-array", () => {
+    expect(validatePollOptions("nope").ok).toBe(false);
+    expect(validatePollOptions(null).ok).toBe(false);
+  });
+
+  it("requires at least 2 non-empty options", () => {
+    expect(validatePollOptions(["only one"]).ok).toBe(false);
+    expect(validatePollOptions(["a", "   "]).ok).toBe(false); // blank dropped → 1 left
+    const res = validatePollOptions(["Yes", "No"]);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.value).toEqual(["Yes", "No"]);
+  });
+
+  it("drops blanks and trims/collapses each option", () => {
+    const res = validatePollOptions(["  Morning  ", "", "  After   noon "]);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.value).toEqual(["Morning", "After noon"]);
+  });
+
+  it("dedupes case-insensitively, keeping first-seen casing", () => {
+    const res = validatePollOptions(["Coffee", "coffee", "Tea"]);
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.value).toEqual(["Coffee", "Tea"]);
+  });
+
+  it("rejects an option over POLL_OPTION_MAX", () => {
+    expect(validatePollOptions(["ok", "x".repeat(POLL_OPTION_MAX + 1)]).ok).toBe(false);
+  });
+
+  it("rejects more than POLL_MAX_OPTIONS", () => {
+    const many = Array.from({ length: POLL_MAX_OPTIONS + 1 }, (_, i) => `opt-${i}`);
+    expect(validatePollOptions(many).ok).toBe(false);
+    const max = Array.from({ length: POLL_MAX_OPTIONS }, (_, i) => `opt-${i}`);
+    expect(validatePollOptions(max).ok).toBe(true);
   });
 });

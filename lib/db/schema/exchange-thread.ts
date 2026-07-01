@@ -1,4 +1,4 @@
-import { pgTable, uuid, text, timestamp, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, jsonb, index, integer, primaryKey } from "drizzle-orm/pg-core";
 import { askResponses } from "./asks";
 import { signups } from "./signups";
 
@@ -39,7 +39,8 @@ export const responseMessages = pgTable(
       .references(() => signups.id, { onDelete: "cascade" }),
     authorClerkId: text("author_clerk_id"),
 
-    // 'comment' → a chat message; 'event_proposal' → a proposed calendar event.
+    // 'comment' → a chat message; 'event_proposal' → a proposed calendar event;
+    // 'poll' → a public-input poll (always visibility='public').
     kind: text("kind").notNull().default("comment"),
 
     // 'public' → visible to anyone viewing the post; 'private' → visible ONLY to
@@ -56,8 +57,36 @@ export const responseMessages = pgTable(
     eventId: uuid("event_id"),
     // 'proposed' | 'accepted' | 'declined'.
     eventStatus: text("event_status"),
+
+    // --- Poll fields (used only when kind = 'poll') -----------------------------
+    // {question, options[] (immutable after creation), closed?}. Votes live in the
+    // separate poll_votes table (one row per member).
+    poll: jsonb("poll"),
   },
   (t) => [index("response_messages_response_created_idx").on(t.responseId, t.createdAt)],
 );
 
 export type ResponseMessageRow = typeof responseMessages.$inferSelect;
+
+// One vote per member per poll (PK enforces it). A member re-voting the same
+// option retracts; a different option moves the vote. Cascades with the poll
+// message. Mirrors the self-heal DDL in lib/db/exchange-thread.ts.
+export const pollVotes = pgTable(
+  "poll_votes",
+  {
+    messageId: uuid("message_id")
+      .notNull()
+      .references(() => responseMessages.id, { onDelete: "cascade" }),
+    voterSignupId: uuid("voter_signup_id")
+      .notNull()
+      .references(() => signups.id, { onDelete: "cascade" }),
+    optionIndex: integer("option_index").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  },
+  (t) => [
+    primaryKey({ columns: [t.messageId, t.voterSignupId] }),
+    index("poll_votes_message_idx").on(t.messageId),
+  ],
+);
+
+export type PollVoteRow = typeof pollVotes.$inferSelect;

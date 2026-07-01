@@ -53,9 +53,26 @@ export function ensureThreadTables(): Promise<void> {
         sql`ALTER TABLE response_messages ADD COLUMN IF NOT EXISTS proposed_event jsonb`,
         sql`ALTER TABLE response_messages ADD COLUMN IF NOT EXISTS event_id uuid`,
         sql`ALTER TABLE response_messages ADD COLUMN IF NOT EXISTS event_status text`,
+        // Poll payload for kind='poll': {question, options[], closed?}. Idempotent.
+        sql`ALTER TABLE response_messages ADD COLUMN IF NOT EXISTS poll jsonb`,
         sql`
           CREATE INDEX IF NOT EXISTS response_messages_response_created_idx
             ON response_messages (response_id, created_at)
+        `,
+        // One vote per member per poll — PK (message_id, voter_signup_id). The
+        // message_id FK cascades so deleting a poll message clears its votes.
+        sql`
+          CREATE TABLE IF NOT EXISTS poll_votes (
+            message_id uuid NOT NULL REFERENCES response_messages(id) ON DELETE CASCADE,
+            voter_signup_id uuid NOT NULL,
+            option_index int NOT NULL,
+            created_at timestamptz NOT NULL DEFAULT now(),
+            PRIMARY KEY (message_id, voter_signup_id)
+          )
+        `,
+        sql`
+          CREATE INDEX IF NOT EXISTS poll_votes_message_idx
+            ON poll_votes (message_id)
         `,
       ]);
     })().catch((e) => {
@@ -70,9 +87,24 @@ export function ensureThreadTables(): Promise<void> {
 // Types
 // ---------------------------------------------------------------------------
 
-export type MessageKind = "comment" | "event_proposal";
+export type MessageKind = "comment" | "event_proposal" | "poll";
 export type MessageVisibility = "public" | "private";
 export type EventProposalStatus = "proposed" | "accepted" | "declined";
+
+// A poll's immutable definition (options never change after creation) plus a
+// `closed` flag a party can flip to stop voting.
+export type Poll = {
+  question: string;
+  options: string[];
+  closed?: boolean;
+};
+
+// Aggregated results for a single poll, from the poll_votes table.
+export type PollResults = {
+  counts: number[]; // votes per option, index-aligned with poll.options
+  total: number;
+  viewerOptionIndex: number | null; // the viewer's current choice, or null
+};
 
 // The event details a proposal carries (mirrors CreateEventInput's user-facing
 // fields; dates are ISO strings so the json is serializable).
@@ -99,6 +131,7 @@ export type ResponseMessage = {
   proposedEvent: ProposedEvent | null;
   eventId: string | null;
   eventStatus: EventProposalStatus | null;
+  poll: Poll | null;
 };
 
 // The two parties + ask id for a response — the authorization context.
@@ -122,6 +155,7 @@ type RawMessage = {
   proposed_event: unknown;
   event_id: string | null;
   event_status: string | null;
+  poll: unknown;
 };
 
 function toDate(s: string | null | undefined): Date | null {
@@ -129,11 +163,22 @@ function toDate(s: string | null | undefined): Date | null {
 }
 
 function mapMessage(r: RawMessage): ResponseMessage {
-  const kind: MessageKind = r.kind === "event_proposal" ? "event_proposal" : "comment";
+  const kind: MessageKind =
+    r.kind === "event_proposal" ? "event_proposal" : r.kind === "poll" ? "poll" : "comment";
   const visibility: MessageVisibility = r.visibility === "private" ? "private" : "public";
   const eventStatus: EventProposalStatus | null =
     r.event_status === "proposed" || r.event_status === "accepted" || r.event_status === "declined"
       ? r.event_status
+      : null;
+  // Normalize the poll json to a well-typed shape (defends against a malformed row).
+  const rawPoll = r.poll as { question?: unknown; options?: unknown; closed?: unknown } | null;
+  const poll: Poll | null =
+    rawPoll && typeof rawPoll.question === "string" && Array.isArray(rawPoll.options)
+      ? {
+          question: rawPoll.question,
+          options: rawPoll.options.filter((o): o is string => typeof o === "string"),
+          closed: rawPoll.closed === true,
+        }
       : null;
   return {
     id: r.id,
@@ -148,6 +193,7 @@ function mapMessage(r: RawMessage): ResponseMessage {
     proposedEvent: (r.proposed_event as ProposedEvent | null) ?? null,
     eventId: r.event_id,
     eventStatus,
+    poll,
   };
 }
 
@@ -270,11 +316,12 @@ export async function addResponseMessage(input: {
   body: string | null;
   proposedEvent?: ProposedEvent | null;
   eventStatus?: EventProposalStatus | null;
+  poll?: Poll | null;
 }): Promise<ResponseMessage> {
   await ensureThreadTables();
   const rows = (await getSql()`
     INSERT INTO response_messages
-      (response_id, ask_id, author_signup_id, author_clerk_id, kind, visibility, body, proposed_event, event_status)
+      (response_id, ask_id, author_signup_id, author_clerk_id, kind, visibility, body, proposed_event, event_status, poll)
     VALUES (
       ${input.responseId},
       ${input.askId},
@@ -284,11 +331,164 @@ export async function addResponseMessage(input: {
       ${input.visibility},
       ${input.body ?? null},
       ${input.proposedEvent ? JSON.stringify(input.proposedEvent) : null}::jsonb,
-      ${input.eventStatus ?? null}
+      ${input.eventStatus ?? null},
+      ${input.poll ? JSON.stringify(input.poll) : null}::jsonb
     )
     RETURNING *
   `) as unknown as RawMessage[];
   return mapMessage(rows[0]!);
+}
+
+// ---------------------------------------------------------------------------
+// Polls
+// ---------------------------------------------------------------------------
+
+// Create a poll message on a response. Polls are ALWAYS public (the whole point
+// is public input) — no visibility parameter. Options are stored immutably in the
+// json; they can never be edited after creation.
+export async function addPoll(input: {
+  responseId: string;
+  askId: string;
+  authorSignupId: string;
+  authorClerkId: string | null;
+  question: string;
+  options: string[];
+}): Promise<ResponseMessage> {
+  return addResponseMessage({
+    responseId: input.responseId,
+    askId: input.askId,
+    authorSignupId: input.authorSignupId,
+    authorClerkId: input.authorClerkId,
+    kind: "poll",
+    visibility: "public",
+    body: null,
+    poll: { question: input.question, options: input.options, closed: false },
+  });
+}
+
+// The state a vote resolves to after a cast.
+export type VoteState = "added" | "changed" | "retracted";
+
+// Cast (or toggle) a vote on a poll. Behavior on the PK (message_id, voter):
+//   • same option again → RETRACT (delete the row → toggle off)
+//   • different option  → UPDATE (move the vote)
+//   • no prior vote      → INSERT
+// Rejects when the poll is closed, the message isn't a poll, or optionIndex is
+// out of range. A forged messageId matches 0 rows → rejected. Returns the state.
+export async function castVote(input: {
+  messageId: string;
+  voterSignupId: string;
+  optionIndex: number;
+}): Promise<{ ok: true; state: VoteState } | { ok: false; error: string }> {
+  await ensureThreadTables();
+  const sql = getSql();
+
+  // Load the poll message to validate closed-state + option range. A non-poll or
+  // forged id yields 0 rows.
+  const rows = (await sql`
+    SELECT * FROM response_messages WHERE id = ${input.messageId} AND kind = 'poll' LIMIT 1
+  `) as unknown as RawMessage[];
+  const msg = rows[0] ? mapMessage(rows[0]) : null;
+  if (!msg || !msg.poll) return { ok: false, error: "not_found" };
+  if (msg.poll.closed) return { ok: false, error: "closed" };
+  if (
+    !Number.isInteger(input.optionIndex) ||
+    input.optionIndex < 0 ||
+    input.optionIndex >= msg.poll.options.length
+  ) {
+    return { ok: false, error: "bad_option" };
+  }
+
+  // Read the voter's existing choice (if any).
+  const existing = (await sql`
+    SELECT option_index FROM poll_votes
+    WHERE message_id = ${input.messageId} AND voter_signup_id = ${input.voterSignupId}
+    LIMIT 1
+  `) as unknown as { option_index: number }[];
+  const prior = existing[0]?.option_index ?? null;
+
+  if (prior === input.optionIndex) {
+    // Same option → retract (toggle off).
+    await sql`
+      DELETE FROM poll_votes
+      WHERE message_id = ${input.messageId} AND voter_signup_id = ${input.voterSignupId}
+    `;
+    return { ok: true, state: "retracted" };
+  }
+
+  // Insert or move the vote. ON CONFLICT covers the "changed" path atomically and
+  // races (a concurrent first vote) without a unique-violation error.
+  await sql`
+    INSERT INTO poll_votes (message_id, voter_signup_id, option_index)
+    VALUES (${input.messageId}, ${input.voterSignupId}, ${input.optionIndex})
+    ON CONFLICT (message_id, voter_signup_id)
+    DO UPDATE SET option_index = EXCLUDED.option_index, created_at = now()
+  `;
+  return { ok: true, state: prior === null ? "added" : "changed" };
+}
+
+// Aggregate results for a set of poll messages, plus THIS viewer's own choice per
+// message. Returns a map: messageId → {counts[], total, viewerOptionIndex}. The
+// caller passes each poll's option count so we can size the counts array even when
+// an option has 0 votes. Messages with no votes still appear (all-zero counts).
+export async function getPollResults(
+  polls: { messageId: string; optionCount: number }[],
+  viewerSignupId: string,
+): Promise<Map<string, PollResults>> {
+  const out = new Map<string, PollResults>();
+  if (polls.length === 0) return out;
+  await ensureThreadTables();
+  const sql = getSql();
+  const ids = polls.map((p) => p.messageId);
+
+  // Seed every requested poll with a zero-filled counts array.
+  for (const p of polls) {
+    out.set(p.messageId, {
+      counts: new Array(Math.max(0, p.optionCount)).fill(0),
+      total: 0,
+      viewerOptionIndex: null,
+    });
+  }
+
+  const rows = (await sql`
+    SELECT message_id, option_index, voter_signup_id
+    FROM poll_votes
+    WHERE message_id = ANY(${ids}::uuid[])
+  `) as unknown as { message_id: string; option_index: number; voter_signup_id: string }[];
+
+  for (const r of rows) {
+    const res = out.get(r.message_id);
+    if (!res) continue;
+    if (r.option_index >= 0 && r.option_index < res.counts.length) {
+      res.counts[r.option_index] += 1;
+      res.total += 1;
+    }
+    if (r.voter_signup_id === viewerSignupId) res.viewerOptionIndex = r.option_index;
+  }
+  return out;
+}
+
+// Close a poll (set poll.closed = true) — PARTY-scoped: only a party of the
+// response the poll lives on may close it. We scope the UPDATE through a join on
+// ask_responses → asks so a non-party (or a forged id) matches 0 rows. Returns the
+// updated row or null.
+export async function closePoll(input: {
+  messageId: string;
+  callerSignupId: string;
+}): Promise<ResponseMessage | null> {
+  await ensureThreadTables();
+  const rows = (await getSql()`
+    UPDATE response_messages m
+    SET poll = jsonb_set(coalesce(m.poll, '{}'::jsonb), '{closed}', 'true'::jsonb)
+    FROM ask_responses r
+    INNER JOIN asks a ON a.id = r.ask_id
+    WHERE m.id = ${input.messageId}
+      AND m.kind = 'poll'
+      AND r.id = m.response_id
+      AND (a.author_signup_id = ${input.callerSignupId} OR r.responder_signup_id = ${input.callerSignupId})
+    RETURNING m.*
+  `) as unknown as RawMessage[];
+  return rows[0] ? mapMessage(rows[0]) : null;
 }
 
 // Mark an event proposal ACCEPTED and attach the created events row. Scoped so the

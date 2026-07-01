@@ -46,7 +46,7 @@ import { ResponseDecision } from "./response-decision";
 import { PostControls } from "./post-controls";
 import { ConnectedCard, type ConnectedCardData, type ConnectedMethod } from "./connected-card";
 import { ResponseThread, type ThreadMessage } from "./response-thread";
-import { listMessagesForResponses } from "@/lib/db/exchange-thread";
+import { listMessagesForResponses, getPollResults } from "@/lib/db/exchange-thread";
 import { EngagementBar } from "./engagement-bar";
 import { CommunityBody } from "../community-body";
 import { extractMentionIds } from "@/lib/mentions";
@@ -397,10 +397,19 @@ export default async function ExchangePostPage({
       ? row.firstName
       : [row.firstName, row.lastName].filter(Boolean).join(" ");
   };
+  // Poll results: aggregate votes for every poll message + this viewer's own
+  // choice per poll. Any verified member can vote, so we always fetch (the viewer
+  // is verified past the gate above).
+  const pollMessages = threadMessages.filter((m) => m.kind === "poll" && m.poll);
+  const pollResultsByMessageId = await getPollResults(
+    pollMessages.map((m) => ({ messageId: m.id, optionCount: m.poll!.options.length })),
+    viewerSignupId,
+  );
   // Group + project messages per response into the client thread shape.
   const threadByResponseId = new Map<string, ThreadMessage[]>();
   for (const m of threadMessages) {
     const list = threadByResponseId.get(m.responseId) ?? [];
+    const results = m.kind === "poll" ? pollResultsByMessageId.get(m.id) : undefined;
     list.push({
       id: m.id,
       createdAt: m.createdAt ? m.createdAt.toISOString() : null,
@@ -414,6 +423,16 @@ export default async function ExchangePostPage({
       eventId: m.eventId,
       eventStatus: m.eventStatus,
       isProposer: m.authorSignupId === viewerSignupId,
+      poll: m.poll
+        ? {
+            question: m.poll.question,
+            options: m.poll.options,
+            closed: m.poll.closed === true,
+            counts: results?.counts ?? new Array(m.poll.options.length).fill(0),
+            total: results?.total ?? 0,
+            viewerOptionIndex: results?.viewerOptionIndex ?? null,
+          }
+        : null,
     });
     threadByResponseId.set(m.responseId, list);
   }
