@@ -45,6 +45,22 @@ export function formatUnreadBadge(count: number, cap = 9): { show: boolean; labe
   return { show: true, label: n > cap ? `${cap}+` : String(n) };
 }
 
+// Pure copy for the notifications-center header SUBTITLE. Single source of truth
+// so the three states can be reasoned about (and unit-tested) in isolation:
+//   - unread > 0            → "N unread" (NEVER "all caught up" while unread exist)
+//   - unread 0, total > 0   → "You're all caught up."
+//   - no notifications yet  → a description of every source that lands here
+// The last string mirrors the empty-state copy and covers ALL emitted sources
+// (posts, connections, mentions, events, boards) so no source implies it isn't
+// covered. Counts are coerced defensively (negative/NaN → 0).
+export function notificationsSubtitle(unread: number, total: number): string {
+  const u = Number.isFinite(unread) ? Math.max(0, Math.floor(unread)) : 0;
+  const t = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
+  if (u > 0) return `${u} unread`;
+  if (t > 0) return "You're all caught up.";
+  return "Updates about your posts, connections, events, and boards show up here.";
+}
+
 export type NotificationRow = {
   id: string;
   recipientSignupId: string;

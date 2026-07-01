@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
-import type { NotificationRow } from "@/lib/db/notifications";
+import { notificationsSubtitle, type NotificationRow } from "@/lib/db/notifications";
 import {
   markNotificationReadAction,
   markAllNotificationsReadAction,
@@ -48,11 +48,7 @@ export function NotificationsClient({ initial }: Props) {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Notifications</h1>
           <p className="mt-1 text-sm text-white/55">
-            {unread > 0
-              ? `${unread} unread`
-              : items.length > 0
-                ? "You're all caught up."
-                : "Updates about your community posts and events show up here."}
+            {notificationsSubtitle(unread, items.length)}
           </p>
         </div>
         {unread > 0 && (
@@ -143,8 +139,12 @@ function TypeIcon({ type }: { type: string }) {
       return <ChatGlyph />;
     case "community_connected":
       return <HeartGlyph />;
+    case "community_mention":
+      return <AtGlyph />;
     case "event_rsvp":
       return <CalendarGlyph />;
+    case "board_contribution":
+      return <BoardGlyph />;
     default:
       return <BellGlyph />;
   }
@@ -216,6 +216,28 @@ function CalendarGlyph() {
       <path d="M3.5 9.5h17" />
       <path d="M8 3v4" />
       <path d="M16 3v4" />
+    </svg>
+  );
+}
+
+// @-mention glyph (a circled "at" mark) for community_mention.
+function AtGlyph() {
+  return (
+    <svg {...svgProps()}>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M16 8v5a2.5 2.5 0 0 0 5 0v-1a9 9 0 1 0-3.5 7.1" />
+    </svg>
+  );
+}
+
+// Board/bookmark glyph for board_contribution (a resource-board card).
+function BoardGlyph() {
+  return (
+    <svg {...svgProps()}>
+      <rect x="4" y="3.5" width="16" height="17" rx="2" />
+      <path d="M8 8h8" />
+      <path d="M8 12h8" />
+      <path d="M8 16h5" />
     </svg>
   );
 }

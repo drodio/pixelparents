@@ -15,6 +15,8 @@ import {
   IconUsers,
   IconHome,
   IconCode,
+  IconCalendar,
+  IconBook,
   IconCircleCheck,
   IconGradCap,
   IconBan,
@@ -203,10 +205,22 @@ export default async function DashboardPage() {
               Icon={IconHeart}
             />
             <LinkCard
+              href="/events"
+              title="Events"
+              desc="The shared OHS calendar — community-created events alongside the school-year calendar."
+              Icon={IconCalendar}
+            />
+            <LinkCard
               href="/directory"
               title="Directory"
               desc="Browse OHS families and students who are sharing, plus a map of where we're building."
               Icon={IconUsers}
+            />
+            <LinkCard
+              href="/resources"
+              title="Resources"
+              desc="Community resource boards — OHS-only, upvotable collections of links, files, and notes."
+              Icon={IconBook}
             />
             <LinkCard
               href="/family"
