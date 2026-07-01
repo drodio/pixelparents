@@ -517,7 +517,7 @@ function ChildCard({
             queue({ notes: e.target.value });
           }}
           rows={4}
-          placeholder="What do they most enjoy doing with others? What would you like to expose them to more (or less) of? What kinds of activities would you like them to do with other OHS kids & families?"
+          placeholder="What do they most enjoy doing with others? What would you like to expose them to more (or less) of? What kinds of activities would you like them to do with other OHS students & families?"
           className={inputCls}
         />
       </div>

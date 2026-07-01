@@ -102,7 +102,7 @@ export default async function Home() {
         <h2 className="max-w-prose text-pretty text-base font-medium text-white/70 sm:text-xl">
           Connect with{" "}
           <span className="font-semibold text-amber-400">{kidsCount.toLocaleString()}</span>{" "}
-          OHS kids around{" "}
+          OHS students around{" "}
           <span className="font-semibold text-amber-400">
             {interestsCount.toLocaleString()}
           </span>{" "}

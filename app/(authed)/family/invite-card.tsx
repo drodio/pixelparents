@@ -165,7 +165,7 @@ export function SpreadTheWordCard({ referralUrl }: { referralUrl: string }) {
           <h3 className="font-semibold text-white">Invite another OHS family</h3>
           <p className="mt-0.5 text-sm text-white/65">
             Know an OHS family who&apos;d love this? Share your link — the more
-            families here, the more our kids can connect around what they love.
+            families here, the more our students can connect around what they love.
           </p>
         </div>
       </div>
