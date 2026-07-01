@@ -22,6 +22,7 @@ import {
   POLL_MIN_OPTIONS,
   POLL_MAX_OPTIONS,
 } from "@/lib/exchange-thread-validate";
+import { Linkify } from "@/lib/linkify";
 import {
   replyToResponseAction,
   proposeEventAction,
@@ -177,9 +178,13 @@ function CommentBubble({ message, onDeleted }: { message: ThreadMessage; onDelet
   const remove = () => {
     setError(null);
     startTransition(async () => {
-      const res = await deleteResponseMessageAction({ messageId: message.id });
-      if (res.ok) onDeleted();
-      else setError(res.error);
+      try {
+        const res = await deleteResponseMessageAction({ messageId: message.id });
+        if (res.ok) onDeleted();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong. Please refresh and try again.");
+      }
     });
   };
 
@@ -216,7 +221,9 @@ function CommentBubble({ message, onDeleted }: { message: ThreadMessage; onDelet
         </div>
       </div>
       {message.body && (
-        <p className="mt-1 whitespace-pre-wrap text-sm text-white/75">{message.body}</p>
+        <p className="mt-1 whitespace-pre-wrap text-sm text-white/75">
+          <Linkify>{message.body}</Linkify>
+        </p>
       )}
       {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
     </div>
@@ -245,12 +252,16 @@ function EventProposalCard({
   const act = (kind: "accept" | "decline") => {
     setError(null);
     startTransition(async () => {
-      const res =
-        kind === "accept"
-          ? await acceptEventProposalAction({ messageId: message.id })
-          : await declineEventProposalAction({ messageId: message.id });
-      if (res.ok) onChange();
-      else setError(res.error);
+      try {
+        const res =
+          kind === "accept"
+            ? await acceptEventProposalAction({ messageId: message.id })
+            : await declineEventProposalAction({ messageId: message.id });
+        if (res.ok) onChange();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong — this may have gone through. Refresh to check.");
+      }
     });
   };
 
@@ -287,7 +298,11 @@ function EventProposalCard({
       <p className="mt-0.5 text-xs text-white/55">
         {p.isOnline ? (p.onlineUrl ? "Online" : "Online") : p.location ? `In person · ${p.location}` : "In person"}
       </p>
-      {message.body && <p className="mt-1.5 whitespace-pre-wrap text-sm text-white/70">{message.body}</p>}
+      {message.body && (
+        <p className="mt-1.5 whitespace-pre-wrap text-sm text-white/70">
+          <Linkify>{message.body}</Linkify>
+        </p>
+      )}
       <p className="mt-1 text-[11px] text-white/40">Proposed by {message.authorName}</p>
 
       {accepted ? (
@@ -351,18 +366,26 @@ function PollCard({
     if (closed) return;
     setError(null);
     startTransition(async () => {
-      const res = await votePollAction({ messageId: message.id, optionIndex });
-      if (res.ok) onChange();
-      else setError(res.error);
+      try {
+        const res = await votePollAction({ messageId: message.id, optionIndex });
+        if (res.ok) onChange();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong — your vote may not have been recorded. Refresh to check.");
+      }
     });
   };
 
   const close = () => {
     setError(null);
     startTransition(async () => {
-      const res = await closePollAction({ messageId: message.id });
-      if (res.ok) onChange();
-      else setError(res.error);
+      try {
+        const res = await closePollAction({ messageId: message.id });
+        if (res.ok) onChange();
+        else setError(res.error);
+      } catch {
+        setError("Something went wrong. Please refresh and try again.");
+      }
     });
   };
 
@@ -498,50 +521,56 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
   const submit = () => {
     setError(null);
     startTransition(async () => {
-      if (mode === "comment" || mode === "private") {
-        const res = await replyToResponseAction({
+      try {
+        if (mode === "comment" || mode === "private") {
+          const res = await replyToResponseAction({
+            responseId,
+            body,
+            visibility: mode === "private" ? "private" : "public",
+          });
+          if (res.ok) {
+            reset();
+            onDone();
+          } else setError(res.error);
+          return;
+        }
+        if (mode === "poll") {
+          const res = await createPollAction({
+            responseId,
+            question: pollQuestion,
+            options: pollOptions,
+          });
+          if (res.ok) {
+            reset();
+            onDone();
+          } else setError(res.error);
+          return;
+        }
+        // Event proposal.
+        const res = await proposeEventAction({
           responseId,
-          body,
-          visibility: mode === "private" ? "private" : "public",
+          visibility: evPrivate ? "private" : "public",
+          note: evNote || null,
+          title: evTitle,
+          date,
+          time: allDay ? null : time,
+          endDate: hasEnd ? date : null,
+          endTime: hasEnd && !allDay ? endTime : null,
+          tzOffsetMinutes: new Date().getTimezoneOffset(),
+          isOnline,
+          location: isOnline ? null : location,
+          onlineUrl: isOnline ? onlineUrl : null,
+          allDay,
         });
         if (res.ok) {
           reset();
           onDone();
         } else setError(res.error);
-        return;
+      } catch {
+        // A thrown action must not crash to the error boundary — it may have
+        // gone through. Show a recoverable notice.
+        setError("Something went wrong — this may have gone through. Refresh to check.");
       }
-      if (mode === "poll") {
-        const res = await createPollAction({
-          responseId,
-          question: pollQuestion,
-          options: pollOptions,
-        });
-        if (res.ok) {
-          reset();
-          onDone();
-        } else setError(res.error);
-        return;
-      }
-      // Event proposal.
-      const res = await proposeEventAction({
-        responseId,
-        visibility: evPrivate ? "private" : "public",
-        note: evNote || null,
-        title: evTitle,
-        date,
-        time: allDay ? null : time,
-        endDate: hasEnd ? date : null,
-        endTime: hasEnd && !allDay ? endTime : null,
-        tzOffsetMinutes: new Date().getTimezoneOffset(),
-        isOnline,
-        location: isOnline ? null : location,
-        onlineUrl: isOnline ? onlineUrl : null,
-        allDay,
-      });
-      if (res.ok) {
-        reset();
-        onDone();
-      } else setError(res.error);
     });
   };
 

@@ -18,6 +18,7 @@ import {
   IconFilter,
 } from "@/components/icons";
 import { MobileSheet } from "@/components/mobile-sheet";
+import { Linkify } from "@/lib/linkify";
 import { AddToCalendar } from "./add-to-calendar";
 import { RsvpControl, PlaceBadge, formatEventWhen } from "./event-bits";
 
@@ -610,7 +611,7 @@ function DetailDrawer({ event, onClose }: { event: CalendarEvent; onClose: () =>
 
       {event.description && (
         <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-white/75">
-          {event.description}
+          <Linkify>{event.description}</Linkify>
         </p>
       )}
 

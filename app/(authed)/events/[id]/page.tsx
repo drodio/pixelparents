@@ -14,6 +14,7 @@ import { signups } from "@/lib/db/schema/signups";
 import { inArray } from "drizzle-orm";
 import { isStudentAccount } from "@/lib/family-display";
 import { isDirectoryVisible } from "@/lib/directory";
+import { Linkify } from "@/lib/linkify";
 import {
   getEventById,
   rsvpCountsFor,
@@ -175,7 +176,7 @@ export default async function EventDetailPage({
 
             {event.description && (
               <p className="mt-4 whitespace-pre-wrap text-sm leading-relaxed text-white/80">
-                {event.description}
+                <Linkify>{event.description}</Linkify>
               </p>
             )}
 

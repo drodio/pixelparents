@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { renderCaption } from "@/lib/mentions";
+import { Linkify } from "@/lib/linkify";
 
 // Renders a Community post body / response that may contain @[Name](signupId)
 // mention markers. Pure + server-safe (mirrors components/mention-text.tsx, but
@@ -19,14 +20,20 @@ export function CommunityBody({
   className?: string;
 }) {
   const segments = renderCaption(body ?? "");
-  // No markers → render the raw text (fast path, preserves the exact string).
+  // No markers → render the raw text (fast path). Still linkify bare URLs so a
+  // pasted link is clickable; non-URL text stays plain (whitespace preserved).
   if (!segments.some((s) => s.kind === "mention")) {
-    return <p className={className}>{body}</p>;
+    return (
+      <p className={className}>
+        <Linkify>{body}</Linkify>
+      </p>
+    );
   }
   return (
     <p className={className}>
       {segments.map((s, i) => {
-        if (s.kind === "text") return <span key={i}>{s.text}</span>;
+        // Text runs between mentions can also contain URLs → linkify them.
+        if (s.kind === "text") return <Linkify key={i}>{s.text}</Linkify>;
         const token = linkById?.get(s.id) ?? null;
         if (token) {
           return (

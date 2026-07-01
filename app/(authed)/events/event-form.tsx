@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   EVENT_TITLE_MAX,
@@ -45,10 +46,16 @@ export function EventForm({ initial }: { initial?: EventFormInitial }) {
   const [location, setLocation] = useState(initial?.location ?? "");
   const [onlineUrl, setOnlineUrl] = useState(initial?.onlineUrl ?? "");
   const [error, setError] = useState<string | null>(null);
+  // A THROWN action (network blip / timeout that can arrive AFTER the server
+  // already committed the event) must NOT crash to the error boundary — that's
+  // the "posted but showed an error" bug. When set, we show a graceful inline
+  // notice (with a link to Events) instead of the normal validation error.
+  const [threwWhileSubmitting, setThrewWhileSubmitting] = useState(false);
   const [pending, startTransition] = useTransition();
 
   const submit = () => {
     setError(null);
+    setThrewWhileSubmitting(false);
     startTransition(async () => {
       const payload = {
         title,
@@ -63,14 +70,21 @@ export function EventForm({ initial }: { initial?: EventFormInitial }) {
         onlineUrl: isOnline ? onlineUrl : null,
         allDay,
       };
-      const res = editing
-        ? await updateEventAction({ id: initial!.id, ...payload })
-        : await createEventAction(payload);
-      if (res.ok) {
-        router.push(res.id ? `/events/${res.id}` : "/events");
-        router.refresh();
-      } else {
-        setError(res.error);
+      try {
+        const res = editing
+          ? await updateEventAction({ id: initial!.id, ...payload })
+          : await createEventAction(payload);
+        if (res.ok) {
+          router.push(res.id ? `/events/${res.id}` : "/events");
+          router.refresh();
+        } else {
+          setError(res.error);
+        }
+      } catch {
+        // The action threw (not a returned {ok:false}). The write may have
+        // already committed server-side, so we don't imply failure — we show a
+        // recoverable notice and point the user at the Events page to check.
+        setThrewWhileSubmitting(true);
       }
     });
   };
@@ -230,6 +244,15 @@ export function EventForm({ initial }: { initial?: EventFormInitial }) {
       </fieldset>
 
       {error && <p className="text-sm text-red-300">{error}</p>}
+
+      {threwWhileSubmitting && (
+        <p className="text-sm text-amber-300">
+          Something went wrong while submitting — your event may have been posted.{" "}
+          <Link href="/events" className="underline underline-offset-2 hover:text-amber-200">
+            Check the Events page.
+          </Link>
+        </p>
+      )}
 
       <div>
         <button
