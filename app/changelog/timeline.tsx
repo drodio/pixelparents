@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CHANGE_TYPES,
   CHANGE_TYPE_STYLE,
@@ -24,6 +24,38 @@ function formatDate(iso: string): string {
 export function ChangelogTimeline({ entries }: { entries: ChangelogEntryView[] }) {
   const [type, setType] = useState<ChangeType | null>(null);
   const [category, setCategory] = useState<string | null>(null);
+  const [highlighted, setHighlighted] = useState<string | null>(null);
+
+  // Email changelog links point at /changelog#<slug> (lib/changelog-email.ts).
+  // If any filter is active it could exclude that entry from the DOM, so the
+  // anchor would resolve to nothing. On mount (and on hash change), if the hash
+  // names a real entry, clear filters so it's guaranteed rendered, then scroll
+  // it into view and briefly highlight it. Runs after hydration so the target
+  // exists in the client DOM.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const slugs = new Set(entries.map((e) => e.slug));
+
+    function focusHash() {
+      const slug = decodeURIComponent(window.location.hash.replace(/^#/, ""));
+      if (!slug || !slugs.has(slug)) return;
+      // Clear filters so the deep-linked entry is never hidden.
+      setType(null);
+      setCategory(null);
+      setHighlighted(slug);
+      // Defer to the next frame so the (now-unfiltered) element is in the DOM.
+      requestAnimationFrame(() => {
+        const el = document.getElementById(slug);
+        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+      // Remove the highlight after a moment.
+      window.setTimeout(() => setHighlighted(null), 2400);
+    }
+
+    focusHash();
+    window.addEventListener("hashchange", focusHash);
+    return () => window.removeEventListener("hashchange", focusHash);
+  }, [entries]);
 
   // Only show category filters that actually appear in the entries.
   const usedCategories = useMemo(() => {
@@ -99,7 +131,15 @@ export function ChangelogTimeline({ entries }: { entries: ChangelogEntryView[] }
       {/* Timeline */}
       <ol className="mt-8 border-l-2 border-white/10 pl-6">
         {filtered.map((e) => (
-          <li key={e.id} id={e.slug} className="relative pb-10 last:pb-0">
+          <li
+            key={e.id}
+            id={e.slug}
+            className={`relative scroll-mt-24 pb-10 last:pb-0 ${
+              highlighted === e.slug
+                ? "rounded-xl bg-amber-400/10 ring-1 ring-amber-400/40 transition-colors"
+                : "transition-colors"
+            }`}
+          >
             <span className="absolute -left-[31px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-black bg-amber-400" />
             <div className="flex flex-wrap items-center gap-2">
               <span

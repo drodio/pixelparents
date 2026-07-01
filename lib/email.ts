@@ -305,6 +305,41 @@ export async function notifyApiRequestReceived(notice: {
 }
 
 // --- Developer API: tell an applicant their request was approved/rejected ---
+
+// Build the plain-text body for an API-decision email. Extracted (and exported)
+// so the formatting — in particular the optional rejection reason — is unit
+// testable. The rejection branch only includes the "Note:" line when a reason is
+// actually supplied; the array is filtered so an omitted reason never leaves a
+// stray blank line in the middle of the message.
+export function buildApiDecisionEmail(notice: {
+  name: string;
+  approved: boolean;
+  reason?: string | null;
+}): string {
+  if (notice.approved) {
+    return [
+      `Hi ${notice.name},`,
+      ``,
+      `Good news — your Pixel Parents developer API access has been approved.`,
+      `Sign in and grab your API key here:`,
+      ``,
+      ACCOUNT_URL,
+      ``,
+      `Have fun building (or vibe coding!) something for the OHS community.`,
+    ].join("\n");
+  }
+  const reason = notice.reason?.trim();
+  return [
+    `Hi ${notice.name},`,
+    ``,
+    `Thanks for your interest in the Pixel Parents developer API.`,
+    `Unfortunately we can't approve this request right now.`,
+    ...(reason ? [``, `Note: ${reason}`] : []),
+    ``,
+    `If you think this was a mistake, just reply to this email.`,
+  ].join("\n");
+}
+
 export async function notifyApiDecision(notice: {
   to: string;
   name: string;
@@ -314,25 +349,6 @@ export async function notifyApiDecision(notice: {
   const subject = notice.approved
     ? "Your Pixel Parents API access is approved 🎉"
     : "Your Pixel Parents API access request";
-  const text = notice.approved
-    ? [
-        `Hi ${notice.name},`,
-        ``,
-        `Good news — your Pixel Parents developer API access has been approved.`,
-        `Sign in and grab your API key here:`,
-        ``,
-        ACCOUNT_URL,
-        ``,
-        `Have fun building (or vibe coding!) something for the OHS community.`,
-      ].join("\n")
-    : [
-        `Hi ${notice.name},`,
-        ``,
-        `Thanks for your interest in the Pixel Parents developer API.`,
-        `Unfortunately we can't approve this request right now.`,
-        notice.reason ? `\nNote: ${notice.reason}` : ``,
-        ``,
-        `If you think this was a mistake, just reply to this email.`,
-      ].join("\n");
+  const text = buildApiDecisionEmail(notice);
   await sendEmail({ to: notice.to, subject, text });
 }

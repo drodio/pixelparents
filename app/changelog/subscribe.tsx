@@ -6,12 +6,17 @@ import { IconCheck } from "@/components/icons";
 export function ChangelogSubscribe() {
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
-  const [status, setStatus] = useState<"idle" | "loading" | "done" | "error">("idle");
+  // "invalid" = client-side email regex failed (edit the address).
+  // "failed"  = the request reached the network but the server/connection
+  //             failed — the email may be fine, so prompt a retry, not an edit.
+  const [status, setStatus] = useState<
+    "idle" | "loading" | "done" | "invalid" | "failed"
+  >("idle");
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!/^\S+@\S+\.\S+$/.test(email)) {
-      setStatus("error");
+      setStatus("invalid");
       return;
     }
     setStatus("loading");
@@ -21,9 +26,9 @@ export function ChangelogSubscribe() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email }),
       });
-      setStatus(res.ok ? "done" : "error");
+      setStatus(res.ok ? "done" : "failed");
     } catch {
-      setStatus("error");
+      setStatus("failed");
     }
   }
 
@@ -54,7 +59,7 @@ export function ChangelogSubscribe() {
         value={email}
         onChange={(e) => {
           setEmail(e.target.value);
-          if (status === "error") setStatus("idle");
+          if (status === "invalid" || status === "failed") setStatus("idle");
         }}
         placeholder="you@example.com"
         autoFocus
@@ -67,7 +72,14 @@ export function ChangelogSubscribe() {
       >
         {status === "loading" ? "…" : "Subscribe"}
       </button>
-      {status === "error" && <span className="text-xs text-red-400">Enter a valid email.</span>}
+      {status === "invalid" && (
+        <span className="text-xs text-red-400">Enter a valid email.</span>
+      )}
+      {status === "failed" && (
+        <span className="text-xs text-red-400">
+          Something went wrong — please try again.
+        </span>
+      )}
     </form>
   );
 }

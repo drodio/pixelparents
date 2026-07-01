@@ -21,16 +21,66 @@ export default function ReportDialog() {
   const wasOpenRef = useRef(false);
   const titleId = useId();
 
-  // Close on Escape; restore focus to the trigger when closing.
+  // While open: close on Escape, trap Tab/Shift+Tab focus inside the dialog,
+  // and lock background scroll. aria-modal="true" promises the rest of the page
+  // is inert to AT/keyboard users — this keeps that promise.
   useEffect(() => {
     if (!open) return;
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") setOpen(false);
+
+    const focusableSelector =
+      'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+    function focusable(): HTMLElement[] {
+      const root = dialogRef.current;
+      if (!root) return [];
+      return Array.from(root.querySelectorAll<HTMLElement>(focusableSelector)).filter(
+        (el) => el.offsetParent !== null || el === document.activeElement,
+      );
     }
+
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setOpen(false);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusable();
+      if (items.length === 0) {
+        // Nothing focusable yet — keep focus pinned to the dialog container.
+        e.preventDefault();
+        dialogRef.current?.focus();
+        return;
+      }
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (e.shiftKey) {
+        if (active === first || active === dialogRef.current || !dialogRef.current?.contains(active)) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else if (active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+
     document.addEventListener("keydown", onKey);
-    // Move focus into the dialog on open.
-    dialogRef.current?.focus();
-    return () => document.removeEventListener("keydown", onKey);
+
+    // Lock background scroll while the modal is open; restore on close.
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    // Focus the first interactive control (not the non-interactive container),
+    // falling back to the container if nothing focusable is present yet.
+    const first = focusable()[0];
+    if (first) first.focus();
+    else dialogRef.current?.focus();
+
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
   }, [open]);
 
   // Return focus to the trigger ONLY after the dialog actually closes (i.e. it

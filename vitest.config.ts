@@ -6,7 +6,10 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["lib/**/*.test.ts"],
+    // Pure-logic unit tests live next to lib helpers, plus a few pure helpers
+    // colocated with route handlers under app/ (e.g. the unsubscribe outcome
+    // logic). No live DB / no Next runtime is exercised by these.
+    include: ["lib/**/*.test.ts", "app/**/*.test.ts"],
   },
   resolve: {
     alias: {
