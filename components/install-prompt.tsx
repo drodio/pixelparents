@@ -190,7 +190,19 @@ export function InstallPrompt() {
           </p>
           {decision.platform === "ios" ? (
             <p className="mt-0.5 text-xs leading-snug text-white/60">
-              Tap the Share icon, then <span className="text-amber-300">Add to Home Screen</span>.
+              Tap the{" "}
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.7"
+                aria-hidden="true"
+                className="mx-0.5 inline-block h-4 w-4 -translate-y-px align-text-bottom text-sky-300"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 15V3.75m0 0L8.75 7M12 3.75 15.25 7" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 9.5H6.5A1.5 1.5 0 0 0 5 11v7.5A1.5 1.5 0 0 0 6.5 20h11a1.5 1.5 0 0 0 1.5-1.5V11a1.5 1.5 0 0 0-1.5-1.5H16" />
+              </svg>{" "}
+              Share icon, then <span className="text-amber-300">Add to Home Screen</span>.
             </p>
           ) : (
             <p className="mt-0.5 text-xs leading-snug text-white/60">
