@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useRef, useState, useTransition } from "react";
 import {
   OHS_AFFILIATIONS,
@@ -372,13 +373,29 @@ export function MemberCard({
         </div>
         <div>
           <label className={labelCls}>Email</label>
-          {/* Email is the identity key (login + directory mapping) — read-only. */}
+          {/* Email is the identity key (login + directory mapping) — read-only.
+              It's ALSO where every Pixel Parents notification is sent, so a parent
+              who signed up with the wrong address (e.g. their child's) would
+              otherwise have no way to notice or fix it. Say so, and give a recovery
+              path — a raw edit here is unsafe because changing the identity key
+              without re-mapping the login would lock the account out. */}
           <input
             value={member.email}
             readOnly
             disabled
             className={`${inputCls} cursor-not-allowed text-white/50`}
           />
+          <p className="mt-1 text-xs text-white/40">
+            All Pixel Parents notifications are sent here, and it&apos;s tied to your
+            login. Wrong address (e.g. you used your child&apos;s by mistake)?{" "}
+            <Link
+              href="/report"
+              className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
+            >
+              Contact us to fix it
+            </Link>
+            .
+          </p>
         </div>
         <div>
           <label className={labelCls}>Phone</label>
