@@ -539,6 +539,11 @@ export default function SignupForm({
               className={inputCls}
               autoComplete="email"
             />
+            <p className="mt-1 text-xs text-white/40">
+              We send your invites and updates here — use <strong>your own</strong>{" "}
+              email, not your child&apos;s. (There&apos;s a separate spot for your
+              student&apos;s email in the next step.)
+            </p>
             <FieldError msg={errors.email} />
           </div>
           <div>
