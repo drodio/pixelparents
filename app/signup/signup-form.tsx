@@ -178,25 +178,52 @@ export default function SignupForm({
     }
   }, [v, V_KEY]);
   const ensuring = useRef<Promise<string | null> | null>(null);
+  // Why the last draft-creation attempt failed, so the UI can show an actionable
+  // message ("blocked" = bot-check/VPN/ad-blocker vs "failed" = transient) instead
+  // of a generic error or a silently-dead button.
+  const ensureError = useRef<null | "blocked" | "failed">(null);
   const ensureId = useCallback(async (): Promise<string | null> => {
     if (idRef.current) return idRef.current;
     if (!ensuring.current) {
       const create = joinToken ? createCoParentDraft(joinToken) : createDraftSignup(refToken);
-      ensuring.current = create.then((r) => {
-        const id = "id" in r ? r.id : null;
-        idRef.current = id;
-        if (id && typeof window !== "undefined") {
-          try {
-            window.localStorage.setItem(ID_KEY, id);
-          } catch {
-            /* storage blocked — non-fatal */
+      ensuring.current = create
+        .then((r) => {
+          if ("id" in r) {
+            ensureError.current = null;
+            idRef.current = r.id;
+            if (typeof window !== "undefined") {
+              try {
+                window.localStorage.setItem(ID_KEY, r.id);
+              } catch {
+                /* storage blocked — non-fatal */
+              }
+            }
+            return r.id;
           }
-        }
-        return id;
-      });
+          // Draft creation failed. Record WHY and clear the in-flight promise so a
+          // later retry actually re-attempts — otherwise this resolved-to-null
+          // promise stays cached and wedges every future save AND invite on the
+          // same failure (the button reads as permanently "not clickable").
+          ensureError.current = r.error === "blocked" ? "blocked" : "failed";
+          ensuring.current = null;
+          return null;
+        })
+        .catch((err) => {
+          console.error("ensureId draft creation threw:", err);
+          ensureError.current = "failed";
+          ensuring.current = null;
+          return null;
+        });
     }
     return ensuring.current;
   }, [joinToken, refToken, ID_KEY]);
+
+  // Message for a draft-creation failure — distinguishes a bot-check/privacy block
+  // (recoverable by the user) from a transient save error.
+  const draftErrorMessage = () =>
+    ensureError.current === "blocked"
+      ? "We couldn't verify your browser. If you're using a VPN, private relay, or an ad/tracker blocker, turn it off for this page and try again."
+      : "Something went wrong saving your info. Please check your connection and try again.";
 
   // --- Co-parent invite UI state ---
   const [inviteRaw, setInviteRaw] = useState("");
@@ -222,10 +249,18 @@ export default function SignupForm({
     const id = idRef.current ?? (await ensureId());
     if (!id) {
       setInviteState("error");
-      setInviteNote("Something went wrong. Please try again.");
+      setInviteNote(draftErrorMessage());
       return;
     }
-    const res = await sendCoParentInvites(id, emails);
+    let res: Awaited<ReturnType<typeof sendCoParentInvites>>;
+    try {
+      res = await sendCoParentInvites(id, emails);
+    } catch (err) {
+      console.error("sendCoParentInvites threw:", err);
+      setInviteState("error");
+      setInviteNote("We couldn't send those invites. Please try again.");
+      return;
+    }
     if (res.ok && res.sent > 0) {
       setInviteState("sent");
       setInviteRaw("");
@@ -307,10 +342,11 @@ export default function SignupForm({
     setSubmitting(true);
     setMessage(null);
     setErrors({});
+    try {
     await flush();
     const id = idRef.current ?? (await ensureId());
     if (!id) {
-      setMessage("Something went wrong. Please try again.");
+      setMessage(draftErrorMessage());
       setSubmitting(false);
       return;
     }
@@ -393,6 +429,16 @@ export default function SignupForm({
           }
         }
       }
+      setSubmitting(false);
+    }
+    } catch (err) {
+      // Safety net: any unexpected throw (completeSignup, flush, a transient
+      // network error) must NEVER leave `submitting` stuck true — that disables
+      // the "Add Your Child(ren)" button with NO error shown, which reads exactly
+      // as a dead/unclickable button with "no unfilled fields." Always surface a
+      // message and re-enable so the user can retry.
+      console.error("onContinue failed:", err);
+      setMessage("Something went wrong finishing your signup. Please try again.");
       setSubmitting(false);
     }
   }

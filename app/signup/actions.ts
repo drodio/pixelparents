@@ -290,37 +290,57 @@ export async function completeSignup(id: string): Promise<SignupState> {
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   if (!extra.notified) {
-    await notifyNewSignup({
-      id: row.id,
-      firstName: row.firstName,
-      lastName: row.lastName,
-      email: row.email,
-      phone: row.phone,
-      githubUsername: row.githubUsername,
-      ohsAffiliation: row.ohsAffiliation,
-      technicalDepth: row.technicalDepth,
-      linkedinUrl: row.linkedinUrl,
-      skillsets: row.skillsets,
-      timeCommitment: row.timeCommitment,
-    });
-    // Welcome the applicant + point them at step 2 (best-effort, never blocks).
-    await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: row.id });
-    // Default a newly-completed profile to OHS-directory visible (they can switch
-    // to "Just me" on the thanks page). Mirrors setShareVisibility("ohs").
-    // Seed approvalStatus=pending here, BEFORE emailing admins — otherwise an
-    // admin who acts on an early email (the fan-out below awaits per recipient)
-    // could have their decision clobbered by this wholesale `extra` write.
-    await getDb()
-      .update(signups)
-      .set({
-        extra: { ...extra, notified: true, approvalStatus: extra.approvalStatus ?? "pending" },
-        shareEnabled: true,
-        shareVisibility: "ohs",
-        shareToken: row.shareToken ?? generateShareToken(),
-      })
-      .where(eq(signups.id, id));
+    // Persist the durable completion state FIRST so the signup is definitively
+    // "done" the moment this write lands — the outbound emails below are
+    // best-effort side effects and must never be able to fail (or throw) the
+    // signup. If any of them threw and bubbled up (as they previously did, being
+    // awaited un-guarded), completeSignup would reject, and the client's
+    // onContinue would leave the "Add Your Child(ren)" button stuck disabled with
+    // no error — a dead button. Writing first also satisfies the ordering the old
+    // code wanted: seed approvalStatus=pending BEFORE any admin email goes out, so
+    // an admin acting on an early email can't be clobbered by this write.
+    try {
+      await getDb()
+        .update(signups)
+        .set({
+          extra: { ...extra, notified: true, approvalStatus: extra.approvalStatus ?? "pending" },
+          shareEnabled: true,
+          shareVisibility: "ohs",
+          shareToken: row.shareToken ?? generateShareToken(),
+        })
+        .where(eq(signups.id, id));
+    } catch (err) {
+      console.error("completeSignup: persisting completion state failed:", err);
+      return { ok: false, message: "We couldn't finish your signup. Please try again." };
+    }
+
+    // Best-effort notifications — each guarded so a flaky email provider can never
+    // fail (or throw) the now-persisted signup.
+    try {
+      await notifyNewSignup({
+        id: row.id,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        email: row.email,
+        phone: row.phone,
+        githubUsername: row.githubUsername,
+        ohsAffiliation: row.ohsAffiliation,
+        technicalDepth: row.technicalDepth,
+        linkedinUrl: row.linkedinUrl,
+        skillsets: row.skillsets,
+        timeCommitment: row.timeCommitment,
+      });
+    } catch (err) {
+      console.error("notifyNewSignup failed:", err);
+    }
+    // Welcome the applicant + point them at step 2.
+    try {
+      await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: row.id });
+    } catch (err) {
+      console.error("notifyApplicantWelcome failed:", err);
+    }
     // Email every admin to verify this profile's OHS-directory access. The first
-    // admin to act resolves it for everyone (see lib/approval). Best-effort.
+    // admin to act resolves it for everyone (see lib/approval).
     try {
       const recipients = await getAdminRecipients();
       await notifyAdminsVerifyProfile({
