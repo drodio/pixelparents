@@ -24,6 +24,8 @@ import {
 } from "./actions";
 import { parseInviteEmails } from "@/lib/invite";
 import { TagPicker, PhotoUploader } from "./thanks/family-form";
+import { CityAutocomplete } from "@/components/city-autocomplete";
+import type { City } from "@/lib/cities";
 
 // Bump when the `empty` shape changes incompatibly — stored drafts from an older
 // shape are discarded on restore rather than spread in with stale keys.
@@ -317,6 +319,21 @@ export default function SignupForm({
     const clearState = value !== "United States";
     setV((prev) => ({ ...prev, country: value, ...(clearState ? { state: "" } : {}) }));
     queue({ country: value, ...(clearState ? { state: "" } : {}) }, true);
+  }
+  // A city suggestion was picked: fill city AND auto-populate country (and US
+  // state when the city carries one). Non-US picks clear any stale state so the
+  // existing country/state consistency rule (US-only state) still holds. Country
+  // remains independently editable afterward.
+  function pickCity(picked: City) {
+    const isUS = picked.country === "United States";
+    const nextState = isUS ? (picked.state ?? "") : "";
+    setV((prev) => ({
+      ...prev,
+      city: picked.name,
+      country: picked.country,
+      state: nextState,
+    }));
+    queue({ city: picked.name, country: picked.country, state: nextState }, true);
   }
   function setBuilderInterest(choice: "builder" | "aspiring" | "no") {
     setV((prev) => ({ ...prev, builderInterest: choice }));
@@ -688,12 +705,12 @@ export default function SignupForm({
           </div>
           <div>
             <label className={labelCls} htmlFor="city">City</label>
-            <input
+            <CityAutocomplete
               id="city"
               value={v.city}
-              onChange={(e) => set("city", e.target.value)}
-              className={inputCls}
-              autoComplete="address-level2"
+              onCityChange={(city) => set("city", city)}
+              onSelect={pickCity}
+              inputClassName={inputCls}
             />
           </div>
           {/* State applies to US families; the world map plots everyone else by

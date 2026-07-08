@@ -11,6 +11,8 @@ import type { SignupRow } from "@/lib/db/schema/signups";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import { TagPicker } from "@/app/signup/thanks/family-form";
+import { CityAutocomplete } from "@/components/city-autocomplete";
+import type { City } from "@/lib/cities";
 import type { SignupPatch } from "@/app/signup/actions";
 import { builderStatusOf } from "@/lib/builder";
 import { SHARE_VISIBILITY, type ShareVisibility } from "@/lib/share";
@@ -306,6 +308,20 @@ export function MemberCard({
     setV((prev) => ({ ...prev, country: value, ...(clearState ? { state: "" } : {}) }));
     queue({ country: value, ...(clearState ? { state: "" } : {}) }, true);
   }
+  // A city suggestion was picked: fill city AND auto-populate country (and US
+  // state when present). Mirrors the signup form; non-US clears any stale state
+  // so the US-only-state rule holds. Country stays independently editable.
+  function pickCity(picked: City) {
+    const isUS = picked.country === "United States";
+    const nextState = isUS ? (picked.state ?? "") : "";
+    setV((prev) => ({
+      ...prev,
+      city: picked.name,
+      country: picked.country,
+      state: nextState,
+    }));
+    queue({ city: picked.name, country: picked.country, state: nextState }, true);
+  }
 
   const displayName = `${v.firstName} ${v.lastName}`.trim() || member.email || "Family member";
 
@@ -492,10 +508,11 @@ export function MemberCard({
         </div>
         <div>
           <label className={labelCls}>City</label>
-          <input
+          <CityAutocomplete
             value={v.city}
-            onChange={(e) => set("city", e.target.value)}
-            className={inputCls}
+            onCityChange={(city) => set("city", city)}
+            onSelect={pickCity}
+            inputClassName={inputCls}
           />
         </div>
         {/* State applies to US families; everyone else plots by country centroid. */}
