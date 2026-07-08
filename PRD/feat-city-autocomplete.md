@@ -1,3 +1,39 @@
+## Progress Update as of July 8, 2026 — 4:00 AM Pacific
+
+### Summary of changes since last update
+Reworked the data source per product-owner feedback ("way more than 1072 cities —
+make it work for ANY city"). Replaced the bundled static list with the **keyless
+Photon (OpenStreetMap) geocoder** (https://photon.komoot.io) queried live from the
+client. Now covers every city worldwide, not a curated subset.
+
+### Detail of changes made:
+- `components/city-autocomplete.tsx` rewritten: debounced (280ms, ≥2 chars) fetch
+  to Photon `?q=…&lang=en&limit=12&layer=city`; AbortController + a monotonic
+  request-seq guard so a slow earlier response can't overwrite a newer one; a
+  "Searching…" state; results deduped by name+country+state. All setState happens
+  inside the async callback (menu gated on query length, so no synchronous
+  effect-body setState — satisfies the repo's react-hooks/set-state-in-effect rule).
+- Photon returns English country names + full US state names; `normalizeCountry`
+  (with a small alias map, e.g. "United States of America"→"United States") and
+  `normalizeUsState` fold them onto the app's exact COUNTRIES / US_STATES option
+  strings so picking a suggestion still auto-fills those <select>s. Verified live
+  against Photon (Paris/France, Paris/Texas, Austin/Texas, … all map correctly).
+- Deleted the bundled dataset + generator: `lib/cities.ts` is now types-only
+  (exports just `City`); removed `scripts/gen-cities.mjs`. The two form imports
+  (`type City`) are unchanged.
+- Privacy: only a short city PREFIX (not sensitive PII) is sent, and only the user
+  explicitly asked for an OSM API. No CSP in the repo blocks the connection
+  (checked). Free-text entry still fully works if the API is unavailable.
+
+### Potential concerns to address:
+- Live dependency on Photon's public endpoint (no SLA/key). Debounced + best-effort;
+  the field degrades to a plain text input on failure. If usage grows, consider a
+  self-hosted Photon/Nominatim or a keyed provider.
+- `layer=city` covers cities/towns/villages; very small hamlets may not appear
+  (free-text still works).
+
+---
+
 ## Progress Update as of July 8, 2026 — 3:30 AM Pacific
 
 ### Summary of changes since last update

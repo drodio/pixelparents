@@ -1,14 +1,76 @@
 "use client";
 
-import { useEffect, useId, useMemo, useRef, useState } from "react";
-import { CITIES, type City } from "@/lib/cities";
+import { useEffect, useId, useRef, useState } from "react";
+import { COUNTRIES, US_STATES } from "@/lib/options";
+import type { City } from "@/lib/cities";
 
-// Keyless, privacy-preserving city autocomplete. Matching runs ENTIRELY in the
-// browser against the bundled lib/cities.ts list — no keystroke ever leaves the
-// page and no external geocoding API is called. Free text is always allowed: the
-// field is a plain controlled input; suggestions are an optional convenience that,
-// when picked, also report the city's country (and US state) so the parent form
-// can auto-fill those fields. The parent stays the source of truth for `value`.
+// City autocomplete backed by Photon (https://photon.komoot.io), the keyless,
+// OpenStreetMap-based geocoder — so it covers ANY city worldwide, not a bundled
+// list. It's keyless (no token, no billing); we debounce and only send a short
+// city PREFIX (not sensitive PII) once the user has typed ≥2 chars. Free text is
+// always allowed: the field is a plain controlled input and suggestions are an
+// optional convenience that, when picked, also report the city's country (and US
+// state) so the parent form can auto-fill those selects. The parent stays the
+// source of truth for `value`. If the network/API is unavailable the field simply
+// behaves as a normal text input.
+
+const MAX_SUGGESTIONS = 8;
+const MIN_QUERY = 2;
+const DEBOUNCE_MS = 280;
+
+// Photon returns English country names (lang=en); fold the few that differ from
+// our COUNTRIES list onto the canonical spelling so the country <select> auto-fills.
+const COUNTRY_ALIASES: Record<string, string> = {
+  "united states of america": "United States",
+  usa: "United States",
+  "u.s.a.": "United States",
+  "united states": "United States",
+};
+
+function normalizeCountry(raw: string): string {
+  const key = raw.trim().toLowerCase();
+  const aliased = COUNTRY_ALIASES[key] ?? key;
+  return COUNTRIES.find((c) => c.toLowerCase() === aliased) ?? raw.trim();
+}
+
+// Photon returns full US state names ("California"), matching US_STATES. Only
+// return one when it's an exact option so the state <select> can adopt it.
+function normalizeUsState(raw: string): string | undefined {
+  const key = raw.trim().toLowerCase();
+  return US_STATES.find((s) => s.toLowerCase() === key);
+}
+
+// Query Photon for populated places matching `q`. Maps each feature to a City with
+// the app's canonical country/state. Dedupes name+country+state. Throws on abort or
+// a bad response (the caller ignores aborts + degrades to no suggestions).
+async function fetchCities(q: string, signal: AbortSignal): Promise<City[]> {
+  const url =
+    "https://photon.komoot.io/api/?" +
+    new URLSearchParams({ q, lang: "en", limit: "12", layer: "city" }).toString();
+  const res = await fetch(url, { signal });
+  if (!res.ok) throw new Error(`photon ${res.status}`);
+  const data = (await res.json()) as {
+    features?: Array<{ properties?: Record<string, unknown> }>;
+  };
+  const seen = new Set<string>();
+  const out: City[] = [];
+  for (const f of data.features ?? []) {
+    const p = (f.properties ?? {}) as Record<string, unknown>;
+    const name = typeof p.name === "string" ? p.name.trim() : "";
+    if (!name) continue;
+    const country = normalizeCountry(typeof p.country === "string" ? p.country : "");
+    const state =
+      country === "United States" && typeof p.state === "string"
+        ? normalizeUsState(p.state)
+        : undefined;
+    const key = `${name.toLowerCase()}|${country.toLowerCase()}|${(state ?? "").toLowerCase()}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push({ name, country, state });
+    if (out.length >= MAX_SUGGESTIONS) break;
+  }
+  return out;
+}
 
 // Highlights the typed portion of a suggestion in gold (mirrors the TagPicker
 // idiom in app/signup/thanks/family-form.tsx).
@@ -23,28 +85,6 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
       {text.slice(i + query.length)}
     </>
   );
-}
-
-const MAX_SUGGESTIONS = 8;
-
-// Rank matches: prefix matches first (a user typing "san" wants "San …" before
-// "…san…"), then substring matches, each group alphabetical. Case-insensitive.
-function matchCities(query: string): City[] {
-  const q = query.trim().toLowerCase();
-  if (q.length < 1) return [];
-  const prefix: City[] = [];
-  const substring: City[] = [];
-  for (const c of CITIES) {
-    const name = c.name.toLowerCase();
-    if (name.startsWith(q)) prefix.push(c);
-    else if (name.includes(q)) substring.push(c);
-    if (prefix.length >= MAX_SUGGESTIONS) break;
-  }
-  const out = prefix.slice(0, MAX_SUGGESTIONS);
-  if (out.length < MAX_SUGGESTIONS) {
-    out.push(...substring.slice(0, MAX_SUGGESTIONS - out.length));
-  }
-  return out;
 }
 
 export function CityAutocomplete({
@@ -69,15 +109,54 @@ export function CityAutocomplete({
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
-  // Suppress reopening the list immediately after a pick (the pick sets `value`,
-  // which would otherwise recompute matches and pop the menu back open).
+  const [matches, setMatches] = useState<City[]>([]);
+  const [loading, setLoading] = useState(false);
+  // Suppress a fetch/reopen immediately after a pick (the pick sets `value`, which
+  // would otherwise refetch and pop the menu back open).
   const justPicked = useRef(false);
+  // Monotonic request id so a slow earlier response can't overwrite a newer one.
+  const seqRef = useRef(0);
   const wrapRef = useRef<HTMLDivElement>(null);
   const listboxId = useId();
 
-  const matches = useMemo(() => (open ? matchCities(value) : []), [open, value]);
+  const q = value.trim();
 
-  // Close on outside click / focus loss.
+  // Debounced Photon lookup on every value change (skipped right after a pick).
+  // All state changes happen INSIDE the async callback (never synchronously in the
+  // effect body) — the menu is gated on `q.length >= MIN_QUERY` (see `showMenu`),
+  // so we don't need to synchronously clear stale matches when the query shortens.
+  useEffect(() => {
+    if (justPicked.current) {
+      justPicked.current = false;
+      return;
+    }
+    if (q.length < MIN_QUERY) return;
+    const controller = new AbortController();
+    const seq = ++seqRef.current;
+    const timer = setTimeout(async () => {
+      setLoading(true);
+      try {
+        const results = await fetchCities(q, controller.signal);
+        if (seq === seqRef.current) {
+          setMatches(results);
+          setLoading(false);
+        }
+      } catch (err) {
+        // Ignore aborts (a newer keystroke superseded this one); on any other
+        // failure just show no suggestions — free-text entry still works.
+        if ((err as Error)?.name !== "AbortError" && seq === seqRef.current) {
+          setMatches([]);
+          setLoading(false);
+        }
+      }
+    }, DEBOUNCE_MS);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
+  }, [q]);
+
+  // Close on outside click.
   useEffect(() => {
     if (!open) return;
     function onDocClick(e: MouseEvent) {
@@ -121,18 +200,16 @@ export function CityAutocomplete({
     }
   }
 
+  const showMenu = open && q.length >= MIN_QUERY && (loading || matches.length > 0);
+
   return (
     <div ref={wrapRef} className="relative">
       <input
         id={id}
         value={value}
         onChange={(e) => {
-          if (justPicked.current) {
-            justPicked.current = false;
-          }
           onCityChange(e.target.value);
           setOpen(true);
-          // Reset highlight as the match set changes with each keystroke.
           setActive(-1);
         }}
         onFocus={() => {
@@ -147,12 +224,10 @@ export function CityAutocomplete({
         aria-controls={listboxId}
         aria-autocomplete="list"
         aria-activedescendant={
-          active >= 0 && matches[active]
-            ? `${listboxId}-opt-${active}`
-            : undefined
+          active >= 0 && matches[active] ? `${listboxId}-opt-${active}` : undefined
         }
       />
-      {open && matches.length > 0 && (
+      {showMenu && (
         <ul
           id={listboxId}
           role="listbox"
@@ -160,9 +235,7 @@ export function CityAutocomplete({
         >
           {matches.map((c, i) => {
             const secondary =
-              c.country === "United States" && c.state
-                ? `${c.state}, USA`
-                : c.country;
+              c.country === "United States" && c.state ? `${c.state}, USA` : c.country;
             return (
               <li
                 key={`${c.name}-${c.country}-${c.state ?? ""}`}
@@ -183,10 +256,17 @@ export function CityAutocomplete({
                 <span>
                   <HighlightedText text={c.name} query={value} />
                 </span>
-                <span className="shrink-0 text-xs text-white/40">{secondary}</span>
+                {secondary && (
+                  <span className="shrink-0 text-xs text-white/40">{secondary}</span>
+                )}
               </li>
             );
           })}
+          {loading && matches.length === 0 && (
+            <li className="px-3 py-1.5 text-sm text-white/40" aria-hidden>
+              Searching…
+            </li>
+          )}
         </ul>
       )}
     </div>
