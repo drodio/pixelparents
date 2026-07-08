@@ -8,6 +8,7 @@ import type { ApprovalStatus } from "@/lib/approval";
 import { VerifiedBadge } from "@/components/verified-badge";
 import { NotificationBell } from "@/components/notification-bell";
 import { FeedbackWidget } from "@/components/feedback-widget";
+import { FeedbackPrompt } from "@/components/feedback-prompt";
 import { HelpButton } from "@/components/help-button";
 import { WalkthroughTour } from "@/components/walkthrough-tour";
 import { InstallPrompt } from "@/components/install-prompt";
@@ -421,6 +422,11 @@ export function DashboardShell({
           aware); the tour renders nothing until started from the help menu. */}
       {authed && (
         <>
+          {/* Ambient, dismissible "share feedback" pill. Self-gates (once per
+              session, re-surfaces ~weekly), reuses the existing FeedbackComposer,
+              and positions itself clear of both the mobile tab bar and the Help
+              button, so it's safe to mount app-wide here alongside them. */}
+          <FeedbackPrompt />
           <HelpButton />
           <WalkthroughTour />
           {/* "Add to home screen" banner. The manifest's start_url is /dashboard
