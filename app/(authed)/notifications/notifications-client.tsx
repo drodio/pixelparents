@@ -213,6 +213,9 @@ function TypeIcon({ type }: { type: string }) {
       return <BoardGlyph />;
     case "interest_match":
       return <SparkGlyph />;
+    case "age16_cert_request":
+    case "age16_cert_approved":
+      return <HeartGlyph />;
     default:
       return <BellGlyph />;
   }

@@ -31,6 +31,8 @@ describe("isNotificationType", () => {
       "event_rsvp",
       "board_contribution",
       "interest_match",
+      "age16_cert_request",
+      "age16_cert_approved",
     ]);
   });
 

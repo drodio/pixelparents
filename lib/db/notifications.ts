@@ -30,6 +30,8 @@ export const NOTIFICATION_TYPES = [
   "event_rsvp", // someone RSVP'd to an event you organize
   "board_contribution", // a new contribution landed on a resource board you follow
   "interest_match", // a new family shares one of your interests
+  "age16_cert_request", // your student asked you to certify they're 16+ (unmasks their contact)
+  "age16_cert_approved", // a parent certified you as 16+ — your own contact is now shown
 ] as const;
 
 export type NotificationType = (typeof NOTIFICATION_TYPES)[number];
