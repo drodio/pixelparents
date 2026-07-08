@@ -349,11 +349,33 @@ function DualRange({
 // fork of the old directory client — same URL-persisted filters (search, age,
 // near-me, interests, sort, per-row) — but cards open IN-TAB at /directory/<token>
 // and surface the student badge, skillsets, and opt-in LinkedIn/GitHub links.
-export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
+export function ShowcaseClient({
+  cards,
+  viewerIsStudent = false,
+}: {
+  cards: DirectoryCard[];
+  // Whose members show first: a student viewer defaults to the "Students" view,
+  // a parent viewer to "Parents". Either can flip it with the toggle. Non-family
+  // viewers (no signup) default to Parents.
+  viewerIsStudent?: boolean;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const reduce = useReducedMotion();
+
+  // Directory perspective: default to the viewer's own kind, switchable via the
+  // toggle. Filters the grid to parent members or student members. If the viewer's
+  // own side happens to be empty, land on the populated side so the grid isn't
+  // blank on first load (the toggle itself hides when one side is empty).
+  const [perspective, setPerspective] = useState<"parents" | "students">(() => {
+    const pref = viewerIsStudent ? "students" : "parents";
+    const hasStudents = cards.some((c) => c.isStudent);
+    const hasParents = cards.some((c) => !c.isStudent);
+    if (pref === "students" && !hasStudents && hasParents) return "parents";
+    if (pref === "parents" && !hasParents && hasStudents) return "students";
+    return pref;
+  });
 
   // The set of interest keys that actually exist on the current cards. Used to
   // validate interests coming in from a shared URL (unknown ones are dropped).
@@ -520,7 +542,10 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
 
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const wantStudents = perspective === "students";
     const filtered = cards.filter((c) => {
+      // Perspective: show parent members or student members (default = viewer's kind).
+      if (c.isStudent !== wantStudents) return false;
       const cardTags = [...c.interests, ...c.skillsets];
       // Interest/skill filter: OR — match any selected tag.
       if (selected.size > 0) {
@@ -571,6 +596,7 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
     return sorted;
   }, [
     cards,
+    perspective,
     query,
     selected,
     sortKey,
@@ -583,6 +609,10 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
     radiusMiles,
     coordsByToken,
   ]);
+
+  // Counts per perspective for the toggle labels (so "Students (3)" reads live).
+  const parentCount = useMemo(() => cards.filter((c) => !c.isStudent).length, [cards]);
+  const studentCount = useMemo(() => cards.filter((c) => c.isStudent).length, [cards]);
 
   // A signature of the active filters. When it changes, the motion grid remounts
   // (keyed on it) so the staggered reveal replays — the cards cascade back in
@@ -805,6 +835,38 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
       {/* Controls. Search is always inline. On phones the secondary filters move
           into a bottom sheet behind a "Filters" button; on md+ they sit inline. */}
       <div className="flex flex-col gap-4">
+        {/* Perspective toggle: parent members vs student members. Defaults to the
+            viewer's own kind. Hidden when one side is empty (nothing to switch to). */}
+        {parentCount > 0 && studentCount > 0 && (
+          <div
+            className="inline-flex self-start rounded-full border border-white/15 bg-white/[0.04] p-0.5 text-sm"
+            role="group"
+            aria-label="Show parents or students"
+          >
+            {(
+              [
+                ["parents", "Parents", parentCount],
+                ["students", "Students", studentCount],
+              ] as const
+            ).map(([val, label, count]) => {
+              const active = perspective === val;
+              return (
+                <button
+                  key={val}
+                  type="button"
+                  onClick={() => setPerspective(val)}
+                  aria-pressed={active}
+                  className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
+                    active ? "bg-amber-400 text-black" : "text-white/60 hover:text-white"
+                  }`}
+                >
+                  {label}{" "}
+                  <span className={active ? "text-black/60" : "text-white/35"}>{count}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <input
             value={query}
