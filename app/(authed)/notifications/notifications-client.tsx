@@ -211,6 +211,8 @@ function TypeIcon({ type }: { type: string }) {
       return <CalendarGlyph />;
     case "board_contribution":
       return <BoardGlyph />;
+    case "interest_match":
+      return <SparkGlyph />;
     case "age16_cert_request":
     case "age16_cert_approved":
       return <HeartGlyph />;
@@ -295,6 +297,16 @@ function AtGlyph() {
     <svg {...svgProps()}>
       <circle cx="12" cy="12" r="4" />
       <path d="M16 8v5a2.5 2.5 0 0 0 5 0v-1a9 9 0 1 0-3.5 7.1" />
+    </svg>
+  );
+}
+
+// Sparkle glyph for interest_match (a new family shares one of your interests).
+function SparkGlyph() {
+  return (
+    <svg {...svgProps()}>
+      <path d="M12 3l1.8 4.7L18.5 9.5 13.8 11.3 12 16l-1.8-4.7L5.5 9.5l4.7-1.8L12 3Z" />
+      <path d="M18.5 15.5l.7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z" />
     </svg>
   );
 }

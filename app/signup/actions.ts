@@ -30,6 +30,7 @@ import { sanitizeRefToken } from "@/lib/referral";
 import { canonicalizeAgainstPool } from "@/lib/interests";
 import { normalizeWebsiteUrl } from "@/lib/enrichment/profile";
 import { runEnrichmentForSignup } from "@/lib/db/enrichment-trigger";
+import { notifyInterestMatches } from "@/lib/db/interest-notify";
 import { after } from "next/server";
 
 export type SignupState = {
@@ -361,6 +362,19 @@ export async function completeSignup(id: string): Promise<SignupState> {
       await runEnrichmentForSignup(id);
     } catch (err) {
       console.error("background enrichment (completeSignup) failed:", err);
+    }
+    // Fan out "a new family shares your interest in X" to existing members. Re-read
+    // the row so we notify against the just-persisted completion state (share_token
+    // minted). Dedupe + fan-out caps live in notifyInterestMatches, so this can't
+    // re-notify a pairing or spam a popular interest. Best-effort — never fails the
+    // now-complete signup.
+    try {
+      const [fresh] = await getDb().select().from(signups).where(eq(signups.id, id)).limit(1);
+      if (fresh) {
+        await notifyInterestMatches({ source: fresh, generatedBy: "signup_complete" });
+      }
+    } catch (err) {
+      console.error("notifyInterestMatches (signup_complete) failed:", err);
     }
   });
 

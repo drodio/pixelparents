@@ -30,6 +30,7 @@ describe("isNotificationType", () => {
       "community_event",
       "event_rsvp",
       "board_contribution",
+      "interest_match",
       "age16_cert_request",
       "age16_cert_approved",
     ]);
@@ -111,6 +112,7 @@ describe("notificationsSubtitle", () => {
     expect(copy).toMatch(/connections/i);
     expect(copy).toMatch(/events/i);
     expect(copy).toMatch(/boards/i);
+    expect(copy).toMatch(/interests/i);
     // The stale copy that omitted connections and boards must be gone.
     expect(copy).not.toBe("Updates about your community posts and events show up here.");
   });

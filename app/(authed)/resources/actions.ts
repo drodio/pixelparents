@@ -5,6 +5,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { isFamilyVerified } from "@/lib/directory";
+import { isAdminEmail } from "@/lib/admin";
 import type { SignupRow } from "@/lib/db/schema/signups";
 import { createNotification } from "@/lib/db/notifications";
 import {
@@ -23,6 +24,12 @@ import {
   toggleBoardFollow,
   listBoardFollowerIds,
   getBoard,
+  listBoardChats,
+  createBoardChat,
+  updateBoardChat,
+  deleteBoardChat,
+  reorderBoardChats,
+  getBoardChatBoardId,
 } from "@/lib/db/resources";
 import {
   validateBoardTitle,
@@ -30,6 +37,8 @@ import {
   validateContributionTitle,
   validateContributionBody,
   validateResourceUrl,
+  validateChatTitle,
+  validateChatUrl,
   normalizeResourceTags,
   isContributionKind,
   autoLabelBoard,
@@ -53,7 +62,7 @@ const RATE_WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
 export type ActionResult = { ok: true; id?: string } | { ok: false; error: string };
 
-async function verifiedCaller(): Promise<{ user: SignupRow; clerkId: string } | null> {
+async function verifiedCaller(): Promise<{ user: SignupRow; clerkId: string; email: string } | null> {
   const user = await currentUser();
   if (!user) return null;
   const email = primaryEmail(user);
@@ -61,7 +70,20 @@ async function verifiedCaller(): Promise<{ user: SignupRow; clerkId: string } | 
   const signup = await getSignupByEmail(email);
   if (!signup) return null;
   if (!isFamilyVerified(signup)) return null;
-  return { user: signup, clerkId: user.id };
+  return { user: signup, clerkId: user.id, email };
+}
+
+// True if the caller may edit/reorder/delete ANY chat on a board: the board's
+// creator, OR a site admin (admins are treated as board owners per the product
+// spec). Kept server-side only — never trust a client-supplied "isOwner".
+async function callerOwnsBoard(
+  caller: { user: SignupRow; email: string },
+  boardId: string,
+): Promise<boolean> {
+  const board = await getBoard({ id: boardId, viewerSignupId: caller.user.id });
+  if (!board) return false;
+  if (board.authorSignupId === caller.user.id) return true;
+  return isAdminEmail(caller.email);
 }
 
 // -------------------------------------------------------------------------
@@ -427,5 +449,170 @@ export async function toggleBoardFollowAction(input: {
   } catch (err) {
     console.error("toggleBoardFollowAction failed:", err);
     return { ok: false, error: "Couldn't update follow. Please try again." };
+  }
+}
+
+// -------------------------------------------------------------------------
+// Board group chats (external join links)
+//
+// Authorization model:
+//   • ADD    → any verified OHS member (attribution = their signup id).
+//   • EDIT   → board owner OR site admin only (may edit ANY chat, incl. others').
+//   • REORDER→ board owner OR site admin only.
+//   • DELETE → board owner/admin may delete ANY chat; a non-owner may delete
+//              ONLY their own submission (documented product choice: submitters
+//              can retract their own link, but never touch someone else's).
+// Every write records who did it: submitted_by on add, last_edited_by on
+// edit/reorder.
+// -------------------------------------------------------------------------
+
+// Add a group chat to a board — ANY verified member. Validates title + http(s)
+// URL. Attribution (submitted_by) is taken from the server session, never the
+// client. New chats append to the end of the list.
+export async function addBoardChatAction(input: {
+  boardId: string;
+  title: string;
+  url: string;
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.boardId)) return { ok: false, error: "Unknown board." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member to add a group chat." };
+
+  const title = validateChatTitle(input.title);
+  if (!title.ok) return { ok: false, error: title.error };
+  const url = validateChatUrl(input.url);
+  if (!url.ok) return { ok: false, error: url.error };
+
+  try {
+    // Confirm the board exists (avoids inserting a chat for a forged/deleted id).
+    const board = await getBoard({ id: input.boardId, viewerSignupId: caller.user.id });
+    if (!board) return { ok: false, error: "Unknown board." };
+
+    const row = await createBoardChat({
+      boardId: input.boardId,
+      title: title.value,
+      url: url.value,
+      submittedBy: caller.user.id,
+      submittedClerkId: caller.clerkId,
+    });
+    revalidatePath(`/resources/${input.boardId}`);
+    return { ok: true, id: row.id };
+  } catch (err) {
+    console.error("addBoardChatAction failed:", err);
+    return { ok: false, error: "Couldn't add this group chat. Please try again." };
+  }
+}
+
+// Edit a group chat's title + URL — BOARD OWNER OR SITE ADMIN only. Records
+// last_edited_by. Works on ANY chat on the board, including ones others submitted.
+export async function updateBoardChatAction(input: {
+  id: string;
+  title: string;
+  url: string;
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.id)) return { ok: false, error: "Unknown group chat." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+
+  const title = validateChatTitle(input.title);
+  if (!title.ok) return { ok: false, error: title.error };
+  const url = validateChatUrl(input.url);
+  if (!url.ok) return { ok: false, error: url.error };
+
+  try {
+    const boardId = await getBoardChatBoardId(input.id);
+    if (!boardId) return { ok: false, error: "Unknown group chat." };
+    if (!(await callerOwnsBoard(caller, boardId))) {
+      return { ok: false, error: "Only the board owner can edit group chats." };
+    }
+    const row = await updateBoardChat({
+      id: input.id,
+      boardId,
+      title: title.value,
+      url: url.value,
+      lastEditedBy: caller.user.id,
+    });
+    if (!row) return { ok: false, error: "Couldn't find that group chat." };
+    revalidatePath(`/resources/${boardId}`);
+    return { ok: true, id: row.id };
+  } catch (err) {
+    console.error("updateBoardChatAction failed:", err);
+    return { ok: false, error: "Couldn't save this group chat. Please try again." };
+  }
+}
+
+// Delete a group chat. Board owner/admin may delete ANY chat; a non-owner may
+// delete ONLY their own submission. The submitter-scoping is enforced in the DB
+// delete (requireSubmitter), so a non-owner can never remove someone else's link.
+export async function deleteBoardChatAction(input: { id: string }): Promise<ActionResult> {
+  if (!UUID_RE.test(input.id)) return { ok: false, error: "Unknown group chat." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+
+  try {
+    const boardId = await getBoardChatBoardId(input.id);
+    if (!boardId) return { ok: false, error: "Unknown group chat." };
+
+    const isOwner = await callerOwnsBoard(caller, boardId);
+    const ok = await deleteBoardChat({
+      id: input.id,
+      boardId,
+      // Owner/admin: unrestricted. Non-owner: only if they submitted it.
+      requireSubmitter: isOwner ? null : caller.user.id,
+    });
+    if (!ok) {
+      return {
+        ok: false,
+        error: isOwner
+          ? "Couldn't remove this group chat."
+          : "You can only remove group chats you submitted.",
+      };
+    }
+    revalidatePath(`/resources/${boardId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("deleteBoardChatAction failed:", err);
+    return { ok: false, error: "Couldn't remove this group chat. Please try again." };
+  }
+}
+
+// Reorder a board's group chats — BOARD OWNER OR SITE ADMIN only. `orderedIds`
+// is the desired full ordering; we validate it against the board's actual chats
+// (same set, no strays) before persisting, so a forged payload can't reposition
+// or leak chats across boards. Records last_edited_by on every moved row.
+export async function reorderBoardChatsAction(input: {
+  boardId: string;
+  orderedIds: string[];
+}): Promise<ActionResult> {
+  if (!UUID_RE.test(input.boardId)) return { ok: false, error: "Unknown board." };
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+  if (!Array.isArray(input.orderedIds) || input.orderedIds.some((id) => !UUID_RE.test(id))) {
+    return { ok: false, error: "Invalid ordering." };
+  }
+
+  try {
+    if (!(await callerOwnsBoard(caller, input.boardId))) {
+      return { ok: false, error: "Only the board owner can reorder group chats." };
+    }
+    const existing = await listBoardChats(input.boardId);
+    const existingIds = existing.map((c) => c.id);
+    // The submitted order must be a permutation of exactly the board's chats.
+    const sameSet =
+      input.orderedIds.length === existingIds.length &&
+      new Set(input.orderedIds).size === existingIds.length &&
+      input.orderedIds.every((id) => existingIds.includes(id));
+    if (!sameSet) return { ok: false, error: "That ordering is out of date — reload and try again." };
+
+    await reorderBoardChats({
+      boardId: input.boardId,
+      orderedIds: input.orderedIds,
+      lastEditedBy: caller.user.id,
+    });
+    revalidatePath(`/resources/${input.boardId}`);
+    return { ok: true };
+  } catch (err) {
+    console.error("reorderBoardChatsAction failed:", err);
+    return { ok: false, error: "Couldn't save the new order. Please try again." };
   }
 }

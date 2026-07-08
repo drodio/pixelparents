@@ -15,11 +15,17 @@ import {
   getBoard,
   listContributions,
   isFollowingBoard,
+  listBoardChats,
 } from "@/lib/db/resources";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import { IconArrowRight } from "@/components/icons";
-import { BoardDetailClient, type ContributionCard, type BoardHeader } from "./board-client";
+import {
+  BoardDetailClient,
+  type ContributionCard,
+  type BoardHeader,
+  type ChatLink,
+} from "./board-client";
 
 export const dynamic = "force-dynamic";
 
@@ -78,14 +84,20 @@ export default async function BoardDetailPage({
   const board = await getBoard({ id: boardId, viewerSignupId: viewerId });
   if (!board) notFound();
 
-  const [contributions, following] = await Promise.all([
+  const [contributions, following, chats] = await Promise.all([
     listContributions({ boardId, viewerSignupId: viewerId }),
     isFollowingBoard({ boardId, signupId: viewerId }),
+    listBoardChats(boardId),
   ]);
 
-  // Resolve author display names for the board + every contribution in ONE batch.
+  // Resolve author display names for the board + every contribution + every
+  // chat submitter in ONE batch.
   const authorIds = Array.from(
-    new Set([board.authorSignupId, ...contributions.map((c) => c.authorSignupId)]),
+    new Set([
+      board.authorSignupId,
+      ...contributions.map((c) => c.authorSignupId),
+      ...chats.map((c) => c.submittedBy),
+    ]),
   );
   const authorById = new Map<string, { name: string; isStudent: boolean }>();
   if (authorIds.length > 0) {
@@ -116,6 +128,14 @@ export default async function BoardDetailPage({
     following,
   };
 
+  const chatLinks: ChatLink[] = chats.map((c) => ({
+    id: c.id,
+    title: c.title,
+    url: c.url,
+    submittedByName: authorById.get(c.submittedBy)?.name ?? "A community member",
+    isMine: c.submittedBy === viewerId,
+  }));
+
   const cards: ContributionCard[] = contributions.map((c) => {
     const a = authorById.get(c.authorSignupId);
     return {
@@ -145,7 +165,12 @@ export default async function BoardDetailPage({
         <IconArrowRight className="h-4 w-4 rotate-180" />
         All boards
       </Link>
-      <BoardDetailClient header={header} contributions={cards} />
+      <BoardDetailClient
+        header={header}
+        contributions={cards}
+        chats={chatLinks}
+        canManageChats={header.isMine || isAdmin}
+      />
     </div>,
   );
 }

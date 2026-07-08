@@ -29,6 +29,7 @@ export const NOTIFICATION_TYPES = [
   "community_event", // an event was proposed/accepted in your conversation
   "event_rsvp", // someone RSVP'd to an event you organize
   "board_contribution", // a new contribution landed on a resource board you follow
+  "interest_match", // a new family shares one of your interests
   "age16_cert_request", // your student asked you to certify they're 16+ (unmasks their contact)
   "age16_cert_approved", // a parent certified you as 16+ — your own contact is now shown
 ] as const;
@@ -62,7 +63,7 @@ export function notificationsSubtitle(unread: number, total: number): string {
   const t = Number.isFinite(total) ? Math.max(0, Math.floor(total)) : 0;
   if (u > 0) return `${u} unread`;
   if (t > 0) return "You're all caught up.";
-  return "Updates about your posts, replies, connections, events, and boards show up here.";
+  return "Updates about your posts, replies, connections, events, boards, and shared interests show up here.";
 }
 
 export type NotificationRow = {

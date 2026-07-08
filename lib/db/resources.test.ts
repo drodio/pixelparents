@@ -31,6 +31,11 @@ import {
   updateBoard,
   updateContribution,
   listContributions,
+  listBoardChats,
+  createBoardChat,
+  updateBoardChat,
+  deleteBoardChat,
+  reorderBoardChats,
   type ContributionWithCounts,
 } from "./resources";
 
@@ -283,10 +288,11 @@ describe("migrateLegacyResources — General board ownership", () => {
     // Every call returns the nonzero-count row; the only results that matter are
     // the "existing General board" lookup (empty → create) and the INSERT id.
     queue = Array.from({ length: 40 }, () => NONZERO_COUNT);
-    // Slot the "no existing General board" + INSERT-id results after the DDL
-    // (18 statements) + the count probe.
-    queue[19] = []; // SELECT existing "General" board → none
-    queue[20] = [{ id: "general-board-id" }]; // INSERT ... RETURNING id
+    // Every NONZERO_COUNT slot has a `c` (probe: pending > 0) but no `id`, so the
+    // "existing General board" lookup resolves to no id wherever it lands → the
+    // create path runs and we assert the system-owned INSERT below. (The exact
+    // index of that SELECT shifts as DDL grows, since each tagged-template inside
+    // sql.transaction shifts the queue; this test doesn't depend on it.)
 
     const fresh = await import("./resources");
     await fresh.ensureBoardsTables();
@@ -306,8 +312,12 @@ describe("migrateLegacyResources — General board ownership", () => {
   it("does NOT re-create the board when a General board already exists", async () => {
     vi.resetModules();
     calls.length = 0;
-    queue = Array.from({ length: 40 }, () => NONZERO_COUNT);
-    queue[19] = [{ id: "existing-general" }]; // General board already present
+    // A combined sentinel so this test is independent of how many DDL statements
+    // ensureBoardsTables issues (each tagged-template inside sql.transaction
+    // shifts the queue, so the exact index of the "existing General" SELECT moves
+    // as the schema grows). `c` keeps the migration probe seeing pending > 0;
+    // `id` makes every "existing General board" lookup resolve to a row → reuse.
+    queue = Array.from({ length: 40 }, () => [{ c: 2, id: "existing-general" }]);
 
     const fresh = await import("./resources");
     await fresh.ensureBoardsTables();
@@ -316,5 +326,139 @@ describe("migrateLegacyResources — General board ownership", () => {
     expect(
       lastCallMatching(/INSERT INTO resource_boards \(title, description, author_signup_id/),
     ).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Board group chats — ordering, attribution, and the two authorized delete
+// paths (owner deletes any / non-owner deletes own). Authorization itself lives
+// in the server action; here we assert the DB scoping the action relies on.
+// ---------------------------------------------------------------------------
+
+describe("listBoardChats", () => {
+  it("orders by position ASC then created_at ASC and scopes to the board", async () => {
+    queue = [[{ c: 0 }], []];
+    await listBoardChats("board-1");
+    const select = lastCallMatching(/FROM board_chats/);
+    expect(select).toBeTruthy();
+    expect(select!.sql.replace(/\s+/g, " ")).toMatch(
+      /WHERE board_id = \? ORDER BY position ASC, created_at ASC/,
+    );
+    expect(select!.values).toContain("board-1");
+  });
+});
+
+describe("createBoardChat", () => {
+  it("persists submitted_by and appends at max(position)+1", async () => {
+    queue = [
+      [
+        {
+          id: "chat-1",
+          board_id: "b1",
+          title: "AP Calc WhatsApp",
+          url: "https://chat.whatsapp.com/x",
+          submitted_by: "member-1",
+          submitted_clerk_id: "clerk-1",
+          last_edited_by: null,
+          position: 3,
+          created_at: "2026-07-08T00:00:00.000Z",
+        },
+      ],
+    ];
+    const row = await createBoardChat({
+      boardId: "b1",
+      title: "AP Calc WhatsApp",
+      url: "https://chat.whatsapp.com/x",
+      submittedBy: "member-1",
+      submittedClerkId: "clerk-1",
+    });
+    expect(row.submittedBy).toBe("member-1");
+    expect(row.position).toBe(3);
+
+    const ins = lastCallMatching(/INSERT INTO board_chats/);
+    expect(ins).toBeTruthy();
+    // submitted_by is bound (attribution), and position is derived in SQL.
+    expect(ins!.values).toContain("member-1");
+    expect(ins!.sql).toMatch(/COALESCE\(\(SELECT max\(position\) \+ 1 FROM board_chats/);
+  });
+});
+
+describe("updateBoardChat", () => {
+  it("stamps last_edited_by and scopes by BOTH chat id and board id (no author scope — owner edits any)", async () => {
+    queue = [
+      [
+        {
+          id: "chat-1",
+          board_id: "b1",
+          title: "New name",
+          url: "https://pronto.io/x",
+          submitted_by: "someone-else",
+          submitted_clerk_id: null,
+          last_edited_by: "owner-1",
+          position: 0,
+          created_at: "2026-07-08T00:00:00.000Z",
+        },
+      ],
+    ];
+    const row = await updateBoardChat({
+      id: "chat-1",
+      boardId: "b1",
+      title: "New name",
+      url: "https://pronto.io/x",
+      lastEditedBy: "owner-1",
+    });
+    expect(row?.lastEditedBy).toBe("owner-1");
+
+    const upd = lastCallMatching(/UPDATE board_chats SET title/);
+    expect(upd).toBeTruthy();
+    expect(upd!.sql.replace(/\s+/g, " ")).toMatch(/WHERE id = \? AND board_id = \?/);
+    // Deliberately NOT scoped to submitted_by — an owner can edit a chat someone
+    // else submitted. The values carry last_edited_by for attribution.
+    expect(upd!.sql).not.toMatch(/submitted_by/);
+    expect(upd!.values).toContain("owner-1");
+  });
+});
+
+describe("deleteBoardChat", () => {
+  it("owner/admin path: no submitter scope (requireSubmitter null → deletes any)", async () => {
+    queue = [[{ id: "chat-1" }]];
+    const ok = await deleteBoardChat({ id: "chat-1", boardId: "b1", requireSubmitter: null });
+    expect(ok).toBe(true);
+    const del = lastCallMatching(/DELETE FROM board_chats/);
+    expect(del!.sql.replace(/\s+/g, " ")).toMatch(
+      /WHERE id = \? AND board_id = \? AND \(\?::uuid IS NULL OR submitted_by = \?::uuid\)/,
+    );
+    // The submitter guard param is null → the "IS NULL" branch matches any row.
+    expect(del!.values).toContain(null);
+  });
+
+  it("non-owner path: scopes the delete to the submitter's own signup id", async () => {
+    queue = [[]]; // wrong submitter → 0 rows
+    const ok = await deleteBoardChat({
+      id: "chat-1",
+      boardId: "b1",
+      requireSubmitter: "member-2",
+    });
+    expect(ok).toBe(false);
+    const del = lastCallMatching(/DELETE FROM board_chats/);
+    expect(del!.values).toContain("member-2");
+  });
+});
+
+describe("reorderBoardChats", () => {
+  it("writes position by index and last_edited_by, scoping each UPDATE to the board", async () => {
+    // Two chats reordered → two UPDATEs, each returning a moved row.
+    queue = [[{ id: "a" }], [{ id: "b" }]];
+    const moved = await reorderBoardChats({
+      boardId: "b1",
+      orderedIds: ["a", "b"],
+      lastEditedBy: "owner-1",
+    });
+    expect(moved).toBe(2);
+    const upd = lastCallMatching(/UPDATE board_chats SET position/);
+    expect(upd).toBeTruthy();
+    expect(upd!.sql.replace(/\s+/g, " ")).toMatch(/WHERE id = \? AND board_id = \?/);
+    expect(upd!.values).toContain("owner-1");
+    expect(upd!.values).toContain("b1");
   });
 });
