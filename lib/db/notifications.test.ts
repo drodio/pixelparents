@@ -30,6 +30,8 @@ describe("isNotificationType", () => {
       "community_event",
       "event_rsvp",
       "board_contribution",
+      "age16_cert_request",
+      "age16_cert_approved",
     ]);
   });
 
