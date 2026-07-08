@@ -5,7 +5,10 @@ import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { getStats, getBreakdowns } from "@/lib/db/aggregates";
+import { getSharedInterestMatches } from "@/lib/db/interest-matches";
+import { isFamilyVerified } from "@/lib/directory";
 import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
+import { SharedInterests } from "./shared-interests";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import { CountUp } from "./count-up";
@@ -162,6 +165,15 @@ export default async function DashboardPage() {
 
   const builderInterest = breakdowns.signups_by_builder_interest ?? {};
 
+  // Auto-matching: families who share the viewer's interests. Gated to a VERIFIED
+  // family (the same gate the directory enforces) so we never surface suggestions
+  // to — or leak profiles into — a view an unverified account shouldn't see.
+  // getSharedInterestMatches internally re-applies isDirectoryVisible to every
+  // candidate, so this is defense in depth, not the only gate. Best-effort: []
+  // (section hidden) on any failure.
+  const interestMatches =
+    signup && isFamilyVerified(signup) ? await getSharedInterestMatches(signup) : [];
+
   const firstName = signup?.firstName ?? user.firstName ?? null;
   const status: ApprovalStatus | null = signup
     ? readApprovalStatus((signup.extra ?? {}) as Record<string, unknown>)
@@ -247,6 +259,8 @@ export default async function DashboardPage() {
             />
           </div>
         </section>
+
+        <SharedInterests matches={interestMatches} />
 
         {stats.database === "ready" && (
           <section>
