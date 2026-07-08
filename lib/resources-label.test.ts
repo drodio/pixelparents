@@ -24,6 +24,10 @@ import {
   BOARD_DESC_MAX,
   CONTRIBUTION_TITLE_MAX,
   CONTRIBUTION_BODY_MAX,
+  validateChatTitle,
+  validateChatUrl,
+  reorderIds,
+  CHAT_TITLE_MAX,
   type Rankable,
 } from "@/lib/resources-label";
 
@@ -482,5 +486,65 @@ describe("autoLabelBoard", () => {
     } finally {
       delete process.env.VERCEL_AI_GATEWAY;
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Board group chats — title + URL validators, and the reorder helper.
+// ---------------------------------------------------------------------------
+
+describe("validateChatTitle", () => {
+  it("rejects empty / whitespace-only", () => {
+    expect(validateChatTitle("   ").ok).toBe(false);
+    expect(validateChatTitle("").ok).toBe(false);
+    expect(validateChatTitle(undefined).ok).toBe(false);
+  });
+  it("collapses whitespace and accepts a normal name", () => {
+    const r = validateChatTitle("  AP  Calc\tBC — WhatsApp ");
+    expect(r.ok && r.value).toBe("AP Calc BC — WhatsApp");
+  });
+  it("enforces the length cap", () => {
+    expect(validateChatTitle("x".repeat(CHAT_TITLE_MAX)).ok).toBe(true);
+    expect(validateChatTitle("x".repeat(CHAT_TITLE_MAX + 1)).ok).toBe(false);
+  });
+});
+
+describe("validateChatUrl", () => {
+  it("accepts http(s) invite links (WhatsApp, Pronto, etc.)", () => {
+    expect(validateChatUrl("https://chat.whatsapp.com/AbCdEf123").ok).toBe(true);
+    expect(validateChatUrl("https://pronto.io/invite/xyz").ok).toBe(true);
+    // Scheme-less host is upgraded to https:// (mirrors validateResourceUrl).
+    const up = validateChatUrl("chat.whatsapp.com/AbCdEf");
+    expect(up.ok && up.value.startsWith("https://")).toBe(true);
+  });
+  it("rejects non-http(s) schemes and bare words", () => {
+    expect(validateChatUrl("javascript:alert(1)").ok).toBe(false);
+    expect(validateChatUrl("mailto:x@example.com").ok).toBe(false);
+    expect(validateChatUrl("not a url").ok).toBe(false);
+    expect(validateChatUrl("").ok).toBe(false);
+  });
+});
+
+describe("reorderIds", () => {
+  it("moves an id earlier in the list", () => {
+    expect(reorderIds(["a", "b", "c", "d"], "c", 0)).toEqual(["c", "a", "b", "d"]);
+  });
+  it("moves an id later in the list", () => {
+    expect(reorderIds(["a", "b", "c", "d"], "a", 2)).toEqual(["b", "c", "a", "d"]);
+  });
+  it("clamps an out-of-range target index to the end", () => {
+    expect(reorderIds(["a", "b", "c"], "a", 99)).toEqual(["b", "c", "a"]);
+  });
+  it("clamps a negative target index to the start", () => {
+    expect(reorderIds(["a", "b", "c"], "c", -5)).toEqual(["c", "a", "b"]);
+  });
+  it("returns a copy unchanged when the id is unknown", () => {
+    const input = ["a", "b"];
+    const out = reorderIds(input, "z", 0);
+    expect(out).toEqual(["a", "b"]);
+    expect(out).not.toBe(input);
+  });
+  it("is a no-op (same order) when moving to the current index", () => {
+    expect(reorderIds(["a", "b", "c"], "b", 1)).toEqual(["a", "b", "c"]);
   });
 });

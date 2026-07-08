@@ -15,12 +15,15 @@ import {
   IconFile,
   IconText,
   IconDownload,
+  IconArrowUp,
+  IconUsers,
 } from "@/components/icons";
 import {
   BOARD_TITLE_MAX,
   BOARD_DESC_MAX,
   CONTRIBUTION_TITLE_MAX,
   CONTRIBUTION_BODY_MAX,
+  CHAT_TITLE_MAX,
   type ContributionKind,
 } from "@/lib/resources-label";
 import { UpvoteButton } from "../upvote-button";
@@ -36,6 +39,10 @@ import {
   toggleBoardUpvoteAction,
   toggleContributionUpvoteAction,
   toggleBoardFollowAction,
+  addBoardChatAction,
+  updateBoardChatAction,
+  deleteBoardChatAction,
+  reorderBoardChatsAction,
 } from "../actions";
 
 export type BoardHeader = {
@@ -52,6 +59,16 @@ export type BoardHeader = {
   isStudent: boolean;
   isMine: boolean;
   following: boolean;
+};
+
+export type ChatLink = {
+  id: string;
+  title: string;
+  url: string;
+  submittedByName: string;
+  // Whether the current viewer submitted this chat (non-owners may delete their
+  // own submission; owners/admins can manage every chat regardless).
+  isMine: boolean;
 };
 
 export type ContributionCard = {
@@ -91,9 +108,15 @@ function hostOf(url: string): string {
 export function BoardDetailClient({
   header,
   contributions,
+  chats,
+  canManageChats,
 }: {
   header: BoardHeader;
   contributions: ContributionCard[];
+  chats: ChatLink[];
+  // True when the viewer owns the board OR is a site admin (admins are treated
+  // as board owners) — gates the edit / reorder / delete-any chat controls.
+  canManageChats: boolean;
 }) {
   const router = useRouter();
   const reduce = useReducedMotion();
@@ -242,6 +265,14 @@ export function BoardDetailClient({
         )}
       </header>
       )}
+
+      {/* Group chats — external join links (WhatsApp, Pronto, any URL) */}
+      <GroupChatsSection
+        boardId={header.id}
+        chats={chats}
+        canManage={canManageChats}
+        onChanged={() => router.refresh()}
+      />
 
       {/* Add-a-contribution toggle */}
       <div className="flex items-center justify-between gap-3">
@@ -897,6 +928,380 @@ function ContributionEditForm({
           onClick={onCancel}
           disabled={pending}
           className="rounded-full border border-white/15 bg-white/[0.04] px-5 py-2.5 text-sm font-medium text-white/70 transition hover:text-white/90 disabled:opacity-50"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Group chats section
+//
+// Lists a board's external group-chat join links. ANY verified member can submit
+// one (title + http(s) URL). The board owner / site admin (`canManage`) can edit,
+// reorder, and delete ANY chat; a non-owner can delete only their OWN submission.
+// The server re-validates + re-authorizes every action.
+// ---------------------------------------------------------------------------
+function GroupChatsSection({
+  boardId,
+  chats,
+  canManage,
+  onChanged,
+}: {
+  boardId: string;
+  chats: ChatLink[];
+  canManage: boolean;
+  onChanged: () => void;
+}) {
+  const [showForm, setShowForm] = useState(false);
+  const [reorderPending, startReorder] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Move a chat up/down by one and persist the whole new order. Owner/admin only
+  // (the buttons are gated on canManage; the server re-checks). We compute the
+  // new id order client-side and send it; the action validates it's the same set.
+  const move = (index: number, dir: -1 | 1) => {
+    const target = index + dir;
+    if (target < 0 || target >= chats.length) return;
+    const ids = chats.map((c) => c.id);
+    [ids[index], ids[target]] = [ids[target]!, ids[index]!];
+    setError(null);
+    startReorder(async () => {
+      const res = await reorderBoardChatsAction({ boardId, orderedIds: ids });
+      if (res.ok) onChanged();
+      else setError(res.error);
+    });
+  };
+
+  return (
+    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+      <div className="flex items-center justify-between gap-3">
+        <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-white/80">
+          <IconUsers className="h-4 w-4 text-white/50" />
+          Group chats
+        </h2>
+        <button
+          type="button"
+          onClick={() => setShowForm((v) => !v)}
+          className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-xs font-medium text-white/70 transition-colors hover:text-white/90"
+        >
+          {showForm ? <IconX className="h-3.5 w-3.5" /> : <IconPlus className="h-3.5 w-3.5" />}
+          {showForm ? "Close" : "Add a group chat"}
+        </button>
+      </div>
+
+      {showForm && (
+        <div className="mt-4">
+          <ChatSubmitForm
+            boardId={boardId}
+            onDone={() => {
+              setShowForm(false);
+              onChanged();
+            }}
+          />
+        </div>
+      )}
+
+      {chats.length === 0 ? (
+        <p className="mt-4 text-sm text-white/50">
+          No group chats linked yet — add a WhatsApp, Pronto, or other invite link so members can join
+          the conversation.
+        </p>
+      ) : (
+        <ul className="mt-4 flex flex-col gap-2">
+          {chats.map((chat, i) => (
+            <ChatRow
+              key={chat.id}
+              chat={chat}
+              index={i}
+              total={chats.length}
+              canManage={canManage}
+              reorderPending={reorderPending}
+              onMove={move}
+              onChanged={onChanged}
+            />
+          ))}
+        </ul>
+      )}
+
+      {error && (
+        <p className="mt-3 text-sm text-red-300" role="alert">
+          {error}
+        </p>
+      )}
+    </section>
+  );
+}
+
+function ChatRow({
+  chat,
+  index,
+  total,
+  canManage,
+  reorderPending,
+  onMove,
+  onChanged,
+}: {
+  chat: ChatLink;
+  index: number;
+  total: number;
+  canManage: boolean;
+  reorderPending: boolean;
+  onMove: (index: number, dir: -1 | 1) => void;
+  onChanged: () => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Owner/admin can delete any chat; a non-owner can delete only their own.
+  const canDelete = canManage || chat.isMine;
+
+  const remove = () => {
+    if (!confirm("Remove this group chat link?")) return;
+    setError(null);
+    startTransition(async () => {
+      const res = await deleteBoardChatAction({ id: chat.id });
+      if (res.ok) onChanged();
+      else setError(res.error);
+    });
+  };
+
+  if (editing) {
+    return (
+      <li className="rounded-xl border border-amber-400/30 bg-white/[0.02] p-4">
+        <ChatEditForm
+          chat={chat}
+          onCancel={() => setEditing(false)}
+          onDone={() => {
+            setEditing(false);
+            onChanged();
+          }}
+        />
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-3 transition-colors hover:border-white/20">
+      {/* Reorder controls — owner/admin only */}
+      {canManage && total > 1 && (
+        <div className="flex shrink-0 flex-col">
+          <button
+            type="button"
+            onClick={() => onMove(index, -1)}
+            disabled={reorderPending || index === 0}
+            aria-label="Move up"
+            title="Move up"
+            className="rounded p-0.5 text-white/40 transition-colors hover:text-amber-200 disabled:opacity-30"
+          >
+            <IconArrowUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onMove(index, 1)}
+            disabled={reorderPending || index === total - 1}
+            aria-label="Move down"
+            title="Move down"
+            className="rounded p-0.5 text-white/40 transition-colors hover:text-amber-200 disabled:opacity-30"
+          >
+            <IconArrowUp className="h-3.5 w-3.5 rotate-180" />
+          </button>
+        </div>
+      )}
+
+      <div className="min-w-0 flex-1">
+        <a
+          href={chat.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="block truncate text-sm font-semibold text-white hover:text-amber-200"
+        >
+          {chat.title}
+          <span className="ml-2 text-xs font-normal text-white/40">{hostOf(chat.url)}</span>
+        </a>
+        <p className="mt-0.5 truncate text-xs text-white/40">Added by {chat.submittedByName}</p>
+        {error && <p className="mt-1 text-xs text-red-300">{error}</p>}
+      </div>
+
+      <div className="flex shrink-0 items-center gap-0.5">
+        {/* Edit — owner/admin only (may edit any chat) */}
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            aria-label="Edit this group chat"
+            title="Edit this group chat"
+            className="rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/5 hover:text-amber-200"
+          >
+            <IconPencil className="h-4 w-4" />
+          </button>
+        )}
+        {/* Delete — owner/admin (any) or submitter (own) */}
+        {canDelete && (
+          <button
+            type="button"
+            onClick={remove}
+            disabled={pending}
+            aria-label="Remove this group chat"
+            title="Remove this group chat"
+            className="rounded-md p-1.5 text-white/40 transition-colors hover:bg-white/5 hover:text-red-300 disabled:opacity-50"
+          >
+            <IconTrash className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+    </li>
+  );
+}
+
+function ChatSubmitForm({ boardId, onDone }: { boardId: string; onDone: () => void }) {
+  const [title, setTitle] = useState("");
+  const [url, setUrl] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const submit = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await addBoardChatAction({ boardId, title, url });
+        if (res.ok) {
+          setTitle("");
+          setUrl("");
+          onDone();
+        } else {
+          setError(res.error);
+        }
+      } catch {
+        setError(
+          "Your connection dropped before we could confirm. Reload the page to see the latest, then resubmit if it is not there.",
+        );
+      }
+    });
+  };
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="flex flex-col gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4"
+    >
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-white/80">Name</span>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={CHAT_TITLE_MAX}
+          placeholder="e.g. AP Calc BC — WhatsApp"
+          className={controlCls}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-white/80">Invite link</span>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          inputMode="url"
+          placeholder="https://…"
+          className={controlCls}
+        />
+      </label>
+
+      {error && <p className="text-sm text-red-300">{error}</p>}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:opacity-50"
+        >
+          {pending ? "Adding…" : "Add group chat"}
+        </button>
+        <span className="text-xs text-white/40">
+          Anyone verified can add one; it&apos;s attributed to you.
+        </span>
+      </div>
+    </form>
+  );
+}
+
+function ChatEditForm({
+  chat,
+  onCancel,
+  onDone,
+}: {
+  chat: ChatLink;
+  onCancel: () => void;
+  onDone: () => void;
+}) {
+  const [title, setTitle] = useState(chat.title);
+  const [url, setUrl] = useState(chat.url);
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+
+  const submit = () => {
+    setError(null);
+    startTransition(async () => {
+      try {
+        const res = await updateBoardChatAction({ id: chat.id, title, url });
+        if (res.ok) onDone();
+        else setError(res.error);
+      } catch {
+        setError(
+          "Your connection dropped before we could confirm. Reload the page to see the latest, then resave if your change is not there.",
+        );
+      }
+    });
+  };
+
+  return (
+    <form
+      onSubmit={(e) => {
+        e.preventDefault();
+        submit();
+      }}
+      className="flex flex-col gap-3"
+    >
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-white/80">Name</span>
+        <input
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          maxLength={CHAT_TITLE_MAX}
+          className={controlCls}
+        />
+      </label>
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium text-white/80">Invite link</span>
+        <input
+          value={url}
+          onChange={(e) => setUrl(e.target.value)}
+          inputMode="url"
+          placeholder="https://…"
+          className={controlCls}
+        />
+      </label>
+
+      {error && <p className="text-sm text-red-300">{error}</p>}
+
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:opacity-50"
+        >
+          {pending ? "Saving…" : "Save changes"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={pending}
+          className="rounded-full border border-white/15 bg-white/[0.04] px-5 py-2 text-sm font-medium text-white/70 transition hover:text-white/90 disabled:opacity-50"
         >
           Cancel
         </button>
