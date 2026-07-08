@@ -10,6 +10,25 @@ import { getDb } from "./db";
 // the signup flow, the admin forms, and the one-off scrub script all agree on
 // which spelling wins.
 
+// The grouping key. Two strings are the SAME interest ONLY when they are equal
+// after trim + lowercase — i.e. genuine case/whitespace variants of the identical
+// spelling. This is the WHOLE canonicalization contract: it can NEVER collapse two
+// interests that differ by any character other than case/edge-whitespace. So
+// distinct interests like "Yegge" and "Linus" (different keys: "yegge" vs "linus")
+// are always kept apart here.
+//
+// The "clubbing Yegge and Linus" report is therefore NOT a canonicalization bug —
+// nothing in this module (buildCanonicalMap / canonicalizeInterests /
+// getInterestPool) can merge two differently-spelled interests. If two distinct
+// interests appear "clubbed together" on screen, it happens at a DISPLAY or
+// MATCHING surface, not here. The most likely surface is the auto-matching /
+// suggested-connections ranking (lib/interest-matching.ts + lib/db/asks.ts's
+// rankCandidates), which groups families by SHARED interests: two families each
+// listing a *different* interest still appear in the same "families who share your
+// interests" section because they each share something with the viewer — that can
+// read as "these two got clubbed" even though no interest was merged. It is a
+// per-viewer overlap grouping, not a claim that Yegge == Linus. (See
+// lib/interests.test.ts "distinct interests never merge" for the regression pins.)
 const key = (s: string) => s.trim().toLowerCase();
 
 // Pick the winning spelling for a group of case-variants given how often each

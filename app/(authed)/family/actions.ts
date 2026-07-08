@@ -2,9 +2,11 @@
 
 import { eq, and } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { getDb } from "@/lib/db";
 import { signups } from "@/lib/db/schema/signups";
+import { notifyInterestMatches } from "@/lib/db/interest-notify";
 import { primaryEmail } from "@/lib/clerk";
 import { familyIdForEmail } from "@/lib/db/signups";
 import { sanitizeSignupPatch, type SignupPatch } from "@/app/signup/actions";
@@ -73,8 +75,25 @@ export async function patchFamilyMember(
       .update(signups)
       .set(set)
       .where(and(eq(signups.id, targetSignupId), eq(signups.familyId, callerFamilyId)))
-      .returning({ id: signups.id });
-    return { ok: updated.length > 0 };
+      .returning();
+    const row = updated[0];
+
+    // If this edit changed the member's interests, fan out "a new family shares your
+    // interest in X" to existing members — in the BACKGROUND (after() — never block
+    // or fail the save on the notification). Dedupe + fan-out caps live in
+    // notifyInterestMatches, so a repeated edit can't re-notify the same pairing and
+    // a popular interest can't spam everyone. Only when parentInterests were part of
+    // the patch (nothing to announce otherwise).
+    if (row && "parentInterests" in patch) {
+      after(async () => {
+        try {
+          await notifyInterestMatches({ source: row, generatedBy: "interests_edit" });
+        } catch (err) {
+          console.error("notifyInterestMatches (interests_edit) failed:", err);
+        }
+      });
+    }
+    return { ok: Boolean(row) };
   } catch (err) {
     console.error("patchFamilyMember failed:", err);
     return { ok: false };

@@ -72,6 +72,52 @@ describe("buildCanonicalMap", () => {
   });
 });
 
+// The reported issue: "clubbing Yegge and Linus seems wildly off" — i.e. two
+// clearly-different interests treated as the same. These pins prove the
+// canonicalization layer can NEVER do that: it groups by trim+lowercase, so only
+// genuine case/whitespace variants of the IDENTICAL spelling collapse. Two
+// differently-spelled interests always stay distinct. If a "clubbing" is observed
+// in the product it is a matching/display surface (see lib/interest-matching.ts),
+// NOT this module.
+describe("distinct interests never merge (Yegge vs Linus regression)", () => {
+  it("keeps two genuinely-different interests as separate canonical entries", () => {
+    const map = buildCanonicalMap(["Yegge", "Linus"]);
+    // Two distinct keys → two distinct canonical spellings, never collapsed into one.
+    expect(map.get("yegge")).toBe("Yegge");
+    expect(map.get("linus")).toBe("Linus");
+    expect(new Set(map.values()).size).toBe(2);
+  });
+
+  it("does not collapse interests that merely share a substring", () => {
+    // "Chess" and "Chess Club" are different interests (different keys); one is not
+    // a case-variant of the other, so canonicalization must keep both.
+    const map = buildCanonicalMap(["Chess", "Chess Club"]);
+    expect(map.get("chess")).toBe("Chess");
+    expect(map.get("chess club")).toBe("Chess Club");
+    expect(new Set(map.values()).size).toBe(2);
+  });
+
+  it("canonicalizeInterests preserves every distinct interest in the input", () => {
+    const pool = ["Yegge", "Linus", "Rust", "Go"];
+    // All four are distinct → all four survive, none merged.
+    expect(canonicalizeInterests(["Yegge", "Linus", "Rust", "Go"], pool)).toEqual([
+      "Yegge",
+      "Linus",
+      "Rust",
+      "Go",
+    ]);
+  });
+
+  it("merges ONLY true case-variants of the same spelling, side-by-side with distinct ones", () => {
+    // "yegge"/"YEGGE" are case-variants of "Yegge" (one interest); "Linus" is a
+    // separate interest. The case-variants collapse to one; "Linus" is untouched.
+    const map = buildCanonicalMap(["Yegge", "yegge", "YEGGE", "Linus"]);
+    expect(map.get("yegge")).toBe("Yegge"); // most-used spelling wins
+    expect(map.get("linus")).toBe("Linus");
+    expect(new Set(map.values()).size).toBe(2);
+  });
+});
+
 describe("canonicalizeInterests", () => {
   const pool = ["Mountain Biking", "Chess", "Robotics"];
 
