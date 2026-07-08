@@ -403,12 +403,12 @@ export async function ProfileView({
               className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-2.5 py-1 text-[11px] font-medium text-amber-200"
               title={
                 enrichment.editedByOwner
-                  ? "Auto-built by Pixel Parents, then refined by this member. Saved."
-                  : "Automatically built by Pixel Parents. Saved."
+                  ? "Drafted by Pixel Parents from public data, then refined by this member."
+                  : "Drafted by Pixel Parents from this member's public data — they control it."
               }
             >
               <IconSparkles className="h-3 w-3" />
-              {enrichment.editedByOwner ? "Auto-built · edited" : "Auto-built profile"}
+              {enrichment.editedByOwner ? "AI-assisted · edited" : "AI-assisted"}
             </span>
           </div>
           <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
