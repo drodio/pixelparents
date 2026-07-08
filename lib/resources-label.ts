@@ -200,6 +200,52 @@ export function validateContributionBody(input: unknown): Result<string> {
 }
 
 // ---------------------------------------------------------------------------
+// Board group chats — pure validators + reorder helper (unit-tested)
+//
+// A board can link ≥1 external group chats (WhatsApp, Pronto, any http(s) URL).
+// ANY verified member can submit one; the board owner (or a site admin, treated
+// as an owner) can edit / reorder / delete ANY chat. See lib/db/resources.ts
+// (board_chats) + app/(authed)/resources/actions.ts for storage + authz.
+// ---------------------------------------------------------------------------
+
+export const CHAT_TITLE_MAX = 120;
+
+// A group chat's display title (as submitted by the user). Required, single-line.
+export function validateChatTitle(input: unknown): Result<string> {
+  const v = cleanLine(input);
+  if (!v) return { ok: false, error: "Give this group chat a name.", field: "title" };
+  if (v.length > CHAT_TITLE_MAX)
+    return {
+      ok: false,
+      error: `Name must be ${CHAT_TITLE_MAX} characters or fewer.`,
+      field: "title",
+    };
+  return { ok: true, value: v };
+}
+
+// A group chat's URL. Reuses the resource-URL rules (http/https only, host
+// required) — WhatsApp / Pronto / any valid link passes; javascript:, mailto:,
+// bare words, etc. are rejected.
+export function validateChatUrl(input: unknown): Result<string> {
+  return validateResourceUrl(input);
+}
+
+// Compute the new position ordering for a reorder. Given the current ordered
+// list of chat ids and the id being moved to `toIndex` (0-based, clamped),
+// return the full id list in its new order. Pure + deterministic so the reorder
+// contract is unit-testable independent of the DB. An unknown id or empty list
+// yields the input unchanged.
+export function reorderIds(ids: string[], moveId: string, toIndex: number): string[] {
+  const from = ids.indexOf(moveId);
+  if (from === -1) return ids.slice();
+  const next = ids.slice();
+  next.splice(from, 1);
+  const clamped = Math.max(0, Math.min(toIndex, next.length));
+  next.splice(clamped, 0, moveId);
+  return next;
+}
+
+// ---------------------------------------------------------------------------
 // Board ranking — Hot / Top / New (pure, deterministic, unit-tested)
 // ---------------------------------------------------------------------------
 

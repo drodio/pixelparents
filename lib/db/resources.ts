@@ -142,6 +142,29 @@ export function ensureBoardsTables(): Promise<void> {
             PRIMARY KEY (board_id, signup_id)
           )
         `,
+
+        // --- Board group chats (external join links: WhatsApp, Pronto, any URL) ---
+        // ANY verified member can submit one (submitted_by = their signup id, for
+        // attribution). The board owner or a site admin can edit/reorder/delete
+        // ANY chat; last_edited_by records who last touched it. `position` orders
+        // the list (owner-controlled reorder). Cascades with its board.
+        sql`
+          CREATE TABLE IF NOT EXISTS board_chats (
+            id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+            board_id uuid NOT NULL REFERENCES resource_boards(id) ON DELETE CASCADE,
+            title text NOT NULL,
+            url text NOT NULL,
+            submitted_by uuid NOT NULL,
+            submitted_clerk_id text,
+            last_edited_by uuid,
+            position integer NOT NULL DEFAULT 0,
+            created_at timestamptz NOT NULL DEFAULT now()
+          )
+        `,
+        sql`ALTER TABLE board_chats ADD COLUMN IF NOT EXISTS submitted_clerk_id text`,
+        sql`ALTER TABLE board_chats ADD COLUMN IF NOT EXISTS last_edited_by uuid`,
+        sql`ALTER TABLE board_chats ADD COLUMN IF NOT EXISTS position integer NOT NULL DEFAULT 0`,
+        sql`CREATE INDEX IF NOT EXISTS board_chats_board_idx ON board_chats (board_id, position ASC, created_at ASC)`,
       ]);
 
       // One-time, idempotent migration of any legacy flat resources into a
@@ -793,4 +816,167 @@ export async function listBoardFollowerIds(input: {
       AND (${input.excludeSignupId ?? null}::uuid IS NULL OR signup_id <> ${input.excludeSignupId ?? null}::uuid)
   `) as unknown as { signup_id: string }[];
   return rows.map((r) => r.signup_id);
+}
+
+// ---------------------------------------------------------------------------
+// Board group chats — external "join" links (WhatsApp / Pronto / any URL)
+//
+// A board can link ≥1 chats. ANY verified member can add one; the board OWNER
+// (or a site admin, treated as owner) can edit / reorder / delete ANY chat.
+// Attribution is always persisted: submitted_by on every row, last_edited_by
+// whenever an owner edits/reorders. Authorization is enforced in the server
+// action (app/(authed)/resources/actions.ts) — this module is pure DB access.
+// Ordering: position ASC, then created_at ASC as a stable tie-breaker.
+// ---------------------------------------------------------------------------
+
+export type BoardChatRow = {
+  id: string;
+  boardId: string;
+  title: string;
+  url: string;
+  submittedBy: string;
+  submittedClerkId: string | null;
+  lastEditedBy: string | null;
+  position: number;
+  createdAt: Date | null;
+};
+
+type RawBoardChat = {
+  id: string;
+  board_id: string;
+  title: string;
+  url: string;
+  submitted_by: string;
+  submitted_clerk_id: string | null;
+  last_edited_by: string | null;
+  position: number | string | null;
+  created_at: string | null;
+};
+
+function mapBoardChat(r: RawBoardChat): BoardChatRow {
+  return {
+    id: r.id,
+    boardId: r.board_id,
+    title: r.title,
+    url: r.url,
+    submittedBy: r.submitted_by,
+    submittedClerkId: r.submitted_clerk_id,
+    lastEditedBy: r.last_edited_by,
+    position: toInt(r.position),
+    createdAt: toDate(r.created_at),
+  };
+}
+
+// A board's group chats in display order.
+export async function listBoardChats(boardId: string): Promise<BoardChatRow[]> {
+  await ensureBoardsTables();
+  const rows = (await getSql()`
+    SELECT * FROM board_chats
+    WHERE board_id = ${boardId}
+    ORDER BY position ASC, created_at ASC
+  `) as unknown as RawBoardChat[];
+  return rows.map(mapBoardChat);
+}
+
+// Add a chat to a board. New chats land at the END of the list (max position + 1
+// for that board), so submission order is preserved until an owner reorders.
+export async function createBoardChat(input: {
+  boardId: string;
+  title: string;
+  url: string;
+  submittedBy: string;
+  submittedClerkId?: string | null;
+}): Promise<BoardChatRow> {
+  await ensureBoardsTables();
+  const rows = (await getSql()`
+    INSERT INTO board_chats (board_id, title, url, submitted_by, submitted_clerk_id, position)
+    VALUES (
+      ${input.boardId},
+      ${input.title},
+      ${input.url},
+      ${input.submittedBy},
+      ${input.submittedClerkId ?? null},
+      COALESCE((SELECT max(position) + 1 FROM board_chats WHERE board_id = ${input.boardId}), 0)
+    )
+    RETURNING *
+  `) as unknown as RawBoardChat[];
+  return mapBoardChat(rows[0]!);
+}
+
+// The board a chat belongs to (for authz + revalidation context).
+export async function getBoardChatBoardId(id: string): Promise<string | null> {
+  await ensureBoardsTables();
+  const rows = (await getSql()`
+    SELECT board_id FROM board_chats WHERE id = ${id} LIMIT 1
+  `) as unknown as { board_id: string }[];
+  return rows[0]?.board_id ?? null;
+}
+
+// Edit a chat's title + URL. AUTHORIZATION LIVES IN THE ACTION (owner/admin
+// only) — this is unscoped by design so an owner can edit a chat SOMEONE ELSE
+// submitted. `lastEditedBy` records who made the edit (attribution). `boardId`
+// is in the WHERE as a safety belt against a forged id targeting another board.
+export async function updateBoardChat(input: {
+  id: string;
+  boardId: string;
+  title: string;
+  url: string;
+  lastEditedBy: string;
+}): Promise<BoardChatRow | null> {
+  await ensureBoardsTables();
+  const rows = (await getSql()`
+    UPDATE board_chats
+    SET title = ${input.title},
+        url = ${input.url},
+        last_edited_by = ${input.lastEditedBy}
+    WHERE id = ${input.id} AND board_id = ${input.boardId}
+    RETURNING *
+  `) as unknown as RawBoardChat[];
+  return rows[0] ? mapBoardChat(rows[0]) : null;
+}
+
+// Delete a chat. Two authorized paths, both enforced in the action:
+//   • owner/admin → delete ANY chat on the board (pass requireSubmitter = null)
+//   • non-owner   → delete only their OWN submission (pass their signup id)
+// `boardId` scopes the delete; `requireSubmitter`, when set, additionally
+// requires submitted_by to match so a non-owner can't delete another's chat.
+export async function deleteBoardChat(input: {
+  id: string;
+  boardId: string;
+  requireSubmitter?: string | null;
+}): Promise<boolean> {
+  await ensureBoardsTables();
+  const requireSubmitter = input.requireSubmitter ?? null;
+  const rows = (await getSql()`
+    DELETE FROM board_chats
+    WHERE id = ${input.id}
+      AND board_id = ${input.boardId}
+      AND (${requireSubmitter}::uuid IS NULL OR submitted_by = ${requireSubmitter}::uuid)
+    RETURNING id
+  `) as unknown as { id: string }[];
+  return rows.length > 0;
+}
+
+// Persist a full reorder of a board's chats. AUTHORIZATION LIVES IN THE ACTION
+// (owner/admin only). Given the desired id order, write each chat's position to
+// its index and stamp last_edited_by. `boardId` scopes every UPDATE so a forged
+// id can't be repositioned onto another board. Returns the count actually moved.
+export async function reorderBoardChats(input: {
+  boardId: string;
+  orderedIds: string[];
+  lastEditedBy: string;
+}): Promise<number> {
+  await ensureBoardsTables();
+  let moved = 0;
+  for (let i = 0; i < input.orderedIds.length; i++) {
+    const id = input.orderedIds[i]!;
+    const rows = (await getSql()`
+      UPDATE board_chats
+      SET position = ${i}, last_edited_by = ${input.lastEditedBy}
+      WHERE id = ${id} AND board_id = ${input.boardId}
+      RETURNING id
+    `) as unknown as { id: string }[];
+    moved += rows.length;
+  }
+  return moved;
 }
