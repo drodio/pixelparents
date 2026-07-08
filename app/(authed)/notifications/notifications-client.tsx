@@ -211,6 +211,9 @@ function TypeIcon({ type }: { type: string }) {
       return <CalendarGlyph />;
     case "board_contribution":
       return <BoardGlyph />;
+    case "age16_cert_request":
+    case "age16_cert_approved":
+      return <HeartGlyph />;
     default:
       return <BellGlyph />;
   }

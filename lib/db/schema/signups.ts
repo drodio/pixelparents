@@ -95,6 +95,20 @@ export const children = pgTable("children", {
   // was verified for this family; the family's approvalStatus is set to
   // "approved" at the same time. See lib/verify.ts + the thanks verify-actions.
   studentEmail: text("student_email"),
+  // Age-16 certification gate for exposing a STUDENT's own contact info. A minor's
+  // contact (their student email) is masked and shown as the PARENT's contact
+  // until a parent certifies the student is 16+. Lifecycle: 'none' → (student may
+  // REQUEST) 'pending' → (a parent APPROVES / certifies) 'certified'. A parent can
+  // also certify directly (signup checkbox / family settings), skipping 'pending'.
+  // Only 'certified' unmasks the student's contact. See lib/contact-visibility.ts.
+  age16Status: text("age16_status").notNull().default("none"),
+  // Attribution ("who did what"): the signups.id of the PARENT who certified, and
+  // when. Null while 'none'/'pending'. Stamped on approval/direct-certify.
+  age16CertifiedBy: uuid("age16_certified_by"),
+  age16CertifiedAt: timestamp("age16_certified_at", { withTimezone: true }),
+  // Attribution for the student's own request (who asked + when) so the parent's
+  // approval screen can show it and we have a full audit trail.
+  age16RequestedAt: timestamp("age16_requested_at", { withTimezone: true }),
 });
 
 export type FamilyRow = typeof families.$inferSelect;

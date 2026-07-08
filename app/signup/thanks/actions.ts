@@ -125,6 +125,11 @@ export type ChildPatch = Partial<{
   notes: string;
   studentEmail: string;
   photos: Photo[];
+  // Parent's 16+ certification for unmasking the student's own contact. Only
+  // 'certified' | 'none' flow through here (a parent certifies or revokes); the
+  // student's own 'pending' REQUEST goes through requestChildAge16 (session-auth).
+  // Stamped with the acting parent's signupId + timestamp for attribution.
+  age16Certified: boolean;
 }>;
 
 // Resolve the family a signup belongs to (null if the id is unknown). Children
@@ -176,6 +181,19 @@ export async function patchChild(
     set.interests = s.length ? await canonicalizeAgainstPool(s) : null;
   }
   if ("photos" in patch) set.photos = sanitizePhotos(patch.photos);
+  if ("age16Certified" in patch) {
+    // A parent certifies (true) or revokes (false). Attribution: stamp who (the
+    // acting parent's signupId) + when on certify; clear both on revoke.
+    if (patch.age16Certified) {
+      set.age16Status = "certified";
+      set.age16CertifiedBy = signupId;
+      set.age16CertifiedAt = new Date();
+    } else {
+      set.age16Status = "none";
+      set.age16CertifiedBy = null;
+      set.age16CertifiedAt = null;
+    }
+  }
   if (Object.keys(set).length === 0) return { ok: true };
   try {
     await getDb()

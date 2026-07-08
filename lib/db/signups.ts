@@ -250,6 +250,10 @@ export type SharedProfile = {
   signup: SignupRow;
   kids: ChildRow[];
   familyStudentAccounts: SignupRow[];
+  // A parent/guardian's contact for the family, used to MASK a not-yet-16+-certified
+  // student's own contact (we show the parent's instead + a note). Null if the
+  // family has no non-student member with an email. See lib/contact-visibility.ts.
+  parentContact: { email: string | null; phone: string | null } | null;
 };
 
 export async function getSharedProfileByToken(token: string): Promise<SharedProfile | null> {
@@ -276,5 +280,16 @@ export async function getSharedProfileByToken(token: string): Promise<SharedProf
     (m) => ((m.extra ?? {}) as Record<string, unknown>).accountType === "student",
   );
 
-  return { signup, kids, familyStudentAccounts };
+  // Pick a parent/guardian contact for masking a minor student's own contact: the
+  // first non-student member that actually has an email (prefer one with a phone).
+  const parentMembers = familyMembers.filter(
+    (m) => ((m.extra ?? {}) as Record<string, unknown>).accountType !== "student" && m.email,
+  );
+  const parentMember =
+    parentMembers.find((m) => m.phone && m.phone.trim() !== "") ?? parentMembers[0] ?? null;
+  const parentContact = parentMember
+    ? { email: parentMember.email, phone: parentMember.phone ?? null }
+    : null;
+
+  return { signup, kids, familyStudentAccounts, parentContact };
 }

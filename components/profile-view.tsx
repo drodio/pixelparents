@@ -5,6 +5,7 @@ import { primaryEmail } from "@/lib/clerk";
 import { getSharedProfileByToken, getSignupByEmail } from "@/lib/db/signups";
 import { shareFieldsOrDefault, coerceShareVisibility, canViewProfile } from "@/lib/share";
 import { isStudentAccount } from "@/lib/family-display";
+import { resolveStudentContact } from "@/lib/contact-visibility";
 import { signedPhotoUrls } from "@/lib/blob";
 import { renderCaption } from "@/lib/mentions";
 import { builderStatusOf } from "@/lib/builder";
@@ -76,9 +77,31 @@ export async function ProfileView({
   const profile = await getSharedProfileByToken(token);
   if (!profile) notFound();
 
-  const { signup, kids, familyStudentAccounts } = profile;
+  const { signup, kids, familyStudentAccounts, parentContact } = profile;
   const visible = new Set(shareFieldsOrDefault(signup.shareFields));
   const isStudent = isStudentAccount(signup);
+
+  // Age-16 contact gate: a STUDENT's own contact is masked (the parent's contact
+  // is shown instead, with a note) until a parent certifies them 16+. Parent
+  // profiles are never masked. We read the age-16 status off the matched child row
+  // (studentEmail === this account's email). Fails closed via resolveStudentContact.
+  const matchedChild = isStudent
+    ? kids.find(
+        (k) => (k.studentEmail ?? "").toLowerCase() === signup.email.toLowerCase(),
+      )
+    : undefined;
+  const studentContact = isStudent
+    ? resolveStudentContact({
+        status: matchedChild?.age16Status,
+        studentEmail: signup.email,
+        parentEmail: parentContact?.email ?? null,
+      })
+    : null;
+  const usingParentContact = Boolean(studentContact?.usingParentContact);
+  // Email/phone to actually render: the student's own when certified, else the
+  // parent's fallback (phone follows the same substitution).
+  const displayEmail = studentContact ? studentContact.email : signup.email;
+  const displayPhone = usingParentContact ? parentContact?.phone ?? null : signup.phone;
 
   // Viewer + the visibility gate (ohs / private).
   const viewer = await currentUser();
@@ -480,23 +503,31 @@ export async function ProfileView({
         <section className="mt-9">
           <Label>Contact</Label>
           <div className="flex flex-wrap gap-x-6 gap-y-2 text-[15px] text-white/85">
-            {visible.has("phone") && signup.phone && (
+            {visible.has("phone") && displayPhone && (
               <span className="inline-flex items-center gap-1.5">
                 <IconPhone className="h-4 w-4 text-white/50" />
-                <a href={`tel:${signup.phone}`} className="text-amber-400 hover:underline">
-                  {signup.phone}
+                <a href={`tel:${displayPhone}`} className="text-amber-400 hover:underline">
+                  {displayPhone}
                 </a>
               </span>
             )}
-            {visible.has("email") && signup.email && (
+            {visible.has("email") && displayEmail && (
               <span className="inline-flex items-center gap-1.5">
                 <IconMail className="h-4 w-4 text-white/50" />
-                <a href={`mailto:${signup.email}`} className="text-amber-400 hover:underline">
-                  {signup.email}
+                <a href={`mailto:${displayEmail}`} className="text-amber-400 hover:underline">
+                  {displayEmail}
                 </a>
               </span>
             )}
           </div>
+          {/* Minor-safety: when a student isn't 16+-certified we show the parent's
+              contact instead of the student's own — say so plainly. */}
+          {usingParentContact && (displayPhone || displayEmail) && (
+            <p className="mt-2 text-xs text-white/45">
+              This is the parent&rsquo;s contact. This student hasn&rsquo;t been
+              certified as 16 or older, so their own contact info is kept private.
+            </p>
+          )}
         </section>
       )}
     </>

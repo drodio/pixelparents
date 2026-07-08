@@ -363,6 +363,9 @@ export type ExistingChild = {
   studentEmail: string | null;
   photos: Photo[];
   photoPreviews: Record<string, string>;
+  // Age-16 contact-gate status: 'none' | 'pending' | 'certified'. A parent
+  // certifies here to unmask the student's own contact. See lib/contact-visibility.
+  age16Status?: string | null;
 };
 
 // One child's card — every field auto-saves independently via patchChild.
@@ -396,7 +399,19 @@ function ChildCard({
   const [interests, setInterests] = useState<string[]>(child.interests ?? []);
   const [notes, setNotes] = useState(child.notes ?? "");
   const [studentEmail, setStudentEmail] = useState(child.studentEmail ?? "");
+  const [age16, setAge16] = useState<string>(child.age16Status ?? "none");
   const currentYear = new Date().getFullYear();
+
+  // Parent certifies (or revokes) that this student is 16+. Certifying unmasks the
+  // student's own contact to the community; otherwise the parent's contact is shown
+  // in its place. Also the approval path for a student's pending self-request.
+  // Routed through the id-authorized patchChild autosave so it works BOTH during
+  // signup (no Clerk session yet) and on the authed /family page. patchChild stamps
+  // the acting parent's id + timestamp for attribution.
+  function toggleAge16(next: boolean) {
+    setAge16(next ? "certified" : "none");
+    queue({ age16Certified: next }, true);
+  }
 
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-white/10 bg-white/[0.02] p-4">
@@ -491,6 +506,35 @@ function ChildCard({
         ) : (
           <p className="mt-1 text-xs text-white/40">
             Your OHS student&apos;s stanford.edu address — used to verify your family.
+          </p>
+        )}
+      </div>
+
+      {/* Age-16 contact gate. A student's own contact stays private (the parent's
+          contact is shown in its place across the community) until a parent
+          certifies they're 16 or older. If the student asked (status 'pending'),
+          checking the box approves the request. */}
+      <div className="rounded-lg border border-white/10 bg-white/[0.02] p-3">
+        <label className="flex items-start gap-2 text-sm text-white/85">
+          <input
+            type="checkbox"
+            checked={age16 === "certified"}
+            onChange={(e) => toggleAge16(e.target.checked)}
+            className="mt-0.5 h-4 w-4 accent-amber-500"
+          />
+          <span>
+            This student is <strong>16 or older</strong> — show their own contact
+            info to the community.
+            <span className="mt-0.5 block text-xs text-white/45">
+              Until you certify this, the community sees your (parent) contact
+              instead of the student&apos;s.
+            </span>
+          </span>
+        </label>
+        {age16 === "pending" && (
+          <p className="mt-2 text-xs text-amber-300">
+            Your student requested to be certified as 16+ — check the box above to
+            approve.
           </p>
         )}
       </div>

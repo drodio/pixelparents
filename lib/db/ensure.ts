@@ -100,6 +100,13 @@ export function ensureFamiliesSchema(): Promise<void> {
         sql`ALTER TABLE signups ADD COLUMN IF NOT EXISTS country text`,
         // Student-email verification: confirmed OHS student email, recorded per child.
         sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS student_email text`,
+        // Age-16 contact gate (mask a minor's contact until a parent certifies 16+).
+        // 'none' | 'pending' | 'certified'. Self-healed + non-null default so existing
+        // rows read as un-certified (masked) rather than NULL.
+        sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS age16_status text NOT NULL DEFAULT 'none'`,
+        sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS age16_certified_by uuid`,
+        sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS age16_certified_at timestamptz`,
+        sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS age16_requested_at timestamptz`,
       ]);
     })().catch((e) => {
       familiesEnsured = null;
