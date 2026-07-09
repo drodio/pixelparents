@@ -3,7 +3,7 @@
 // "no_data" rather than throwing. A byte cap protects against pathological
 // responses.
 
-export const USER_AGENT = "pixelparents-enrichment/1.0 (+https://pixelparents.org)";
+export const USER_AGENT = "pixelparents-enrichment/1.0 (+https://gopixel.org)";
 
 const DEFAULT_FETCH_TIMEOUT_MS = Number(process.env.ENRICHMENT_FETCH_TIMEOUT_MS) || 10_000;
 // Cap any single response body we buffer (defends against huge pages/files).

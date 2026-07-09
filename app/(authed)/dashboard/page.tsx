@@ -29,7 +29,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Dashboard — Pixel Parents",
+  title: "Dashboard — GoPixel",
   robots: { index: false, follow: false },
 };
 
@@ -115,7 +115,7 @@ function VerificationCard({ status }: { status: ApprovalStatus }) {
         <div>
           <h2 className="font-semibold text-white">Your family&apos;s access was declined</h2>
           <p className="mt-0.5 text-sm text-white/65">
-            Reach out to a Pixel Parents admin if you think this is a mistake.
+            Reach out to a GoPixel admin if you think this is a mistake.
           </p>
         </div>
       </div>
@@ -183,9 +183,9 @@ export default async function DashboardPage() {
     <DashboardShell firstName={firstName} email={email} status={status} isAdmin={isAdmin}>
       <header className="mb-8">
         <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">
-          {firstName ? `Welcome back, ${firstName}.` : "Welcome to Pixel Parents."}
+          {firstName ? `Welcome back, ${firstName}.` : "Welcome to GoPixel."}
         </h1>
-        <p className="mt-1 text-sm text-white/55">Your Pixel Parents home base.</p>
+        <p className="mt-1 text-sm text-white/55">Your GoPixel home base.</p>
       </header>
 
       <div className="flex flex-col gap-8">
@@ -195,7 +195,7 @@ export default async function DashboardPage() {
           <div className="flex flex-wrap items-start gap-3 rounded-2xl border border-white/10 bg-white/[0.03] p-5">
             <IconGradCap className="mt-0.5 h-6 w-6 shrink-0 text-amber-300" />
             <div className="min-w-0 flex-1">
-              <h2 className="font-semibold text-white">Join Pixel Parents</h2>
+              <h2 className="font-semibold text-white">Join GoPixel</h2>
               <p className="mt-0.5 text-sm text-white/65">
                 We don&apos;t have a family signup for this account yet. Sign up to unlock the
                 directory and community.
@@ -253,7 +253,7 @@ export default async function DashboardPage() {
             <LinkCard
               href="/dashboard/developers"
               title="Developers"
-              desc="Build on the Pixel Parents API — request a key and read the docs."
+              desc="Build on the GoPixel API — request a key and read the docs."
               Icon={IconCode}
               tourId="explore-developers"
             />

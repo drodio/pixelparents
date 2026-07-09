@@ -21,7 +21,7 @@ export default function GlobalErrorPreview() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-semibold">Something went wrong</h1>
         <p className="max-w-md text-white/55">
-          Pixel Parents hit an unexpected error. Try reloading — if it keeps
+          GoPixel hit an unexpected error. Try reloading — if it keeps
           happening, please let us know.
         </p>
       </div>

@@ -43,7 +43,7 @@ async function enforceVerificationGate(): Promise<void> {
     // Admins are exempt from the gate.
     if (await isAdminEmail(email)) return;
 
-    // Resolve the caller's family. No signup on file → not a Pixel Parents family
+    // Resolve the caller's family. No signup on file → not a GoPixel family
     // yet, so there's nothing to force-verify here (the /verify page itself
     // handles the "no signup" messaging). Only gate users who HAVE a signup.
     const family = await getFamilyForEmail(email);

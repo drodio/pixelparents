@@ -205,7 +205,7 @@ export function FeedbackPrompt() {
           className="flex max-w-md items-center gap-3 rounded-full border border-white/10 bg-zinc-900/95 py-2 pl-4 pr-2 shadow-xl shadow-black/40 backdrop-blur"
         >
           <p className="min-w-0 text-xs leading-snug text-white/70">
-            Enjoying Pixel Parents?{" "}
+            Enjoying GoPixel?{" "}
             <span className="text-white/90">
               A real person on our team reads every note.
             </span>

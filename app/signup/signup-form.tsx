@@ -94,7 +94,7 @@ const empty = {
   // Resource-for-students opt-in (only surfaced once LinkedIn is filled).
   // Defaults to "yes" to match the pre-checked option in the prompt.
   studentResource: "yes" as "yes" | "no",
-  // Interest in helping build Pixel Parents software (no default selection).
+  // Interest in helping build GoPixel software (no default selection).
   builderInterest: "" as "" | "builder" | "aspiring" | "no",
   // Who's signing up. Default "parent" keeps the parent path exactly as before;
   // "student" routes step-2 to "add your parent / guardian". In co-parent join
@@ -795,7 +795,7 @@ export default function SignupForm({
 
         <fieldset>
           <legend className={legendCls}>
-            Are you interested in helping us build Pixel Parents software?{" "}
+            Are you interested in helping us build GoPixel software?{" "}
             <span className="text-red-400">*</span>
           </legend>
           <div className="mt-2 flex flex-col gap-2">
@@ -836,7 +836,7 @@ export default function SignupForm({
               <strong>Welcome, technical parent!</strong> We appreciate you. Read
               our{" "}
               <a
-                href="https://pixelparents.org/builders"
+                href="https://gopixel.org/builders"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
@@ -855,7 +855,7 @@ export default function SignupForm({
               </em>{" "}
               Please read{" "}
               <a
-                href="https://pixelparents.org/builders#frequently-asked-questions"
+                href="https://gopixel.org/builders#frequently-asked-questions"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"

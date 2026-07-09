@@ -12,8 +12,8 @@ import { ProfileView } from "@/components/profile-view";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Member profile — Pixel Parents",
-  description: "A Pixel Parents community member's profile.",
+  title: "Member profile — GoPixel",
+  description: "A GoPixel community member's profile.",
   robots: { index: false, follow: false },
 };
 
@@ -54,14 +54,14 @@ export default async function CommunityProfilePage({
       <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
         <h2 className="text-lg font-semibold">This page is for OHS families</h2>
         <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
-          Your account isn&apos;t recognized as an OHS family yet. Join Pixel Parents to view member
+          Your account isn&apos;t recognized as an OHS family yet. Join GoPixel to view member
           profiles.
         </p>
         <Link
           href="/signup"
           className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
         >
-          Join Pixel Parents
+          Join GoPixel
         </Link>
       </div>,
     );

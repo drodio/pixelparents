@@ -1,4 +1,4 @@
-// Canonical option taxonomies for Pixel Parents — single source of truth shared
+// Canonical option taxonomies for GoPixel — single source of truth shared
 // by the signup form (long, user-facing labels) and the developer API's
 // /api/v1/options endpoint. Non-PII reference data, safe to publish.
 
@@ -12,7 +12,7 @@ export const OHS_AFFILIATIONS = [
 // Alias used by the developer API (kept in sync — same underlying list).
 export const AFFILIATIONS = OHS_AFFILIATIONS;
 
-// Interest in helping build Pixel Parents software (signup question). Stored in
+// Interest in helping build GoPixel software (signup question). Stored in
 // signups.extra.builderInterest.
 export const BUILDER_INTEREST = ["builder", "aspiring", "no"] as const;
 

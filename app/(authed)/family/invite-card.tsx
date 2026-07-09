@@ -155,7 +155,7 @@ export function FamilyInviteCard({
 
 // 2) INVITE ANOTHER OHS FAMILY — "spread the word". A shareable public signup
 // link carrying this family's referral token (?ref=…). Pulls brand-new families
-// into Pixel Parents. No email send — just a link to share anywhere.
+// into GoPixel. No email send — just a link to share anywhere.
 export function SpreadTheWordCard({ referralUrl }: { referralUrl: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-5 sm:p-6">

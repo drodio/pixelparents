@@ -18,7 +18,7 @@ import { StudentVerify } from "@/components/student-verify";
 import { isStudentAccount } from "@/lib/family-display";
 
 export const metadata: Metadata = {
-  title: "Welcome — Pixel Parents",
+  title: "Welcome — GoPixel",
 };
 
 const UUID_RE =

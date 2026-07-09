@@ -75,7 +75,7 @@ export default function GlobalError({
             Something went wrong
           </h1>
           <p style={{ maxWidth: 460, margin: 0, color: "rgba(255,255,255,0.55)" }}>
-            Pixel Parents hit an unexpected error. Try reloading — if it keeps
+            GoPixel hit an unexpected error. Try reloading — if it keeps
             happening, please let us know.
           </p>
         </div>

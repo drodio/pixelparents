@@ -33,7 +33,7 @@ import { AdminManager } from "./admin-manager";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Event — Pixel Parents",
+  title: "Event — GoPixel",
   robots: { index: false, follow: false },
 };
 
@@ -191,7 +191,7 @@ export default async function EventDetailPage({
             <section className="mt-6 rounded-2xl border border-white/10 bg-white/[0.02] p-5">
               <h2 className="text-sm font-semibold text-white/85">Organizers</h2>
               <p className="mt-1 text-xs text-white/50">
-                Add a co-organizer by name — only existing Pixel Parents accounts can be added. They
+                Add a co-organizer by name — only existing GoPixel accounts can be added. They
                 can edit this event.
               </p>
               <div className="mt-4">

@@ -3,7 +3,7 @@ import { getSql, hasDatabase } from "../db";
 // ---------------------------------------------------------------------------
 // Contact / bug-abuse reports data layer.
 //
-// `hello@pixelparents.org` is not a real mailbox, so the landing "Report a bug
+// `hello@gopixel.org` is not a real mailbox, so the landing "Report a bug
 // or abuse" form persists to this DB table instead of emailing a dead address.
 // The table is the source of truth; admins triage it from /admin/reports.
 //

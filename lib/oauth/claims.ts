@@ -44,7 +44,7 @@ export type IdTokenClaims = {
 };
 
 // Compute whether this user is a verified OHS member. A null signup (the user
-// authenticated via Clerk but has no Pixel Parents signup on file) is NOT
+// authenticated via Clerk but has no GoPixel signup on file) is NOT
 // verified — the assertion must be backed by a real, approved/grandfathered row.
 export function isOhsVerified(signup: SignupForClaims | null | undefined): boolean {
   if (!signup) return false;

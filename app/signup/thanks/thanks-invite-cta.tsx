@@ -26,7 +26,7 @@ export function ThanksInviteCta({ referralUrl }: { referralUrl: string }) {
         <div className="min-w-0 flex-1">
           <h3 className="font-semibold text-white">Know another OHS family?</h3>
           <p className="mt-0.5 text-sm text-white/65">
-            Pixel Parents gets better with every family. Share your link to invite
+            GoPixel gets better with every family. Share your link to invite
             another OHS family to join.
           </p>
         </div>

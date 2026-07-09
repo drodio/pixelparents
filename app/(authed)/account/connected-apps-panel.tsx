@@ -10,7 +10,7 @@ import { SCOPE_DESCRIPTIONS, type SupportedScope } from "@/lib/oauth/config";
 import { IconCode, IconCheck } from "@/components/icons";
 
 // The account-page "Connected apps" panel: every app the user authorized with
-// "Sign in with Pixel Parents", what each can see (scopes, in plain language), and
+// "Sign in with GoPixel", what each can see (scopes, in plain language), and
 // a Revoke button (revokes the grant + its refresh tokens). Repeat logins skip the
 // consent screen until revoked here.
 
@@ -89,7 +89,7 @@ export function ConnectedAppsPanel({ apps }: { apps: ConnectedAppView[] }) {
   if (apps.length === 0) {
     return (
       <p className="rounded-lg border border-white/10 bg-white/[0.02] p-5 text-sm text-white/45">
-        You haven&apos;t signed in to any apps with Pixel Parents yet. When you do, they&apos;ll
+        You haven&apos;t signed in to any apps with GoPixel yet. When you do, they&apos;ll
         show up here and you can revoke their access anytime.
       </p>
     );

@@ -9,7 +9,7 @@ import {
 } from "./oauth-actions";
 import { IconSparkles, IconCheck, IconCode } from "@/components/icons";
 
-// The "Sign in with Pixel Parents" app-registration UI for the Developers tab.
+// The "Sign in with GoPixel" app-registration UI for the Developers tab.
 // Register an app (name + redirect URIs + scopes) → reveal client_id + a one-time
 // client_secret. Lists the caller's apps with a per-app rotate-secret control.
 
@@ -299,9 +299,9 @@ export function OAuthAppsPanel({
   return (
     <div className="flex flex-col gap-5">
       <div>
-        <h2 className="text-xl font-semibold tracking-tight">Sign in with Pixel Parents</h2>
+        <h2 className="text-xl font-semibold tracking-tight">Sign in with GoPixel</h2>
         <p className="mt-1 text-sm text-white/55">
-          Let another app sign users in with Pixel Parents and receive a signed
+          Let another app sign users in with GoPixel and receive a signed
           assertion that they&apos;re a verified Stanford OHS student or parent
           (<code className="font-mono text-xs text-amber-200">ohs_verified</code>) —
           something Google, Apple, or GitHub can&apos;t provide.

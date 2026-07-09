@@ -88,8 +88,8 @@ function BuilderBadge({ contributions }: { contributions: number }) {
       className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-medium text-amber-300"
       title={
         contributions > 0
-          ? `${contributions} contribution${contributions === 1 ? "" : "s"} to Pixel Parents`
-          : "A Pixel Parents builder"
+          ? `${contributions} contribution${contributions === 1 ? "" : "s"} to GoPixel`
+          : "A GoPixel builder"
       }
     >
       <IconCode className="h-3.5 w-3.5" strokeWidth={2} />

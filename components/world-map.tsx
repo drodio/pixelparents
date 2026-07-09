@@ -73,7 +73,7 @@ export function WorldMap({ markers, accent = "#fbbf24" }: { markers: Marker[]; a
         viewBox={`0 0 ${W} ${H}`}
         className="w-full"
         role="img"
-        aria-label="World map of where Pixel Parents members are"
+        aria-label="World map of where GoPixel members are"
       >
         <g>
           {COUNTRY_PATHS.map((d, i) => (

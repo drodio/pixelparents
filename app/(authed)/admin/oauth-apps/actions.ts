@@ -5,7 +5,7 @@ import { revalidatePath } from "next/cache";
 import { isAdminEmail } from "@/lib/admin";
 import { decideClient } from "@/lib/oauth/store";
 
-// Admin decisions on "Sign in with Pixel Parents" apps. Most apps go live
+// Admin decisions on "Sign in with GoPixel" apps. Most apps go live
 // automatically when the owning developer's API access is approved; this queue is
 // for explicitly approving (or rejecting) a registered app — the lever for extra
 // scrutiny on apps requesting minor-data scopes (role / grade_band / ohs_verified).

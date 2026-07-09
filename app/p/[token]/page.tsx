@@ -4,15 +4,15 @@ import { ProfileView } from "@/components/profile-view";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "A Pixel Parents profile",
+  title: "A GoPixel profile",
   description:
-    "A family in the Pixel Parents community — OHS parents building software for our kids.",
+    "A family in the GoPixel community — OHS parents building software for our kids.",
   // A secret link should never be indexed.
   robots: { index: false, follow: false },
   openGraph: {
-    title: "A Pixel Parents profile",
+    title: "A GoPixel profile",
     description:
-      "A family in the Pixel Parents community — OHS parents building software for our kids.",
+      "A family in the GoPixel community — OHS parents building software for our kids.",
     type: "profile",
     // Deliberately NO `images` here: the OG card is a DYNAMIC file-based route
     // (app/opengraph-image.tsx → /opengraph-image/<hash>), never a static

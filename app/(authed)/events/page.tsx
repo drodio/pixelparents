@@ -23,7 +23,7 @@ import { toCalendarEvent } from "./shared";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Events — Pixel Parents",
+  title: "Events — GoPixel",
   description:
     "The shared Stanford OHS community calendar — family-created meetups plus the OHS school-year calendar.",
   robots: { index: false, follow: false },
@@ -92,13 +92,13 @@ export default async function EventsPage() {
           <p className="mx-auto mt-2 max-w-md text-sm text-white/60">
             {viewerSignup
               ? "Confirm your OHS student's Stanford email to see the community calendar and create events."
-              : "Your account isn't recognized as an OHS family yet. Join Pixel Parents to use Events."}
+              : "Your account isn't recognized as an OHS family yet. Join GoPixel to use Events."}
           </p>
           <Link
             href={viewerSignup ? "/verify" : "/signup"}
             className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--surface-0)] active:scale-[0.98] motion-reduce:transition-none"
           >
-            {viewerSignup ? "Verify now" : "Join Pixel Parents"}
+            {viewerSignup ? "Verify now" : "Join GoPixel"}
           </Link>
         </div>
       </>,

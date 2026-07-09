@@ -135,7 +135,7 @@ async function authorizedTarget(
   };
 }
 
-// Count the target member's commits on the Pixel Parents repo and, if any are
+// Count the target member's commits on the GoPixel repo and, if any are
 // found, auto-set extra.builder=true + store the count + checkedAt. Authorized by
 // FAMILY MEMBERSHIP (caller derived from the session; target must share the
 // caller's family). Best-effort: the GitHub count never throws, and a 0 count

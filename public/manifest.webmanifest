@@ -1,6 +1,6 @@
 {
-  "name": "Pixel Parents",
-  "short_name": "Pixel Parents",
+  "name": "GoPixel",
+  "short_name": "GoPixel",
   "description": "Parents building software to improve the experience for Stanford OHS students. Connect with OHS kids around shared interests.",
   "start_url": "/dashboard",
   "scope": "/",

@@ -249,7 +249,7 @@ export function DashboardShell({
         <Link
           href="/dashboard"
           className="flex h-16 items-center gap-2.5 px-3 md:px-5"
-          aria-label="Pixel Parents dashboard"
+          aria-label="GoPixel dashboard"
         >
           <Image
             src="/images/pixel-mascot.png"
@@ -259,7 +259,7 @@ export function DashboardShell({
             className="h-9 w-9 rounded-lg object-cover"
           />
           <span className="hidden text-base font-semibold tracking-tight md:inline">
-            Pixel Parents
+            GoPixel
           </span>
         </Link>
 
@@ -285,7 +285,7 @@ export function DashboardShell({
         <Link
           href="/dashboard"
           className="flex items-center gap-2"
-          aria-label="Pixel Parents dashboard"
+          aria-label="GoPixel dashboard"
         >
           <Image
             src="/images/pixel-mascot.png"
@@ -294,7 +294,7 @@ export function DashboardShell({
             height={64}
             className="h-8 w-8 rounded-lg object-cover"
           />
-          <span className="text-base font-semibold tracking-tight">Pixel Parents</span>
+          <span className="text-base font-semibold tracking-tight">GoPixel</span>
         </Link>
         <div className="flex items-center gap-1">
           {/* Notification bell in the persistent top chrome so the unread badge is

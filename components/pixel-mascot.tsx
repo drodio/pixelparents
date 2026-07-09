@@ -1,7 +1,7 @@
 import Image from "next/image";
 import Link from "next/link";
 
-// The Pixel Parents mascot with its standard treatment: a 3px border in the
+// The GoPixel mascot with its standard treatment: a 3px border in the
 // regular text gray, with a 2px transparent gap between the image and the border.
 export function PixelMascot({
   widthClass = "w-24",
@@ -16,7 +16,7 @@ export function PixelMascot({
     <span className="inline-block rounded-2xl border-[3px] border-white/60 p-[2px]">
       <Image
         src="/images/pixel-mascot.png"
-        alt="Pixel Parents mascot"
+        alt="GoPixel mascot"
         width={934}
         height={918}
         priority={priority}
@@ -29,7 +29,7 @@ export function PixelMascot({
     return (
       <Link
         href={href}
-        aria-label="Pixel Parents home"
+        aria-label="GoPixel home"
         className="inline-block transition-opacity hover:opacity-80"
       >
         {framed}

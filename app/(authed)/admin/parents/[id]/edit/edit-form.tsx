@@ -160,7 +160,7 @@ export default function EditForm({ row }: { row: SignupRow }) {
       </fieldset>
 
       <fieldset>
-        <legend className={labelCls}>Interested in building Pixel Parents?</legend>
+        <legend className={labelCls}>Interested in building GoPixel?</legend>
         <div className="mt-2 flex flex-col gap-2">
           {BUILDER_INTEREST.map((opt) => (
             <label key={opt} className="flex items-start gap-2 text-sm text-white/80">

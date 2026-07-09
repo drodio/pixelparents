@@ -37,7 +37,7 @@ vi.mock("next/server", () => ({ after: (fn: () => unknown) => fn() }));
 vi.mock("@clerk/nextjs/server", () => ({
   currentUser: vi.fn(async () => (caller ? { id: caller.clerkId } : null)),
 }));
-vi.mock("@/lib/clerk", () => ({ primaryEmail: () => "caller@pixelparents.org" }));
+vi.mock("@/lib/clerk", () => ({ primaryEmail: () => "caller@gopixel.org" }));
 vi.mock("@/lib/db/signups", () => ({
   getSignupByEmail: vi.fn(async () =>
     caller ? { id: caller.id, firstName: "Cal", lastName: "Ler", extra: {} } : null,

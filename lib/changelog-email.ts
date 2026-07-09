@@ -4,7 +4,7 @@ import type { ChangelogEntryRow } from "@/lib/db/schema/changelog";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
-const FROM = process.env.RESEND_FROM ?? "Pixel Parents <noreply@pixelparents.org>";
+const FROM = process.env.RESEND_FROM ?? "GoPixel <noreply@gopixel.org>";
 
 // Notify one subscriber about one new changelog entry. Best-effort.
 export async function sendChangelogEmail(
@@ -28,7 +28,7 @@ export async function sendChangelogEmail(
     ? entry.authors.map((a) => (a.login ? `${a.name} (${a.login})` : a.name)).join(", ")
     : "";
   const text = [
-    `New on Pixel Parents:`,
+    `New on GoPixel:`,
     ``,
     entry.title,
     ...(byline ? [`by ${byline}`] : []),
@@ -38,14 +38,14 @@ export async function sendChangelogEmail(
     ``,
     `See it: ${url}`,
     ``,
-    `You're getting this because you subscribed to the Pixel Parents changelog.`,
+    `You're getting this because you subscribed to the GoPixel changelog.`,
     `Unsubscribe: ${unsubscribeUrl}`,
   ].join("\n");
   try {
     await resend.emails.send({
       from: FROM,
       to,
-      subject: `Pixel Parents — ${entry.title}`,
+      subject: `GoPixel — ${entry.title}`,
       text,
     });
     return true;

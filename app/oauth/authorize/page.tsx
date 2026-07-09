@@ -16,7 +16,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Sign in with Pixel Parents",
+  title: "Sign in with GoPixel",
   robots: { index: false, follow: false },
 };
 
@@ -125,7 +125,7 @@ export default async function AuthorizePage({ searchParams }: { searchParams: SP
     <main className="flex min-h-full items-center justify-center p-6">
       <div className="w-full max-w-md rounded-2xl border border-white/10 bg-white/[0.03] p-6 sm:p-8">
         <div className="mb-6 flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-amber-300">
-          Sign in with Pixel Parents
+          Sign in with GoPixel
         </div>
 
         <h1 className="text-xl font-semibold tracking-tight text-white">
@@ -239,13 +239,13 @@ function PendingCard({
           {rejected ? (
             <>
               <span className="font-medium text-white/90">{appName}</span> can&apos;t sign you
-              in. Its access to Pixel Parents was not approved.
+              in. Its access to GoPixel was not approved.
               {reason ? <span className="mt-1 block text-white/50">Note: {reason}</span> : null}
             </>
           ) : (
             <>
               <span className="font-medium text-white/90">{appName}</span> is registered with
-              Pixel Parents but is still under review. Sign-in apps go live once we&apos;ve
+              GoPixel but is still under review. Sign-in apps go live once we&apos;ve
               vetted the developer — especially for apps that see OHS students&apos; data. Check
               back soon.
             </>

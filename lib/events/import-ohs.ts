@@ -53,7 +53,7 @@ export async function importOhsCalendar(
 
   try {
     const res = await fetchImpl(OHS_CALENDAR_URL, {
-      headers: { "user-agent": "PixelParents-EventsBot/1.0 (+https://pixelparents.org)" },
+      headers: { "user-agent": "GoPixel-EventsBot/1.0 (+https://gopixel.org)" },
       // Don't let a slow page hang the cron; the seed fallback covers a failure.
       signal: AbortSignal.timeout(15_000),
     });

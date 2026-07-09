@@ -28,7 +28,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Family — Pixel Parents",
+  title: "Family — GoPixel",
   robots: { index: false, follow: false },
 };
 
@@ -249,7 +249,7 @@ export default async function FamilyPage() {
 
         {/* Info note: how to link two accounts into one family (no merging here). */}
         <p className="rounded-2xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/55">
-          To link two Pixel Parents accounts into one family, both accounts must verify
+          To link two GoPixel accounts into one family, both accounts must verify
           under the same OHS student email (@ohs.stanford.edu).
         </p>
       </div>

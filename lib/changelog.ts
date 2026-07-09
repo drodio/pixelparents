@@ -241,9 +241,9 @@ export const SEED_ENTRIES: SeedEntry[] = [
   {
     slug: "sign-in-with-pixel-parents",
     shippedAt: "2026-06-29T17:00:00Z",
-    title: "Sign in with Pixel Parents",
+    title: "Sign in with GoPixel",
     summary:
-      "A drop-in “Sign in with Pixel Parents” button lets other OHS community tools authenticate parents without rebuilding accounts.",
+      "A drop-in “Sign in with GoPixel” button lets other OHS community tools authenticate parents without rebuilding accounts.",
     bullets: [
       "Published the @pixelparents/auth SDK with a one-line button component.",
       "OAuth-style flow returns a verified parent identity to partner apps.",

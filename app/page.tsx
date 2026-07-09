@@ -97,7 +97,7 @@ export default async function Home() {
         <h1 className="max-w-3xl text-balance text-3xl font-bold tracking-tight text-white sm:text-6xl">
           Join{" "}
           <span className="text-amber-400">{count.toLocaleString()}</span> other
-          Pixel Parents
+          GoPixel
         </h1>
         <h2 className="max-w-prose text-pretty text-base font-medium text-white/70 sm:text-xl">
           Connect with{" "}

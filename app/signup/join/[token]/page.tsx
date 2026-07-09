@@ -8,8 +8,8 @@ import SignupForm from "../../signup-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Join your family — Pixel Parents",
-  description: "Add your information to your family on Pixel Parents.",
+  title: "Join your family — GoPixel",
+  description: "Add your information to your family on GoPixel.",
   robots: { index: false, follow: false },
 };
 
@@ -50,14 +50,14 @@ export default async function JoinPage({
         <div className="flex flex-col items-center text-center">
           <Image
             src="/images/pixel-mascot.png"
-            alt="Pixel Parents mascot"
+            alt="GoPixel mascot"
             width={934}
             height={918}
             priority
             className="h-auto w-24"
           />
           <h1 className="mt-4 text-3xl font-semibold tracking-tight sm:text-4xl">
-            Join your family on Pixel Parents
+            Join your family on GoPixel
           </h1>
           <p className="mt-2 max-w-prose text-white/60">
             You&apos;ve been invited to add your own information. Your name, email, and contact

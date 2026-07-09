@@ -11,7 +11,7 @@ function fmt(d: string | null): string {
   return d ? new Date(d).toLocaleString("en-US", { timeZone: "America/Los_Angeles" }) : "—";
 }
 
-// Admin review queue for "Sign in with Pixel Parents" apps awaiting approval. Apps
+// Admin review queue for "Sign in with GoPixel" apps awaiting approval. Apps
 // whose owner has approved API access go live automatically and never appear here;
 // this is for per-app approval (and rejecting apps over-reaching for minors' data).
 export default async function AdminOAuthAppsPage() {

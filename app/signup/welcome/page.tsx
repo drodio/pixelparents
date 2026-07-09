@@ -5,7 +5,7 @@ import { getSignupForEdit } from "@/lib/db/signups";
 import { readApprovalStatus } from "@/lib/approval";
 
 export const metadata: Metadata = {
-  title: "You're all set — Pixel Parents",
+  title: "You're all set — GoPixel",
 };
 
 const UUID_RE =
@@ -46,7 +46,7 @@ export default async function WelcomePage({
     <main className="flex min-h-dvh flex-col items-center justify-center gap-5 bg-black px-6 text-center text-white">
       <Image
         src="/images/pixel-mascot.png"
-        alt="Pixel Parents mascot"
+        alt="GoPixel mascot"
         width={934}
         height={918}
         priority

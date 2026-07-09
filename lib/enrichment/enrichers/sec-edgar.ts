@@ -10,7 +10,7 @@ import { nameOverlaps } from "../identity";
 
 const FTS = "https://efts.sec.gov/LATEST/search-index";
 // SEC politeness policy: UA MUST identify the app + a contact email.
-const SEC_UA = "pixelparents-enrichment/1.0 (enrichment@pixelparents.org)";
+const SEC_UA = "pixelparents-enrichment/1.0 (enrichment@gopixel.org)";
 
 type FtsResp = {
   hits?: {

@@ -25,7 +25,7 @@ export function GithubDialog({ onClose }: { onClose: () => void }) {
       className="fixed inset-0 z-[95] flex items-center justify-center p-4"
       role="dialog"
       aria-modal="true"
-      aria-label="About the Pixel Parents open-source project"
+      aria-label="About the GoPixel open-source project"
     >
       <button
         type="button"
@@ -52,7 +52,7 @@ export function GithubDialog({ onClose }: { onClose: () => void }) {
         </div>
 
         <p className="text-sm text-white/65">
-          Pixel Parents is open source — designed and built by students and
+          GoPixel is open source — designed and built by students and
           parents in the Stanford OHS community. Anyone in the community can jump
           in, propose an idea, and ship it.
         </p>

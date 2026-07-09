@@ -2,9 +2,9 @@ import Link from "next/link";
 import { PixelMascot } from "@/components/pixel-mascot";
 
 export const metadata = {
-  title: "Docs — Pixel Parents",
+  title: "Docs — GoPixel",
   description:
-    "A curated index of Pixel Parents developer docs: Sign in with Pixel Parents (OIDC), the public /api/v1 community-stats API and how to request access, and how to contribute to the open-source repo.",
+    "A curated index of GoPixel developer docs: Sign in with GoPixel (OIDC), the public /api/v1 community-stats API and how to request access, and how to contribute to the open-source repo.",
 };
 
 const REPO_URL = "https://github.com/drodio/pixelparents";
@@ -43,15 +43,15 @@ export default function DocsPage() {
             </h1>
             <p className="mx-auto max-w-xl text-lg leading-relaxed text-white/70">
               A short, curated index of everything a builder needs to integrate
-              with Pixel Parents — sign-in, the public API, and how to
+              with GoPixel — sign-in, the public API, and how to
               contribute. Everything links back to the open-source repo.
             </p>
           </div>
         </header>
 
-        {/* Sign in with Pixel Parents */}
+        {/* Sign in with GoPixel */}
         <section className="flex flex-col gap-4">
-          <h2 className="text-2xl font-bold">Sign in with Pixel Parents</h2>
+          <h2 className="text-2xl font-bold">Sign in with GoPixel</h2>
           <p className="text-base leading-relaxed text-white/70">
             A &ldquo;Sign in with Google&rdquo;-style identity button with one
             thing Google can&apos;t give you: a cryptographically signed,

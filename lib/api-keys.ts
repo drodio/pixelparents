@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 
-// Vendor-namespaced so a holder can tell at a glance this is a Pixel Parents key
+// Vendor-namespaced so a holder can tell at a glance this is a GoPixel key
 // (the way Stripe uses sk_live_ and Anthropic uses sk-ant-).
 export const KEY_PREFIX = "sk_pixelparents_live_";
 

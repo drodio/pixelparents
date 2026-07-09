@@ -25,14 +25,14 @@ export async function GET(req: Request) {
   return apiJson(
     req,
     {
-      name: "Pixel Parents API",
+      name: "GoPixel API",
       version: API_VERSION,
       description: "High-level, non-PII community stats — counts and taxonomies only.",
-      documentation: "https://pixelparents.org/developers",
+      documentation: "https://gopixel.org/developers",
       authentication: {
         scheme: "Bearer",
         header: "Authorization: Bearer <your-key>",
-        request_access: "https://pixelparents.org/developers",
+        request_access: "https://gopixel.org/developers",
       },
       endpoints: ENDPOINTS,
     },

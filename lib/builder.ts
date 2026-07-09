@@ -1,4 +1,4 @@
-// "Builder" status — a parent who has shipped commits to the Pixel Parents repo.
+// "Builder" status — a parent who has shipped commits to the GoPixel repo.
 // ALL state lives in signups.extra (no new DB columns — a stray `country` column
 // once caused a prod P0), under these keys:
 //   extra.builder              bool  — auto-set true once a commit check finds >0

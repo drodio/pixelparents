@@ -27,7 +27,7 @@ const filterParams = [
   ["time_commitment", "Weekly time commitment", TIME_COMMITMENT],
   ["skillset", "Skillset tag", SKILLSETS],
   ["grade", "Child grade", GRADES],
-  ["builder_interest", "Interest in building Pixel Parents software", BUILDER_INTEREST],
+  ["builder_interest", "Interest in building GoPixel software", BUILDER_INTEREST],
 ].map(([name, description, en]) => ({
   name,
   in: "query",
@@ -48,13 +48,13 @@ export function openapiSpec() {
   return {
     openapi: "3.1.0",
     info: {
-      title: "Pixel Parents API",
+      title: "GoPixel API",
       version: API_VERSION,
       description:
-        "High-level, non-PII community stats for the Pixel Parents (Stanford OHS) builder community. Returns counts and taxonomies only — never names, emails, phones, or photos. Request access at /developers.",
-      contact: { name: "Pixel Parents", url: "https://pixelparents.org/developers" },
+        "High-level, non-PII community stats for the GoPixel (Stanford OHS) builder community. Returns counts and taxonomies only — never names, emails, phones, or photos. Request access at /developers.",
+      contact: { name: "GoPixel", url: "https://gopixel.org/developers" },
     },
-    servers: [{ url: "https://pixelparents.org", description: "Production" }],
+    servers: [{ url: "https://gopixel.org", description: "Production" }],
     components: {
       securitySchemes: {
         bearerAuth: { type: "http", scheme: "bearer", description: "Approved API key." },

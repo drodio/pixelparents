@@ -81,7 +81,7 @@ export async function removeRepoCollaborator(
 // of outbound requests for a prolific contributor so the check stays cheap.
 const MAX_COMMIT_PAGES = 5;
 
-// Count commits authored by `username` in the Pixel Parents repo, driving the
+// Count commits authored by `username` in the GoPixel repo, driving the
 // auto "Builder" tag. Best-effort: returns 0 (never throws) on any failure —
 // missing token/username, a private/absent repo (404), rate-limit/permissions
 // (403), or a network error — so the caller can treat 0 as "no commits found".

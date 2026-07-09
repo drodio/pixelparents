@@ -5,7 +5,7 @@ describe("handleMcp (JSON-RPC)", () => {
   it("initialize returns protocol + serverInfo", async () => {
     const r = await handleMcp({ id: 1, method: "initialize" }, { authed: false });
     expect(r?.result).toHaveProperty("protocolVersion");
-    expect((r?.result as { serverInfo: { name: string } }).serverInfo.name).toBe("Pixel Parents");
+    expect((r?.result as { serverInfo: { name: string } }).serverInfo.name).toBe("GoPixel");
   });
 
   it("tools/list returns every tool", async () => {

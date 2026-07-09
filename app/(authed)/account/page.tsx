@@ -25,7 +25,7 @@ import { LinkedinPanel } from "./linkedin-panel";
 
 export const dynamic = "force-dynamic";
 
-export const metadata = { title: "Account — Pixel Parents" };
+export const metadata = { title: "Account — GoPixel" };
 
 // Lightweight, read-only telemetry for an approved key: when it was last seen on
 // the API and how many requests it has served. Both values are bumped best-effort
@@ -109,7 +109,7 @@ export default async function AccountPage() {
   // can verify many OHS students); the widget lets them add another.
   const verifyState = signup ? await getVerifyState(signup.id) : null;
 
-  // Connected apps: every "Sign in with Pixel Parents" app this user authorized
+  // Connected apps: every "Sign in with GoPixel" app this user authorized
   // (keyed to their Clerk user id, so no other-user data is read).
   const connectedApps = await getConnectedApps();
 
@@ -203,7 +203,7 @@ export default async function AccountPage() {
         ) : (
           <>
             <p className="text-sm text-white/60">
-              The Pixel Parents API is limited to OHS families. Tell us what you&apos;d like to build
+              The GoPixel API is limited to OHS families. Tell us what you&apos;d like to build
               and we&apos;ll review your request.
             </p>
             <RequestForm />
@@ -218,7 +218,7 @@ export default async function AccountPage() {
         <div>
           <h2 className="text-xl font-semibold tracking-tight">Connected apps</h2>
           <p className="mt-1 text-sm text-white/55">
-            Apps you&apos;ve signed in to with Pixel Parents, and what each can see. Revoke
+            Apps you&apos;ve signed in to with GoPixel, and what each can see. Revoke
             access anytime — they&apos;ll have to ask permission again next time.
           </p>
         </div>
