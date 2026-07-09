@@ -32,7 +32,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Directory — GoPixel",
   description:
-    "Browse the GoPixel (Stanford OHS) directory — parents and students who have chosen to share.",
+    "Browse the GoPixel (Stanford OHS) directory — parents, students, and alumni who have chosen to share.",
   // Only renders for signed-in OHS families; never index it.
   robots: { index: false, follow: false },
 };
@@ -82,7 +82,7 @@ function PageHeader() {
     <header className="mb-8">
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Directory</h1>
       <p className="mt-1 text-sm text-white/55">
-        Stanford OHS parents and students, building together.
+        Stanford OHS parents, students, and alumni, building together.
       </p>
     </header>
   );
