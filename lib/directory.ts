@@ -1,7 +1,7 @@
 import { canViewProfile, coerceShareVisibility, shareFieldsOrDefault } from "@/lib/share";
 import { childAge } from "@/lib/directory-filters";
 import { builderStatusOf } from "@/lib/builder";
-import { isStudentAccount } from "@/lib/family-display";
+import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
 import { verifiedEmailsOf } from "@/lib/verify";
 import { curatedEnrichmentOf, type StoredEnrichment } from "@/lib/enrichment/profile";
 import type { SignupRow, ChildRow } from "@/lib/db/schema/signups";
@@ -61,6 +61,9 @@ export type DirectoryCard = {
   // minor-privacy coarsening: a student card never exposes precise location
   // (no city — region/country at most) and never shows children.
   isStudent: boolean;
+  // True for an ALUM account (graduated OHS student — an adult member). Drives the
+  // directory's Parents/Students/Alumni perspective. Never both isStudent + isAlum.
+  isAlum: boolean;
   // Opt-in professional links, gated behind a NEW, default-OFF "links" share
   // field so they never appear unless the member explicitly enables them.
   // linkedinUrl is the stored profile URL; githubUrl is derived from the public
@@ -260,6 +263,7 @@ export function buildDirectoryCard(
   // opted to share: never a precise city, never the children list. (They still
   // only appear at all when isDirectoryVisible passes the same opt-in gate.)
   const isStudent = isStudentAccount(row);
+  const isAlum = isAlumAccount(row);
 
   // Location: parents may show "City, State". Students are coarsened to the
   // region/country only — at most the state (or country), never the city.
@@ -364,6 +368,7 @@ export function buildDirectoryCard(
     isBuilder,
     contributions,
     isStudent,
+    isAlum,
     linkedinUrl,
     githubUrl,
     enrichment,

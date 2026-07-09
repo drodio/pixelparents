@@ -8,7 +8,7 @@ import { getSignupByEmail, getDirectorySignups } from "@/lib/db/signups";
 import { getStats, getBreakdowns } from "@/lib/db/aggregates";
 import { getDb, hasDatabase } from "@/lib/db";
 import { children, type ChildRow, type SignupRow } from "@/lib/db/schema/signups";
-import { isStudentAccount } from "@/lib/family-display";
+import { isStudentAccount, memberTypeOf } from "@/lib/family-display";
 import {
   buildDirectoryCard,
   directoryPhotoPaths,
@@ -67,8 +67,14 @@ const getCachedBreakdowns = unstable_cache(() => getBreakdowns(), ["directory-br
 // deferred off the first paint — see CommunityPage). Module-scoped so it isn't
 // recreated per render; it just awaits the caller's already-started Promise, so
 // React can suspend on it behind a hero-only fallback.
-async function ThumbnailedShowcase({ cards }: { cards: Promise<DirectoryCard[]> }) {
-  return <ShowcaseClient cards={await cards} />;
+async function ThumbnailedShowcase({
+  cards,
+  viewerMemberType,
+}: {
+  cards: Promise<DirectoryCard[]>;
+  viewerMemberType: "parent" | "student" | "alum";
+}) {
+  return <ShowcaseClient cards={await cards} viewerMemberType={viewerMemberType} />;
 }
 
 function PageHeader() {
@@ -103,6 +109,11 @@ export default async function CommunityPage() {
     isAdminEmail(email),
   ]);
   const isOhsFamily = Boolean(viewerSignup);
+  // Directory perspective default: the viewer's own member type (parent/student/
+  // alum); non-family viewers default to parents.
+  const viewerMemberType = viewerSignup
+    ? memberTypeOf({ extra: viewerSignup.extra as Record<string, unknown> | null })
+    : "parent";
   const firstName = viewerSignup?.firstName ?? viewer.firstName ?? null;
   const status: ApprovalStatus | null = viewerSignup
     ? readApprovalStatus((viewerSignup.extra ?? {}) as Record<string, unknown>)
@@ -321,7 +332,7 @@ export default async function CommunityPage() {
             // from the URL; a Suspense boundary is required so the build doesn't
             // bail out of prerendering the surrounding tree (App Router rule).
             <Suspense fallback={<ShowcaseSkeleton />}>
-              <ShowcaseClient cards={heroCards} />
+              <ShowcaseClient cards={heroCards} viewerMemberType={viewerMemberType} />
             </Suspense>
           ) : (
             // Stream the thumbnail-complete grid: the fallback is the hero-only
@@ -329,8 +340,8 @@ export default async function CommunityPage() {
             // complete visible set), and ThumbnailedShowcase swaps in the cards
             // with thumbnails once their presigns resolve. The Suspense boundary
             // also satisfies the useSearchParams() prerender rule.
-            <Suspense fallback={<ShowcaseClient cards={heroCards} />}>
-              <ThumbnailedShowcase cards={thumbnailedCards} />
+            <Suspense fallback={<ShowcaseClient cards={heroCards} viewerMemberType={viewerMemberType} />}>
+              <ThumbnailedShowcase cards={thumbnailedCards} viewerMemberType={viewerMemberType} />
             </Suspense>
           )}
         </section>

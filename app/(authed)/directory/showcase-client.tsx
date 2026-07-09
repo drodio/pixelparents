@@ -349,11 +349,40 @@ function DualRange({
 // fork of the old directory client — same URL-persisted filters (search, age,
 // near-me, interests, sort, per-row) — but cards open IN-TAB at /directory/<token>
 // and surface the student badge, skillsets, and opt-in LinkedIn/GitHub links.
-export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
+type Perspective = "parents" | "students" | "alumni";
+
+export function ShowcaseClient({
+  cards,
+  viewerMemberType = "parent",
+}: {
+  cards: DirectoryCard[];
+  // Whose members show first — GoPixel is the whole OHS community, so the directory
+  // opens on the viewer's own kind (parent → Parents, student → Students, alum →
+  // Alumni), switchable via the toggle. Non-family viewers default to Parents.
+  viewerMemberType?: "parent" | "student" | "alum";
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const reduce = useReducedMotion();
+
+  // Perspective: parents / students / alumni. Default = the viewer's own kind, but
+  // fall back to a populated bucket if the viewer's own is empty so the grid is
+  // never blank on load. The toggle only offers buckets that have members.
+  const cardPerspective = (c: DirectoryCard): Perspective =>
+    c.isStudent ? "students" : c.isAlum ? "alumni" : "parents";
+  const counts = { parents: 0, students: 0, alumni: 0 };
+  for (const c of cards) counts[cardPerspective(c)] += 1;
+  const [perspective, setPerspective] = useState<Perspective>(() => {
+    const pref: Perspective =
+      viewerMemberType === "student"
+        ? "students"
+        : viewerMemberType === "alum"
+          ? "alumni"
+          : "parents";
+    if (counts[pref] > 0) return pref;
+    return (["parents", "students", "alumni"] as const).find((p) => counts[p] > 0) ?? "parents";
+  });
 
   // The set of interest keys that actually exist on the current cards. Used to
   // validate interests coming in from a shared URL (unknown ones are dropped).
@@ -521,6 +550,8 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
   const visible = useMemo(() => {
     const q = query.trim().toLowerCase();
     const filtered = cards.filter((c) => {
+      // Perspective: show one member type at a time (default = viewer's kind).
+      if (cardPerspective(c) !== perspective) return false;
       const cardTags = [...c.interests, ...c.skillsets];
       // Interest/skill filter: OR — match any selected tag.
       if (selected.size > 0) {
@@ -571,6 +602,7 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
     return sorted;
   }, [
     cards,
+    perspective,
     query,
     selected,
     sortKey,
@@ -805,6 +837,43 @@ export function ShowcaseClient({ cards }: { cards: DirectoryCard[] }) {
       {/* Controls. Search is always inline. On phones the secondary filters move
           into a bottom sheet behind a "Filters" button; on md+ they sit inline. */}
       <div className="flex flex-col gap-4">
+        {/* Perspective: Parents / Students / Alumni. Defaults to the viewer's own
+            kind; only buckets with members appear. Hidden if only one has members. */}
+        {(["parents", "students", "alumni"] as const).filter((p) => counts[p] > 0).length > 1 && (
+          <div
+            className="inline-flex self-start rounded-full border border-white/15 bg-white/[0.04] p-0.5 text-sm"
+            role="group"
+            aria-label="Show parents, students, or alumni"
+          >
+            {(
+              [
+                ["parents", "Parents"],
+                ["students", "Students"],
+                ["alumni", "Alumni"],
+              ] as const
+            )
+              .filter(([val]) => counts[val] > 0)
+              .map(([val, label]) => {
+                const active = perspective === val;
+                return (
+                  <button
+                    key={val}
+                    type="button"
+                    onClick={() => setPerspective(val)}
+                    aria-pressed={active}
+                    className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
+                      active ? "bg-amber-400 text-black" : "text-white/60 hover:text-white"
+                    }`}
+                  >
+                    {label}{" "}
+                    <span className={active ? "text-black/60" : "text-white/35"}>
+                      {counts[val]}
+                    </span>
+                  </button>
+                );
+              })}
+          </div>
+        )}
         <div className="flex flex-wrap items-center gap-3">
           <input
             value={query}

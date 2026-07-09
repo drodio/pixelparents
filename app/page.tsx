@@ -9,7 +9,6 @@ import { InstallPrompt } from "@/components/install-prompt";
 import { isAdminEmail } from "@/lib/admin";
 import {
   getSignupCount,
-  getChildrenCount,
   getBuilderCounts,
   getStudentBuilderCount,
 } from "@/lib/db/signups";
@@ -24,15 +23,13 @@ const cornerBtnCls =
 
 export default async function Home() {
   let count = 0;
-  let kidsCount = 0;
   let interests: string[] = [];
   let builders = { technical: 0, curious: 0 };
   let studentBuilders = 0;
   try {
-    [count, kidsCount, interests, builders, studentBuilders] =
+    [count, interests, builders, studentBuilders] =
       await Promise.all([
         getSignupCount(),
-        getChildrenCount(),
         // Completed-only so the "N shared interests" headline (and the mosaic it
         // feeds) matches the other completed-only counts — drafts don't inflate it.
         getInterestPool({ completedOnly: true }),
@@ -41,7 +38,6 @@ export default async function Home() {
       ]);
   } catch {
     count = 0;
-    kidsCount = 0;
     interests = [];
     builders = { technical: 0, curious: 0 };
     studentBuilders = 0;
@@ -96,13 +92,13 @@ export default async function Home() {
         <PixelMascot widthClass="w-48 max-w-[80vw] sm:w-64" />
         <h1 className="max-w-3xl text-balance text-3xl font-bold tracking-tight text-white sm:text-6xl">
           Join{" "}
-          <span className="text-amber-400">{count.toLocaleString()}</span> other
-          GoPixel
+          <span className="text-amber-400">{count.toLocaleString()}</span> in the
+          Stanford OHS community
         </h1>
         <h2 className="max-w-prose text-pretty text-base font-medium text-white/70 sm:text-xl">
-          Connect with{" "}
-          <span className="font-semibold text-amber-400">{kidsCount.toLocaleString()}</span>{" "}
-          OHS students around{" "}
+          Where OHS <span className="font-semibold text-white/85">parents</span>,{" "}
+          <span className="font-semibold text-white/85">students</span>, and{" "}
+          <span className="font-semibold text-white/85">alumni</span> connect around{" "}
           <span className="font-semibold text-amber-400">
             {interestsCount.toLocaleString()}
           </span>{" "}
@@ -121,7 +117,7 @@ export default async function Home() {
             href="/signup"
             className="group mt-1 inline-flex items-center gap-2 rounded-full bg-amber-400 px-7 py-3.5 text-base font-semibold text-black shadow-lg shadow-amber-400/20 transition-all hover:bg-amber-300 hover:shadow-amber-400/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-400/60 focus-visible:ring-offset-2 focus-visible:ring-offset-black active:scale-[0.98] motion-reduce:transition-none"
           >
-            Sign up free
+            Join GoPixel free
             <IconArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </Link>
         )}
