@@ -1,9 +1,9 @@
 /*!
- * Sign in with Pixel Parents — drop-in button (Tier 1, zero npm).
+ * Sign in with GoPixel — drop-in button (Tier 1, zero npm).
  *
  * Usage (anywhere on your page):
  *
- *   <script src="https://pixelparents.org/sign-in-with-pixelparents.js" async></script>
+ *   <script src="https://gopixel.org/sign-in-with-pixelparents.js" async></script>
  *   <div data-pixelparents-signin
  *        data-client-id="ppc_live_…"
  *        data-redirect-uri="https://your-app.com/callback"
@@ -21,7 +21,7 @@
 (function () {
   "use strict";
 
-  var DEFAULT_ISSUER = "https://pixelparents.org";
+  var DEFAULT_ISSUER = "https://gopixel.org";
   var DEFAULT_SCOPE = "openid ohs_verified";
   var STORAGE_PREFIX = "pp_auth:";
 
@@ -174,7 +174,7 @@
     btn.type = "button";
     btn.className = "pp-signin-btn";
     if (host.getAttribute("data-theme") === "dark") btn.className += " pp-dark";
-    var label = host.getAttribute("data-label") || "Sign in with Pixel Parents";
+    var label = host.getAttribute("data-label") || "Sign in with GoPixel";
     btn.setAttribute("aria-label", label);
     btn.innerHTML = '<span class="pp-mark">' + MARK_SVG + "</span><span>" + escapeHtml(label) + "</span>";
 
@@ -202,7 +202,7 @@
   }
 
   // Expose a tiny programmatic API for advanced callers / SPAs.
-  window.PixelParentsSignIn = {
+  window.GoPixelSignIn = {
     render: renderAll,
     renderElement: render,
     // Start the flow imperatively (no button), e.g. from a custom element.

@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export type Crumb = { label: string; href?: string };
 
-// Admin breadcrumb trail, e.g. Pixel Parents Admin › Parents › Daniel Odio.
+// Admin breadcrumb trail, e.g. GoPixel Admin › Parents › Daniel Odio.
 // Items with an href are clickable; the last (current) item is plain text.
 export function Breadcrumb({ items }: { items: Crumb[] }) {
   return (

@@ -18,7 +18,7 @@ import { getMyOAuthApps } from "./oauth-actions";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Developers — Pixel Parents",
+  title: "Developers — GoPixel",
   // In-dashboard view; never index it (the public /developers page is indexable).
   robots: { index: false, follow: false },
 };
@@ -38,7 +38,7 @@ function DevHeader() {
     <header className="mb-8">
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Developers</h1>
       <p className="mt-1 text-sm text-white/55">
-        Build on the Pixel Parents API — request a key, then explore non-PII community data.
+        Build on the GoPixel API — request a key, then explore non-PII community data.
       </p>
     </header>
   );
@@ -90,7 +90,7 @@ export default async function DashboardDevelopersPage() {
   const req = await getRequestByClerkUser(user.id);
   const reqStatus = req?.status ?? "none";
 
-  // The caller's registered "Sign in with Pixel Parents" OAuth apps. Owner-scoped
+  // The caller's registered "Sign in with GoPixel" OAuth apps. Owner-scoped
   // (keyed to their Clerk user) and best-effort (returns [] on any read error).
   const oauthApps = await getMyOAuthApps();
 
@@ -142,7 +142,7 @@ export default async function DashboardDevelopersPage() {
           ) : (
             <>
               <p className="text-sm text-white/60">
-                The Pixel Parents API is limited to OHS families. Tell us what you&apos;d like to
+                The GoPixel API is limited to OHS families. Tell us what you&apos;d like to
                 build and we&apos;ll review your request.
               </p>
               <RequestForm />
@@ -150,7 +150,7 @@ export default async function DashboardDevelopersPage() {
           )}
         </section>
 
-        {/* Sign in with Pixel Parents — register a connected app + reveal/rotate
+        {/* Sign in with GoPixel — register a connected app + reveal/rotate
             its client_id + one-time client_secret. Self-serve for MVP. */}
         <section className="border-t border-white/10 pt-8">
           <OAuthAppsPanel apps={oauthApps} ownerApiApproved={reqStatus === "approved"} />

@@ -10,7 +10,7 @@ import { EventForm, type EventFormInitial } from "../../event-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Edit event — Pixel Parents",
+  title: "Edit event — GoPixel",
   robots: { index: false, follow: false },
 };
 

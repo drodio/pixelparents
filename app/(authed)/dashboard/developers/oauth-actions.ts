@@ -17,7 +17,7 @@ import { developerFacingStatus, type DeveloperFacingStatus } from "@/lib/oauth/g
 import { ownerApiAccessApproved } from "@/lib/oauth/owner-approval";
 import { notifyAdminNewOAuthApp } from "@/lib/oauth/notify";
 
-// Server actions backing the Developers-tab "Sign in with Pixel Parents" app
+// Server actions backing the Developers-tab "Sign in with GoPixel" app
 // registration. Self-serve for MVP (any signed-in user can register an app);
 // admin approval before an app goes live is a v1 follow-up (see docs). All
 // actions are auth-gated to the caller's Clerk user, and an app can only be

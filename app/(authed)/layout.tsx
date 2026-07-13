@@ -43,7 +43,7 @@ async function enforceVerificationGate(): Promise<void> {
     // Admins are exempt from the gate.
     if (await isAdminEmail(email)) return;
 
-    // Resolve the caller's family. No signup on file → not a Pixel Parents family
+    // Resolve the caller's family. No signup on file → not a GoPixel family
     // yet, so there's nothing to force-verify here (the /verify page itself
     // handles the "no signup" messaging). Only gate users who HAVE a signup.
     const family = await getFamilyForEmail(email);
@@ -69,12 +69,27 @@ export default async function AuthedLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   await enforceVerificationGate();
+
+  // Multi-domain (Clerk): this ONE deployment serves the Clerk PRIMARY
+  // (pixelparents.org) and the SATELLITE (gopixel.org). On the satellite host we run
+  // Clerk in satellite mode (FAPI clerk.gopixel.org) with sign-in on the primary, so
+  // the cross-domain handshake works; on the primary these are false/undefined and
+  // behavior is byte-for-byte unchanged. MUST stay in lockstep with the same
+  // conditional in proxy.ts (the middleware). Domains are public config, not secrets.
+  const host = ((await headers()).get("host") ?? "").toLowerCase();
+  const isSatellite = host === "gopixel.org" || host === "www.gopixel.org";
+
   // Theme every Clerk surface under this provider (sign-in, UserButton popover,
   // "Manage account" modal) with the shared dark/amber appearance so Clerk's
   // default light UI never leaks through. The verification gate above is
   // unaffected — appearance is purely presentational.
   return (
-    <ClerkProvider appearance={clerkAppearance}>
+    <ClerkProvider
+      appearance={clerkAppearance}
+      isSatellite={isSatellite}
+      domain={isSatellite ? "gopixel.org" : undefined}
+      signInUrl={isSatellite ? "https://pixelparents.org/sign-in" : undefined}
+    >
       {/* Ties PostHog events to the signed-in account (anonymous when signed out). */}
       <PostHogIdentify />
       {children}

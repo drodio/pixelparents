@@ -108,7 +108,7 @@ const inputCls =
   "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40";
 
 // "Builder status" block. The GitHub username is edited in the field above; this
-// block lets a family member (a) run a commit check against the Pixel Parents
+// block lets a family member (a) run a commit check against the GoPixel
 // repo (auto-sets the Builder tag when commits are found) and (b) manually toggle
 // the Builder tag. Both calls are family-scoped server actions. State is local +
 // optimistic; the underlying truth lives in the member's `extra` jsonb.
@@ -212,7 +212,7 @@ function BuilderStatusBlock({
         {contributions > 0
           ? `${contributions} contribution${
               contributions === 1 ? "" : "s"
-            } to Pixel Parents.`
+            } to GoPixel.`
           : "No contributions counted yet."}
       </p>
 
@@ -390,7 +390,7 @@ export function MemberCard({
         <div>
           <label className={labelCls}>Email</label>
           {/* Email is the identity key (login + directory mapping) — read-only.
-              It's ALSO where every Pixel Parents notification is sent, so a parent
+              It's ALSO where every GoPixel notification is sent, so a parent
               who signed up with the wrong address (e.g. their child's) would
               otherwise have no way to notice or fix it. Say so, and give a recovery
               path — a raw edit here is unsafe because changing the identity key
@@ -402,7 +402,7 @@ export function MemberCard({
             className={`${inputCls} cursor-not-allowed text-white/50`}
           />
           <p className="mt-1 text-xs text-white/40">
-            All Pixel Parents notifications are sent here, and it&apos;s tied to your
+            All GoPixel notifications are sent here, and it&apos;s tied to your
             login. Wrong address (e.g. you used your child&apos;s by mistake)?{" "}
             <Link
               href="/report"

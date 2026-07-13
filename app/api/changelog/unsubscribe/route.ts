@@ -35,7 +35,7 @@ export async function resolveUnsubscribe(
 
 function page(outcome: UnsubscribeOutcome): string {
   const shell = (title: string, heading: string, body: string) =>
-    `<!doctype html><meta charset="utf-8"><title>${title} — Pixel Parents</title>` +
+    `<!doctype html><meta charset="utf-8"><title>${title} — GoPixel</title>` +
     `<body style="background:#000;color:#fff;font-family:system-ui;min-height:100vh;display:flex;align-items:center;justify-content:center;text-align:center">` +
     `<div><h1 style="font-weight:600">${heading}</h1>` +
     `<p style="color:#9ca3af">${body}</p>` +
@@ -45,14 +45,14 @@ function page(outcome: UnsubscribeOutcome): string {
     return shell(
       "Unsubscribed",
       "You're unsubscribed",
-      "You won't receive any more Pixel Parents changelog emails.",
+      "You won't receive any more GoPixel changelog emails.",
     );
   }
   if (outcome === "not-found") {
     return shell(
       "Link expired",
       "We couldn't process that link",
-      "This unsubscribe link is expired or invalid. If you're still getting emails, use the unsubscribe link in your most recent Pixel Parents email.",
+      "This unsubscribe link is expired or invalid. If you're still getting emails, use the unsubscribe link in your most recent GoPixel email.",
     );
   }
   return shell(

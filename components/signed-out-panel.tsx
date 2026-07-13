@@ -17,7 +17,7 @@ export function SignedOutPanel({ area }: { area: string }) {
             Sign in to access your {area}
           </h1>
           <p className="mx-auto mt-2 max-w-sm text-sm text-white/55">
-            This is for signed-in Pixel Parents families. Sign in to unlock your{" "}
+            This is for signed-in GoPixel families. Sign in to unlock your{" "}
             {area} and the rest of the dashboard.
           </p>
         </div>

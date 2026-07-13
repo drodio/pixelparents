@@ -23,7 +23,7 @@ export function UnverifiedNotice({ status }: { status: ApprovalStatus }) {
         </p>
         <p className="mt-0.5 text-sm text-white/60">
           {denied
-            ? "Reach out to a Pixel Parents admin if you think this is a mistake."
+            ? "Reach out to a GoPixel admin if you think this is a mistake."
             : "Verify your student's Stanford email to confirm you're an OHS family. It takes about a minute."}
         </p>
       </div>

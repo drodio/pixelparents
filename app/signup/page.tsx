@@ -16,7 +16,7 @@ function firstParam(v: string | string[] | undefined): string | undefined {
 }
 
 export const metadata: Metadata = {
-  title: "Sign up — Pixel Parents",
+  title: "Sign up — GoPixel",
   description:
     "Join OHS parents building software to transform the experience for our kids.",
 };
@@ -65,10 +65,10 @@ export default async function SignupPage({
             {count > 0 ? (
               <>
                 Join <span className="text-amber-400">{count.toLocaleString()}</span>{" "}
-                other Pixel Parents
+                other GoPixel
               </>
             ) : (
-              "Join Pixel Parents"
+              "Join GoPixel"
             )}
           </h1>
           <h2 className="mt-2 max-w-prose text-xl font-bold text-white/80 sm:text-2xl">

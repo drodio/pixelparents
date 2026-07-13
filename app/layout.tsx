@@ -15,8 +15,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://pixelparents.org"),
-  title: "Pixel Parents",
+  metadataBase: new URL("https://gopixel.org"),
+  title: "GoPixel",
   description:
     "Parents building software to improve the experience for Stanford OHS students.",
   // PWA install manifest (name, icons, standalone display, start_url:/dashboard).
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   // bar so the standalone app draws under the notch (paired with viewportFit).
   appleWebApp: {
     capable: true,
-    title: "Pixel Parents",
+    title: "GoPixel",
     statusBarStyle: "black-translucent",
   },
   // Apple touch icon for the iOS home-screen tile (amber "P" on ink).
@@ -36,8 +36,8 @@ export const metadata: Metadata = {
     title: "Pixel Parent Tech: Join our Builder Community",
     description:
       "Parents building software to improve the experience for Stanford OHS students.",
-    siteName: "Pixel Parents",
-    url: "https://pixelparents.org",
+    siteName: "GoPixel",
+    url: "https://gopixel.org",
     type: "website",
   },
   twitter: {

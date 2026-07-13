@@ -15,7 +15,7 @@ import { NewBoardForm } from "./new-board-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Create a board — Pixel Parents",
+  title: "Create a board — GoPixel",
   robots: { index: false, follow: false },
 };
 

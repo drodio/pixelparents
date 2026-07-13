@@ -83,7 +83,7 @@ function buildPrompt(commits: RecentCommit[]): string {
 
   const categorySlugs = CHANGELOG_CATEGORIES.map((c) => c.slug).join(", ");
 
-  return `You are writing the PUBLIC changelog for Pixel Parents, an app used by Stanford Online High School parents and students. Below are git commits merged since the last update. Turn them into a small set of user-facing changelog entries.
+  return `You are writing the PUBLIC changelog for GoPixel, an app used by Stanford Online High School parents and students. Below are git commits merged since the last update. Turn them into a small set of user-facing changelog entries.
 
 Commits (each has a 7-char sha, a title, and maybe a short body):
 ${commitBlock}

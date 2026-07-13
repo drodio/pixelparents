@@ -171,7 +171,7 @@ export function InstallPrompt() {
   return (
     <div
       role="dialog"
-      aria-label="Install Pixel Parents"
+      aria-label="Install GoPixel"
       className="pp-install fixed inset-x-0 bottom-0 z-50 px-4 pb-[calc(1rem+env(safe-area-inset-bottom))] pt-2"
     >
       <div className="mx-auto flex max-w-md items-center gap-3 rounded-2xl border border-amber-400/25 bg-[#0A0A0B]/95 p-3 shadow-xl shadow-black/40 backdrop-blur">
@@ -186,7 +186,7 @@ export function InstallPrompt() {
         />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-white">
-            Add Pixel Parents to your home screen
+            Add GoPixel to your home screen
           </p>
           {decision.platform === "ios" ? (
             <p className="mt-0.5 text-xs leading-snug text-white/60">

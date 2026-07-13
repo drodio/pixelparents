@@ -149,7 +149,7 @@ export function StudentVerify({
           </>
         ) : (
           <>
-            Every Pixel Parents family is paired with an OHS student. Enter your
+            Every GoPixel family is paired with an OHS student. Enter your
             student&apos;s Stanford email and we&apos;ll send a code to confirm —
             this unlocks the OHS family directory for you.
           </>

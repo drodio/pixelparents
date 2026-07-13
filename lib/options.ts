@@ -1,4 +1,4 @@
-// Canonical option taxonomies for Pixel Parents — single source of truth shared
+// Canonical option taxonomies for GoPixel — single source of truth shared
 // by the signup form (long, user-facing labels) and the developer API's
 // /api/v1/options endpoint. Non-PII reference data, safe to publish.
 
@@ -12,15 +12,17 @@ export const OHS_AFFILIATIONS = [
 // Alias used by the developer API (kept in sync — same underlying list).
 export const AFFILIATIONS = OHS_AFFILIATIONS;
 
-// Interest in helping build Pixel Parents software (signup question). Stored in
+// Interest in helping build GoPixel software (signup question). Stored in
 // signups.extra.builderInterest.
 export const BUILDER_INTEREST = ["builder", "aspiring", "no"] as const;
 
-// Who is filling out the signup. A "student" account is a signup with
-// extra.accountType === "student" (a minor who must link a parent/guardian); a
-// "parent" account is the default (and stores no accountType, matching the
-// pre-existing parent rows). Persisted in signups.extra.accountType.
-export const ACCOUNT_TYPE = ["parent", "student"] as const;
+// Who is filling out the signup — GoPixel is the whole OHS community, so one of
+// three member types: a "parent"/guardian (the default; stores NO accountType,
+// matching every pre-existing row byte-for-byte), a "student" (a minor who must
+// link a parent/guardian and whose contact is age-gated), or an "alum" (a
+// graduated OHS student — an adult member, no parent-link and no age gate).
+// Persisted in signups.extra.accountType.
+export const ACCOUNT_TYPE = ["parent", "student", "alum"] as const;
 export type AccountType = (typeof ACCOUNT_TYPE)[number];
 
 export const TECHNICAL_DEPTH = [

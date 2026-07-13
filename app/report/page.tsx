@@ -2,14 +2,14 @@ import Link from "next/link";
 import ReportForm from "./report-form";
 
 export const metadata = {
-  title: "Contact / Report — Pixel Parents",
+  title: "Contact / Report — GoPixel",
   description:
-    "Report a bug or abuse, ask a question, or request that we delete your data. Goes straight to the Pixel Parents team.",
+    "Report a bug or abuse, ask a question, or request that we delete your data. Goes straight to the GoPixel team.",
 };
 
 // Standalone contact / report page. Hosts the same <ReportForm> as the landing
 // footer modal, so the privacy/terms "contact us" copy can link here instead of
-// the dead hello@pixelparents.org mailbox. Submissions persist to the `reports`
+// the dead hello@gopixel.org mailbox. Submissions persist to the `reports`
 // DB table and are triaged from /admin/reports.
 export default function ReportPage() {
   return (
@@ -20,7 +20,7 @@ export default function ReportPage() {
             href="/"
             className="text-sm text-amber-400 underline decoration-amber-400/60 underline-offset-2 transition-colors hover:text-amber-300"
           >
-            ← Back to Pixel Parents
+            ← Back to GoPixel
           </Link>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             Contact us

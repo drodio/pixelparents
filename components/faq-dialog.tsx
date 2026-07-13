@@ -9,8 +9,8 @@ type QA = { q: string; a: string };
 // for the first time. No PII — community contact lives in the GitHub dialog (env).
 const FAQS: QA[] = [
   {
-    q: "What is Pixel Parents?",
-    a: "Pixel Parents is a community app for Stanford OHS families — a place to ask for and offer help, find other families in a directory, share events and resources, and build together. It's open source and made by OHS students and parents.",
+    q: "What is GoPixel?",
+    a: "GoPixel is a community app for Stanford OHS families — a place to ask for and offer help, find other families in a directory, share events and resources, and build together. It's open source and made by OHS students and parents.",
   },
   {
     q: "Who is it for?",
@@ -30,7 +30,7 @@ const FAQS: QA[] = [
   },
   {
     q: "How can I contribute or build?",
-    a: "Pixel Parents is open source. Check the Developers area for the API and docs, or open the GitHub option in this help menu to view the code and see how to get involved.",
+    a: "GoPixel is open source. Check the Developers area for the API and docs, or open the GitHub option in this help menu to view the code and see how to get involved.",
   },
   {
     q: "How do I join the builder group?",

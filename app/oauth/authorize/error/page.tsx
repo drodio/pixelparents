@@ -4,7 +4,7 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Sign-in error — Pixel Parents",
+  title: "Sign-in error — GoPixel",
   robots: { index: false, follow: false },
 };
 

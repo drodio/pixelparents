@@ -34,7 +34,7 @@ export async function mintIdToken(args: {
 }
 
 // Mint a short-lived RS256 access token (bearer for /userinfo or a future scoped
-// Pixel Parents API call). Carries `scope` (so /userinfo emits only consented
+// GoPixel API call). Carries `scope` (so /userinfo emits only consented
 // claims) and a PRIVATE `pp_email` claim (so /userinfo can rebuild the verified-
 // identity claims for the user). We deliberately do NOT embed the global Clerk
 // user id — the subject is the PAIRWISE id, keeping the token free of any cross-app

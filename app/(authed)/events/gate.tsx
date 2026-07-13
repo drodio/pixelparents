@@ -55,13 +55,13 @@ export async function gateEvents(): Promise<GateResult> {
             <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
               {viewerSignup
                 ? "Confirm your OHS student's Stanford email to create and manage events."
-                : "Join Pixel Parents to use Events."}
+                : "Join GoPixel to use Events."}
             </p>
             <Link
               href={viewerSignup ? "/verify" : "/signup"}
               className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
             >
-              {viewerSignup ? "Verify now" : "Join Pixel Parents"}
+              {viewerSignup ? "Verify now" : "Join GoPixel"}
             </Link>
           </div>
         </DashboardShell>

@@ -1,9 +1,9 @@
 import Link from "next/link";
 
 export const metadata = {
-  title: "Privacy Policy — Pixel Parents",
+  title: "Privacy Policy — GoPixel",
   description:
-    "How Pixel Parents handles your data: opt-in only, visible just to verified OHS families, and yours to delete anytime.",
+    "How GoPixel handles your data: opt-in only, visible just to verified OHS families, and yours to delete anytime.",
 };
 
 const REPO_URL = "https://github.com/drodio/pixelparents";
@@ -18,7 +18,7 @@ export default function PrivacyPage() {
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-8">
         <header className="flex flex-col gap-3">
           <Link href="/" className={`${linkCls} text-sm`}>
-            ← Back to Pixel Parents
+            ← Back to GoPixel
           </Link>
           <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
             Privacy Policy
@@ -27,7 +27,7 @@ export default function PrivacyPage() {
         </header>
 
         <p className="rounded-lg border border-amber-400/20 bg-amber-400/[0.04] p-4 text-sm text-white/70">
-          This is a plain-language summary, not legal advice. Pixel Parents is a
+          This is a plain-language summary, not legal advice. GoPixel is a
           free, open-source community project built by and for Stanford OHS
           families. It is <span className="font-semibold text-white/90">not</span>{" "}
           affiliated with or endorsed by Stanford University or Stanford OHS. The

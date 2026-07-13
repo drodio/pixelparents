@@ -5,7 +5,7 @@ import { ensureFamiliesSchema, ensureDirectoryIndex } from "@/lib/db/ensure";
 import { OHS_AFFILIATIONS } from "@/lib/options";
 
 // The two student affiliations from OHS_AFFILIATIONS — current students and
-// alumni. Used to count "students building Pixel Parents". Sliced from the
+// alumni. Used to count "students building GoPixel". Sliced from the
 // canonical list so the exact strings stay in lockstep with the signup form.
 const STUDENT_AFFILIATIONS: readonly string[] = [
   OHS_AFFILIATIONS[3], // "Current OHS student (I'm currently enrolled at OHS)"
@@ -154,7 +154,7 @@ export async function familyIdForEmail(email: string): Promise<string | null> {
 export const COMPLETED_SIGNUP_SQL = sql`(${signups.shareToken} IS NOT NULL AND btrim(${signups.firstName}) <> '' AND btrim(${signups.email}) <> '')`;
 
 // Total number of parents who have COMPLETED signup. Used on /signup to show
-// "Join N other Pixel Parents" as social proof — drafts are excluded.
+// "Join N other GoPixel" as social proof — drafts are excluded.
 export async function getSignupCount(): Promise<number> {
   const [row] = await getDb()
     .select({ c: sql<number>`count(*)::int` })
@@ -203,7 +203,7 @@ export async function getBuilderCounts(): Promise<{ technical: number; curious: 
 
 // Number of OHS students (current students + alumni) who have also opted in as
 // builders (extra.builderInterest = 'builder'). Used on the home footer
-// ("…and N students building Pixel Parents"). Mirrors getBuilderCounts: raw
+// ("…and N students building GoPixel"). Mirrors getBuilderCounts: raw
 // getSql with explicit columns, so no ensureFamiliesSchema() SELECT * concern.
 export async function getStudentBuilderCount(): Promise<number> {
   const sql = getSql();

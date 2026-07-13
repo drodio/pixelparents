@@ -42,27 +42,27 @@ describe("sanitizeRefToken", () => {
 
 describe("signupReferralUrl", () => {
   it("builds a family referral link with the ref param", () => {
-    expect(signupReferralUrl("https://pixelparents.org", "tok123")).toBe(
-      `https://pixelparents.org/signup?${REFERRAL_PARAM}=tok123`,
+    expect(signupReferralUrl("https://gopixel.org", "tok123")).toBe(
+      `https://gopixel.org/signup?${REFERRAL_PARAM}=tok123`,
     );
   });
 
   it("adds as=student for student referrals", () => {
-    const url = signupReferralUrl("https://pixelparents.org", "tok123", { student: true });
+    const url = signupReferralUrl("https://gopixel.org", "tok123", { student: true });
     expect(url).toContain(`${REFERRAL_PARAM}=tok123`);
     expect(url).toContain(`${REFERRAL_AS_PARAM}=student`);
-    expect(url.startsWith("https://pixelparents.org/signup?")).toBe(true);
+    expect(url.startsWith("https://gopixel.org/signup?")).toBe(true);
   });
 
   it("strips a trailing slash from the base url", () => {
-    expect(signupReferralUrl("https://pixelparents.org/", "tok123")).toBe(
-      `https://pixelparents.org/signup?${REFERRAL_PARAM}=tok123`,
+    expect(signupReferralUrl("https://gopixel.org/", "tok123")).toBe(
+      `https://gopixel.org/signup?${REFERRAL_PARAM}=tok123`,
     );
   });
 
   it("omits the ref param entirely for a garbage token (no naked ?)", () => {
-    expect(signupReferralUrl("https://pixelparents.org", "bad token")).toBe(
-      "https://pixelparents.org/signup",
+    expect(signupReferralUrl("https://gopixel.org", "bad token")).toBe(
+      "https://gopixel.org/signup",
     );
   });
 });

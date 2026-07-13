@@ -4,9 +4,9 @@ import Link from "next/link";
 export const dynamic = "force-dynamic";
 
 export const metadata = {
-  title: "Developer API — Pixel Parents",
+  title: "Developer API — GoPixel",
   description:
-    "Build with the Pixel Parents API. Request access (OHS families only); once approved, your key unlocks high-level, non-PII community stats. Never returns names, emails, phones, or photos.",
+    "Build with the GoPixel API. Request access (OHS families only); once approved, your key unlocks high-level, non-PII community stats. Never returns names, emails, phones, or photos.",
 };
 
 // Hand-trimmed illustrative payloads so the response shape is obvious at a glance.
@@ -61,7 +61,7 @@ const CLAUDE_DESKTOP_CONFIG = `{
       "command": "npx",
       "args": [
         "-y", "mcp-remote",
-        "https://pixelparents.org/api/mcp",
+        "https://gopixel.org/api/mcp",
         "--header", "Authorization: Bearer YOUR_KEY"
       ]
     }
@@ -74,10 +74,10 @@ export default function DevelopersPage() {
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-12">
         {/* Header */}
         <header className="flex flex-col items-center gap-6 text-center">
-          <Link href="/" aria-label="Pixel Parents home" className="opacity-90 transition-opacity hover:opacity-100">
+          <Link href="/" aria-label="GoPixel home" className="opacity-90 transition-opacity hover:opacity-100">
             <Image
               src="/images/pixel-mascot.png"
-              alt="Pixel Parents mascot"
+              alt="GoPixel mascot"
               width={934}
               height={918}
               priority
@@ -85,7 +85,7 @@ export default function DevelopersPage() {
             />
           </Link>
           <h1 className="text-4xl font-semibold tracking-tight sm:text-5xl">
-            Build with the Pixel Parents API
+            Build with the GoPixel API
           </h1>
           <div className="text-red-500">
             <p className="text-base font-semibold">
@@ -209,7 +209,7 @@ export default function DevelopersPage() {
               as a header:
             </p>
             <pre className="mt-2 overflow-x-auto rounded-lg border border-white/10 bg-black/60 p-3 font-mono text-xs text-emerald-200">
-https://pixelparents.org/api/mcp
+https://gopixel.org/api/mcp
             </pre>
             <p className="mt-4 text-sm text-white/60">
               <span className="font-semibold text-white/80">Claude Desktop</span> only speaks stdio,

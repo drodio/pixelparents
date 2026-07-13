@@ -17,7 +17,7 @@ export type TourStep = {
 export const TOUR_STEPS: TourStep[] = [
   {
     target: null,
-    title: "Welcome to Pixel Parents",
+    title: "Welcome to GoPixel",
     body: "A quick 60-second tour of the essentials. Use Next and Back to move, or Skip anytime.",
   },
   {
@@ -48,7 +48,7 @@ export const TOUR_STEPS: TourStep[] = [
   {
     target: "explore-developers",
     title: "Developers",
-    body: "Build on the Pixel Parents API — request a key, read the docs, and ship on top of the community.",
+    body: "Build on the GoPixel API — request a key, read the docs, and ship on top of the community.",
   },
   {
     target: "notifications",

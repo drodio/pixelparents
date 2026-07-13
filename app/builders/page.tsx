@@ -7,9 +7,9 @@ import { PixelMascot } from "@/components/pixel-mascot";
 import { getInterestPool } from "@/lib/interests";
 
 export const metadata = {
-  title: "Builder Guidelines — Pixel Parents",
+  title: "Builder Guidelines — GoPixel",
   description:
-    "How Pixel Parents tech builders work together: a high-trust, open-source, learn-by-shipping community of OHS parents building software for our kids — protecting PII and using AI safely.",
+    "How GoPixel tech builders work together: a high-trust, open-source, learn-by-shipping community of OHS parents building software for our kids — protecting PII and using AI safely.",
 };
 
 // Live interest pool drives the jigsaw strip.
@@ -52,7 +52,7 @@ export default async function BuildersPage() {
               Anyone can be a builder
             </h1>
             <p className="mx-auto max-w-xl text-lg leading-relaxed text-white/70">
-              Pixel Parents is a warm, low-pressure place for OHS parents and
+              GoPixel is a warm, low-pressure place for OHS parents and
               students to learn to build software together — even if you have
               never written a line of code. If you are curious, you already
               belong here.
@@ -337,7 +337,7 @@ export default async function BuildersPage() {
           <pre className={preClass}>
             <code>{`git clone ${REPO_URL}
 cd pixelparents
-claude -p "Read CLAUDE.md and AGENTS.md and treat them as binding instructions for this repo. Explore the codebase — the routes in app/, the modules in lib/, and the developer API under app/api — then give me a short summary of what Pixel Parents does, how it's organized, and confirm you understand the branch -> PR workflow and the strict no-PII / no-secrets rules. Then tell me you're ready to build."`}</code>
+claude -p "Read CLAUDE.md and AGENTS.md and treat them as binding instructions for this repo. Explore the codebase — the routes in app/, the modules in lib/, and the developer API under app/api — then give me a short summary of what GoPixel does, how it's organized, and confirm you understand the branch -> PR workflow and the strict no-PII / no-secrets rules. Then tell me you're ready to build."`}</code>
           </pre>
 
           <p className="text-base leading-relaxed text-white/70">
@@ -390,7 +390,7 @@ claude -p "Read CLAUDE.md and AGENTS.md and treat them as binding instructions f
               href="/developers"
               className="text-inherit underline decoration-dotted decoration-amber-400 underline-offset-2 transition-colors hover:decoration-amber-300"
             >
-              Explore the Pixel Parents API →
+              Explore the GoPixel API →
             </Link>
             <Link
               href="/docs"

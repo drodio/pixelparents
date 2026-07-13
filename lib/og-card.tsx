@@ -66,7 +66,7 @@ export async function renderOgCard(): Promise<ImageResponse> {
             P
           </div>
           <div style={{ marginLeft: 28, color: "#FFFFFF", fontSize: 52, fontWeight: 700 }}>
-            Pixel Parents
+            GoPixel
           </div>
         </div>
 
@@ -89,7 +89,7 @@ export async function renderOgCard(): Promise<ImageResponse> {
         </div>
 
         <div style={{ marginTop: 40, color: AMBER, fontSize: 30, fontWeight: 700 }}>
-          pixelparents.org
+          gopixel.org
         </div>
       </div>
     ),

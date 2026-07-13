@@ -46,7 +46,7 @@ export async function POST(req: Request) {
 // GET /api/mcp — human-friendly info (some clients probe with GET).
 export async function GET(): Promise<NextResponse> {
   return rpc({
-    name: "Pixel Parents MCP server",
+    name: "GoPixel MCP server",
     protocol: "Model Context Protocol",
     protocolVersion: MCP_PROTOCOL_VERSION,
     version: API_VERSION,

@@ -4,7 +4,7 @@ import { auth } from "@clerk/nextjs/server";
 import { listConsentsForUser, revokeConsent } from "@/lib/oauth/store";
 
 // Server actions backing the account-page "Connected apps" panel: list the apps
-// the signed-in user has authorized via "Sign in with Pixel Parents", and revoke
+// the signed-in user has authorized via "Sign in with GoPixel", and revoke
 // one (which deletes the grant AND burns all its refresh tokens). Auth-gated to the
 // caller's Clerk user — the revoke is keyed on their user id, so they can only ever
 // revoke their own grants.

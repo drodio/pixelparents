@@ -1,6 +1,6 @@
 import { getSql } from "@/lib/db";
 
-// Self-contained, self-healing DDL for the "Sign in with Pixel Parents" OIDC
+// Self-contained, self-healing DDL for the "Sign in with GoPixel" OIDC
 // provider. SAME rationale as lib/admin.ts:ensureAdminsTable and
 // lib/db/ensure.ts:ensureApiKeysTable — this app shares one Neon database across
 // features, there is NO migrate-on-deploy, and a sibling `drizzle-kit push` from

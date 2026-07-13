@@ -41,7 +41,7 @@ export default async function EditParentPage({
       <div className="flex flex-col gap-2">
         <Breadcrumb
           items={[
-            { label: "Pixel Parents Admin", href: "/admin" },
+            { label: "GoPixel Admin", href: "/admin" },
             { label: "Parents", href: "/admin" },
             { label: `${row.firstName} ${row.lastName}` },
           ]}

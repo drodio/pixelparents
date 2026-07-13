@@ -15,10 +15,10 @@ import { ThanksInviteCta } from "./thanks-invite-cta";
 import { getVerifyState } from "./verify-actions";
 import { getStudentParentLinkStatus } from "./actions";
 import { StudentVerify } from "@/components/student-verify";
-import { isStudentAccount } from "@/lib/family-display";
+import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
 
 export const metadata: Metadata = {
-  title: "Welcome — Pixel Parents",
+  title: "Welcome — GoPixel",
 };
 
 const UUID_RE =
@@ -95,6 +95,7 @@ export default async function ThanksPage({
   // "add your parent / guardian" instead of "add children". The parent path is
   // untouched. We fetch the family-link status only for student accounts.
   const isStudent = isStudentAccount({ extra: signup.extra });
+  const isAlum = isAlumAccount({ extra: signup.extra });
   const studentLinkStatus = isStudent
     ? await getStudentParentLinkStatus(validId)
     : null;
@@ -153,7 +154,11 @@ export default async function ThanksPage({
 
   const subheading = (
     <h2 className="text-xl font-semibold text-white/90 sm:text-2xl">
-      {isStudent ? "Add your parent / guardian" : "Tell us about your child(ren)"}
+      {isStudent
+        ? "Add your parent / guardian"
+        : isAlum
+          ? "Your OHS children (optional)"
+          : "Tell us about your child(ren)"}
     </h2>
   );
 

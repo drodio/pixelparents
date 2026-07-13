@@ -19,7 +19,7 @@ import { NotificationsClient } from "./notifications-client";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Notifications — Pixel Parents",
+  title: "Notifications — GoPixel",
   robots: { index: false, follow: false },
 };
 

@@ -9,7 +9,7 @@ const resend = apiKey ? new Resend(apiKey) : null;
 // Set RESEND_FROM, NOTIFY_TO, and EMAIL_SIGNATURE (multi-line) in env.
 // Use `||` (not `??`) so an empty/whitespace RESEND_FROM falls back to a valid
 // sender — a blank "from" makes Resend reject every send.
-const FROM = process.env.RESEND_FROM?.trim() || "Pixel Parents <noreply@pixelparents.org>";
+const FROM = process.env.RESEND_FROM?.trim() || "GoPixel <noreply@gopixel.org>";
 const TO = process.env.NOTIFY_TO ?? "";
 const SIGNATURE = process.env.EMAIL_SIGNATURE ?? "";
 
@@ -62,7 +62,7 @@ async function sendEmail(msg: {
 
 // From address for the admin "verify this profile" email. Env-overridable but
 // defaults to the project's own hello@ address (PUBLIC repo — no personal info).
-const VERIFY_FROM = process.env.RESEND_VERIFY_FROM ?? "Pixel Parents <hello@pixelparents.org>";
+const VERIFY_FROM = process.env.RESEND_VERIFY_FROM ?? "GoPixel <hello@gopixel.org>";
 
 // Notify every admin that a new parent needs their OHS-directory access verified.
 // One personalized email per admin; whoever acts first resolves it for everyone
@@ -81,7 +81,7 @@ export async function notifyAdminsVerifyProfile(n: {
     const text = [
       `${hi},`,
       ``,
-      `You are getting this email because you are an admin on Pixel Parents.`,
+      `You are getting this email because you are an admin on GoPixel.`,
       ``,
       `${name} has requested access to the OHS parent directory. Approve?`,
       ``,
@@ -94,7 +94,7 @@ export async function notifyAdminsVerifyProfile(n: {
     await sendEmail({
       to: admin.email,
       from: VERIFY_FROM,
-      subject: `Verify ${name}'s profile on Pixel Parents`,
+      subject: `Verify ${name}'s profile on GoPixel`,
       text,
     });
   }
@@ -111,11 +111,11 @@ export async function sendStudentVerificationCode(n: {
   const text = [
     `Hi,`,
     ``,
-    `Here is your Pixel Parents verification code:`,
+    `Here is your GoPixel verification code:`,
     ``,
     `    ${n.code}`,
     ``,
-    `Enter it on the Pixel Parents page to confirm your Stanford OHS student and`,
+    `Enter it on the GoPixel page to confirm your Stanford OHS student and`,
     `unlock the OHS family directory. This code expires in 10 minutes.`,
     ``,
     `If you didn't request this, you can safely ignore this email.`,
@@ -123,12 +123,12 @@ export async function sendStudentVerificationCode(n: {
   return sendEmail({
     to: n.to,
     from: VERIFY_FROM,
-    subject: "Your Pixel Parents verification code",
+    subject: "Your GoPixel verification code",
     text,
   });
 }
 
-const ACCOUNT_URL = "https://pixelparents.org/account";
+const ACCOUNT_URL = "https://gopixel.org/account";
 
 export type SignupNotification = {
   id: string;
@@ -147,7 +147,7 @@ export type SignupNotification = {
 // Best-effort: never throws, never blocks the user's signup.
 export async function notifyNewSignup(s: SignupNotification): Promise<void> {
   const text = [
-    `New Pixel Parents signup`,
+    `New GoPixel signup`,
     ``,
     `Name:        ${s.firstName} ${s.lastName}`,
     `Email:       ${s.email}`,
@@ -165,7 +165,7 @@ export async function notifyNewSignup(s: SignupNotification): Promise<void> {
   // instead of this internal-style admin dump.
   await sendEmail({
     to: TO,
-    subject: `New Pixel Parents signup: ${s.firstName} ${s.lastName}`,
+    subject: `New GoPixel signup: ${s.firstName} ${s.lastName}`,
     text,
   });
 }
@@ -182,7 +182,7 @@ export async function notifyApplicantWelcome(n: {
   const text = [
     `Hi ${n.firstName},`,
     ``,
-    `Thanks for signing up for Pixel Parents — I've got your submission, and I'm glad you're here. Looking forward to connecting with you more over WhatsApp.`,
+    `Thanks for signing up for GoPixel — I've got your submission, and I'm glad you're here. Looking forward to connecting with you more over WhatsApp.`,
     ``,
     `There's one more (optional) step whenever you have a few minutes: if you're willing to tell us a bit about your interests and your child(ren) at OHS, it helps us build a small seed data set before we bring other parents in:`,
     ``,
@@ -200,11 +200,11 @@ export async function notifyApplicantWelcome(n: {
         ]
       : []),
     ``,
-    `A bit about me and what I'm hoping we build together: I'm dad to Devina, just entering OHS as a 7th grader, and CEO of Chief https://Chief.bot, an AI Chief of Staff startup in the SF Bay area. My goal with Pixel Parents is to build software that transforms the experience of parents and students at OHS — staying independent, moving fast, and keeping everything open source so others can benefit too.`,
+    `A bit about me and what I'm hoping we build together: I'm dad to Devina, just entering OHS as a 7th grader, and CEO of Chief https://Chief.bot, an AI Chief of Staff startup in the SF Bay area. My goal with GoPixel is to build software that transforms the experience of parents and students at OHS — staying independent, moving fast, and keeping everything open source so others can benefit too.`,
   ].join("\n");
   await sendEmail({
     to: n.to,
-    subject: "Thanks for signing up for Pixel Parents — one more step",
+    subject: "Thanks for signing up for GoPixel — one more step",
     text,
   });
 }
@@ -222,7 +222,7 @@ export async function notifyCoParentInvite(n: {
   const text = [
     `Hi,`,
     ``,
-    `${who} invited you to join their family on Pixel Parents — OHS parents`,
+    `${who} invited you to join their family on GoPixel — OHS parents`,
     `building software to make our kids' educational experience better.`,
     ``,
     `Use your private link below to fill out your own information. You'll be able`,
@@ -236,7 +236,7 @@ export async function notifyCoParentInvite(n: {
   ].join("\n");
   return sendEmail({
     to: n.to,
-    subject: `${who} invited you to Pixel Parents`,
+    subject: `${who} invited you to GoPixel`,
     text,
   });
 }
@@ -272,13 +272,13 @@ export async function notifyAdminNewApiRequest(notice: {
   intendedUse: string;
 }): Promise<void> {
   const text = [
-    `A new Pixel Parents developer API access request is awaiting review.`,
+    `A new GoPixel developer API access request is awaiting review.`,
     ``,
     `Name:         ${notice.name}`,
     `Email:        ${notice.email}`,
     `Intended use: ${notice.intendedUse}`,
     ``,
-    `Approve or reject at https://pixelparents.org/admin/api-requests`,
+    `Approve or reject at https://gopixel.org/admin/api-requests`,
   ].join("\n");
   await sendEmail({ to: TO, subject: `New API access request: ${notice.name}`, text });
 }
@@ -291,7 +291,7 @@ export async function notifyApiRequestReceived(notice: {
   const text = [
     `Hi ${notice.name},`,
     ``,
-    `Thanks for requesting Pixel Parents developer API access — your request is`,
+    `Thanks for requesting GoPixel developer API access — your request is`,
     `under review. We review every request by hand, and you'll get another email`,
     `when it's approved. Your API key will then show up at:`,
     ``,
@@ -299,7 +299,7 @@ export async function notifyApiRequestReceived(notice: {
   ].join("\n");
   await sendEmail({
     to: notice.to,
-    subject: "Your Pixel Parents API request is under review ⏳",
+    subject: "Your GoPixel API request is under review ⏳",
     text,
   });
 }
@@ -320,7 +320,7 @@ export function buildApiDecisionEmail(notice: {
     return [
       `Hi ${notice.name},`,
       ``,
-      `Good news — your Pixel Parents developer API access has been approved.`,
+      `Good news — your GoPixel developer API access has been approved.`,
       `Sign in and grab your API key here:`,
       ``,
       ACCOUNT_URL,
@@ -332,7 +332,7 @@ export function buildApiDecisionEmail(notice: {
   return [
     `Hi ${notice.name},`,
     ``,
-    `Thanks for your interest in the Pixel Parents developer API.`,
+    `Thanks for your interest in the GoPixel developer API.`,
     `Unfortunately we can't approve this request right now.`,
     ...(reason ? [``, `Note: ${reason}`] : []),
     ``,
@@ -347,8 +347,8 @@ export async function notifyApiDecision(notice: {
   reason?: string | null;
 }): Promise<void> {
   const subject = notice.approved
-    ? "Your Pixel Parents API access is approved 🎉"
-    : "Your Pixel Parents API access request";
+    ? "Your GoPixel API access is approved 🎉"
+    : "Your GoPixel API access request";
   const text = buildApiDecisionEmail(notice);
   await sendEmail({ to: notice.to, subject, text });
 }

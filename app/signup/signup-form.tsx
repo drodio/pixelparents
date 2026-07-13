@@ -94,12 +94,12 @@ const empty = {
   // Resource-for-students opt-in (only surfaced once LinkedIn is filled).
   // Defaults to "yes" to match the pre-checked option in the prompt.
   studentResource: "yes" as "yes" | "no",
-  // Interest in helping build Pixel Parents software (no default selection).
+  // Interest in helping build GoPixel software (no default selection).
   builderInterest: "" as "" | "builder" | "aspiring" | "no",
   // Who's signing up. Default "parent" keeps the parent path exactly as before;
   // "student" routes step-2 to "add your parent / guardian". In co-parent join
   // mode this is forced to "parent" (a co-parent is always a parent).
-  accountType: "parent" as "parent" | "student",
+  accountType: "parent" as "parent" | "student" | "alum",
 };
 
 // `joinToken`, when present, puts the form in co-parent "join mode": the draft
@@ -118,7 +118,7 @@ export default function SignupForm({
   refToken?: string;
   // When a student referral link is opened (?as=student), default the new account
   // to the student flow so the friend lands in the right signup path.
-  defaultAccountType?: "parent" | "student";
+  defaultAccountType?: "parent" | "student" | "alum";
 } = {}) {
   const router = useRouter();
   const [v, setV] = useState(() =>
@@ -341,7 +341,7 @@ export default function SignupForm({
   }
   // Role choice (parent vs student). Persisted immediately so the thanks page
   // (read server-side from extra.accountType) routes to the right step-2.
-  function setAccountType(choice: "parent" | "student") {
+  function setAccountType(choice: "parent" | "student" | "alum") {
     setV((prev) => ({ ...prev, accountType: choice }));
     queue({ accountType: choice }, true);
   }
@@ -500,13 +500,29 @@ export default function SignupForm({
                     onChange={() => setAccountType("student")}
                     className="mt-1 h-4 w-4 accent-amber-500"
                   />
-                  <span>The student</span>
+                  <span>A current OHS student</span>
+                </label>
+                <label className="flex items-start gap-2 text-sm text-white/80">
+                  <input
+                    type="radio"
+                    name="accountType"
+                    checked={v.accountType === "alum"}
+                    onChange={() => setAccountType("alum")}
+                    className="mt-1 h-4 w-4 accent-amber-500"
+                  />
+                  <span>An OHS alum (I graduated from OHS)</span>
                 </label>
               </div>
               {v.accountType === "student" && (
                 <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-white/75">
                   Next, you&apos;ll add (invite) your parent or guardian so they can
                   join your family.
+                </p>
+              )}
+              {v.accountType === "alum" && (
+                <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-white/75">
+                  Welcome back! You&apos;ll just complete your own profile — no parent
+                  link or children required (add OHS children only if you have them).
                 </p>
               )}
             </fieldset>
@@ -795,7 +811,7 @@ export default function SignupForm({
 
         <fieldset>
           <legend className={legendCls}>
-            Are you interested in helping us build Pixel Parents software?{" "}
+            Are you interested in helping us build GoPixel software?{" "}
             <span className="text-red-400">*</span>
           </legend>
           <div className="mt-2 flex flex-col gap-2">
@@ -836,7 +852,7 @@ export default function SignupForm({
               <strong>Welcome, technical parent!</strong> We appreciate you. Read
               our{" "}
               <a
-                href="https://pixelparents.org/builders"
+                href="https://gopixel.org/builders"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
@@ -855,7 +871,7 @@ export default function SignupForm({
               </em>{" "}
               Please read{" "}
               <a
-                href="https://pixelparents.org/builders#frequently-asked-questions"
+                href="https://gopixel.org/builders#frequently-asked-questions"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
@@ -1005,7 +1021,9 @@ export default function SignupForm({
               ? "…"
               : !joinToken && v.accountType === "student"
                 ? "Add Your Parent →"
-                : "Add Your Child(ren) →"}
+                : !joinToken && v.accountType === "alum"
+                  ? "Continue →"
+                  : "Add Your Child(ren) →"}
           </button>
           {/* On save failure, retry is the ONLY way forward — the button above is
               disabled until the save succeeds. */}

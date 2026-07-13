@@ -1,5 +1,5 @@
 /*
- * Pixel Parents service worker — minimal, installability-focused.
+ * GoPixel service worker — minimal, installability-focused.
  *
  * PRIVACY / STALENESS SAFETY (this app is auth-gated and serves PII):
  *   - We NEVER cache API responses (/api/*) or any authed HTML. Doing so could

@@ -10,7 +10,7 @@ import {
 
 describe("slugify", () => {
   it("lowercases and hyphenates", () => {
-    expect(slugify("Sign in with Pixel Parents")).toBe("sign-in-with-pixel-parents");
+    expect(slugify("Sign in with GoPixel")).toBe("sign-in-with-gopixel");
   });
 
   it("collapses runs of non-alphanumerics and trims edges", () => {

@@ -13,7 +13,7 @@ import { studentFirstNames, formatNameList } from "@/lib/verify-copy";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Verify your OHS student — Pixel Parents",
+  title: "Verify your OHS student — GoPixel",
   robots: { index: false, follow: false },
 };
 
@@ -63,21 +63,21 @@ export default async function VerifyPage({
   const email = primaryEmail(viewer);
   const signup = email ? await getSignupByEmail(email) : null;
 
-  // Signed in, but no signup on file — not a Pixel Parents family yet.
+  // Signed in, but no signup on file — not a GoPixel family yet.
   if (!signup) {
     return (
       <Shell>
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
           <h2 className="text-lg font-semibold">We don&apos;t have a signup for this account</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
-            Sign up as a Pixel Parents family first — then you can verify your OHS
+            Sign up as a GoPixel family first — then you can verify your OHS
             student and unlock the directory.
           </p>
           <Link
             href="/signup"
             className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
           >
-            Join Pixel Parents
+            Join GoPixel
           </Link>
         </div>
       </Shell>
@@ -110,7 +110,7 @@ export default async function VerifyPage({
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-8">
           <h2 className="text-lg font-semibold">Your family&apos;s access was declined</h2>
           <p className="mt-2 text-sm text-white/55">
-            If you think this is a mistake, reach out to a Pixel Parents admin.
+            If you think this is a mistake, reach out to a GoPixel admin.
           </p>
         </div>
       ) : (

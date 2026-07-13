@@ -15,7 +15,7 @@ import { PostForm } from "../../new/post-form";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Edit post — Pixel Parents",
+  title: "Edit post — GoPixel",
   robots: { index: false, follow: false },
 };
 

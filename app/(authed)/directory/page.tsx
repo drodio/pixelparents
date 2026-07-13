@@ -8,7 +8,7 @@ import { getSignupByEmail, getDirectorySignups } from "@/lib/db/signups";
 import { getStats, getBreakdowns } from "@/lib/db/aggregates";
 import { getDb, hasDatabase } from "@/lib/db";
 import { children, type ChildRow, type SignupRow } from "@/lib/db/schema/signups";
-import { isStudentAccount } from "@/lib/family-display";
+import { isStudentAccount, memberTypeOf } from "@/lib/family-display";
 import {
   buildDirectoryCard,
   directoryPhotoPaths,
@@ -30,14 +30,14 @@ import { StatStrip } from "./stat-strip";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Directory — Pixel Parents",
+  title: "Directory — GoPixel",
   description:
-    "Browse the Pixel Parents (Stanford OHS) directory — parents and students who have chosen to share.",
+    "Browse the GoPixel (Stanford OHS) directory — parents, students, and alumni who have chosen to share.",
   // Only renders for signed-in OHS families; never index it.
   robots: { index: false, follow: false },
 };
 
-// Amber accent, matching the rest of pixelparents.org.
+// Amber accent, matching the rest of gopixel.org.
 const AMBER = "#fbbf24";
 
 // How many photo thumbnails to entice a click with, per card.
@@ -67,8 +67,14 @@ const getCachedBreakdowns = unstable_cache(() => getBreakdowns(), ["directory-br
 // deferred off the first paint — see CommunityPage). Module-scoped so it isn't
 // recreated per render; it just awaits the caller's already-started Promise, so
 // React can suspend on it behind a hero-only fallback.
-async function ThumbnailedShowcase({ cards }: { cards: Promise<DirectoryCard[]> }) {
-  return <ShowcaseClient cards={await cards} />;
+async function ThumbnailedShowcase({
+  cards,
+  viewerMemberType,
+}: {
+  cards: Promise<DirectoryCard[]>;
+  viewerMemberType: "parent" | "student" | "alum";
+}) {
+  return <ShowcaseClient cards={await cards} viewerMemberType={viewerMemberType} />;
 }
 
 function PageHeader() {
@@ -76,7 +82,7 @@ function PageHeader() {
     <header className="mb-8">
       <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Directory</h1>
       <p className="mt-1 text-sm text-white/55">
-        Stanford OHS parents and students, building together.
+        Stanford OHS parents, students, and alumni, building together.
       </p>
     </header>
   );
@@ -103,6 +109,11 @@ export default async function CommunityPage() {
     isAdminEmail(email),
   ]);
   const isOhsFamily = Boolean(viewerSignup);
+  // Directory perspective default: the viewer's own member type (parent/student/
+  // alum); non-family viewers default to parents.
+  const viewerMemberType = viewerSignup
+    ? memberTypeOf({ extra: viewerSignup.extra as Record<string, unknown> | null })
+    : "parent";
   const firstName = viewerSignup?.firstName ?? viewer.firstName ?? null;
   const status: ApprovalStatus | null = viewerSignup
     ? readApprovalStatus((viewerSignup.extra ?? {}) as Record<string, unknown>)
@@ -121,14 +132,14 @@ export default async function CommunityPage() {
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
           <h2 className="text-lg font-semibold">This page is for OHS families</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
-            Your account isn&apos;t recognized as an OHS family yet. Join Pixel Parents to see the
+            Your account isn&apos;t recognized as an OHS family yet. Join GoPixel to see the
             community.
           </p>
           <Link
             href="/signup"
             className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
           >
-            Join Pixel Parents
+            Join GoPixel
           </Link>
         </div>
       </>,
@@ -321,7 +332,7 @@ export default async function CommunityPage() {
             // from the URL; a Suspense boundary is required so the build doesn't
             // bail out of prerendering the surrounding tree (App Router rule).
             <Suspense fallback={<ShowcaseSkeleton />}>
-              <ShowcaseClient cards={heroCards} />
+              <ShowcaseClient cards={heroCards} viewerMemberType={viewerMemberType} />
             </Suspense>
           ) : (
             // Stream the thumbnail-complete grid: the fallback is the hero-only
@@ -329,8 +340,8 @@ export default async function CommunityPage() {
             // complete visible set), and ThumbnailedShowcase swaps in the cards
             // with thumbnails once their presigns resolve. The Suspense boundary
             // also satisfies the useSearchParams() prerender rule.
-            <Suspense fallback={<ShowcaseClient cards={heroCards} />}>
-              <ThumbnailedShowcase cards={thumbnailedCards} />
+            <Suspense fallback={<ShowcaseClient cards={heroCards} viewerMemberType={viewerMemberType} />}>
+              <ThumbnailedShowcase cards={thumbnailedCards} viewerMemberType={viewerMemberType} />
             </Suspense>
           )}
         </section>

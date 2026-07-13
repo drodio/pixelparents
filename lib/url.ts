@@ -11,7 +11,7 @@ export function getBaseUrl(): string {
   const vercel = process.env.VERCEL_URL;
   if (vercel) return `https://${vercel}`;
 
-  return "https://pixelparents.org";
+  return "https://gopixel.org";
 }
 
 // Full secret-share URL for a given token.

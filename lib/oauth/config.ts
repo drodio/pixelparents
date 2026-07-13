@@ -1,4 +1,4 @@
-// Static configuration + scope vocabulary for the Pixel Parents OIDC provider.
+// Static configuration + scope vocabulary for the GoPixel OIDC provider.
 // Kept dependency-free (no DB, no node:crypto) so it's safe to import anywhere,
 // including the discovery endpoint and pure scope tests.
 
@@ -41,7 +41,7 @@ export function requestsMinorData(scopes: readonly string[]): boolean {
 export const CODE_TTL_SECONDS = 60;
 
 // Token lifetimes. The ID token IS the identity assertion; the access token is a
-// bearer for /userinfo and any future scoped Pixel Parents API call.
+// bearer for /userinfo and any future scoped GoPixel API call.
 export const ID_TOKEN_TTL_SECONDS = 60 * 60; // 1 hour
 export const ACCESS_TOKEN_TTL_SECONDS = 15 * 60; // 15 minutes
 // Refresh tokens are opaque, hashed at rest, and rotated on every use. 30-day
@@ -81,7 +81,7 @@ export function parseScopes(raw: string | null | undefined): SupportedScope[] {
 // Human-readable consent copy for each scope (shown on the Allow/Deny screen). The
 // consent screen lists EXACTLY the requested scopes in plain language.
 export const SCOPE_DESCRIPTIONS: Record<SupportedScope, string> = {
-  openid: "Sign you in with Pixel Parents",
+  openid: "Sign you in with GoPixel",
   email: "See your email address",
   ohs_verified: "Confirm you're a verified Stanford OHS student or parent",
   role: "See whether you're a parent, student, or alumni",

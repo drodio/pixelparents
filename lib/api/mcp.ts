@@ -46,7 +46,7 @@ export const MCP_TOOLS = [
   {
     name: "community_stats",
     description:
-      "Total signups / families / children for the Pixel Parents community (optionally filtered). Counts only, never PII. Filtered totals below 5 are suppressed.",
+      "Total signups / families / children for the GoPixel community (optionally filtered). Counts only, never PII. Filtered totals below 5 are suppressed.",
     inputSchema: { type: "object", properties: FILTER_PROPS },
   },
   {
@@ -130,7 +130,7 @@ export async function handleMcp(
       return reply(id, {
         protocolVersion: MCP_PROTOCOL_VERSION,
         capabilities: { tools: {} },
-        serverInfo: { name: "Pixel Parents", version: API_VERSION },
+        serverInfo: { name: "GoPixel", version: API_VERSION },
       });
     case "notifications/initialized":
     case "notifications/cancelled":

@@ -189,7 +189,7 @@ describe("buildIntroEmail", () => {
       isOffer: false,
       topic: "College essays",
       offerNote: "Happy to review a draft.",
-      postUrl: "https://pixelparents.org/community/abc",
+      postUrl: "https://gopixel.org/community/abc",
     });
     expect(subject).toBe("Intro: Ada Lovelace <> Grace Hopper — College essays");
   });
@@ -201,11 +201,11 @@ describe("buildIntroEmail", () => {
       isOffer: false,
       topic: "College essays",
       offerNote: "Happy to review a draft.",
-      postUrl: "https://pixelparents.org/community/abc",
+      postUrl: "https://gopixel.org/community/abc",
     });
     expect(text).toContain("ada@example.com");
     expect(text).toContain("grace@example.com");
-    expect(text).toContain("https://pixelparents.org/community/abc");
+    expect(text).toContain("https://gopixel.org/community/abc");
     expect(text).toContain("Happy to review a draft.");
     // Ask framing: responder offered to help author.
     expect(text).toContain("offered to help");
@@ -218,7 +218,7 @@ describe("buildIntroEmail", () => {
       isOffer: true,
       topic: "Resume reviews",
       offerNote: "",
-      postUrl: "https://pixelparents.org/community/abc",
+      postUrl: "https://gopixel.org/community/abc",
     });
     expect(text).toContain("took");
     expect(text).toContain("up on their offer");
@@ -233,7 +233,7 @@ describe("buildIntroEmail", () => {
       isOffer: false,
       topic: "Chess",
       offerNote: "",
-      postUrl: "https://pixelparents.org/community/abc",
+      postUrl: "https://gopixel.org/community/abc",
     });
     expect(text).not.toContain("charlie@ohs.stanford.edu");
     expect(text).not.toContain("555-9999");

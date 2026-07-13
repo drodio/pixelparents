@@ -1,6 +1,6 @@
 import type { OAuthClientRow } from "./store";
 
-// Approval gating for "Sign in with Pixel Parents" apps (the top V1 ask).
+// Approval gating for "Sign in with GoPixel" apps (the top V1 ask).
 //
 // A registered Sign-in app (an oauth_client) is only LIVE — able to complete
 // /authorize + issue tokens — once it has been APPROVED. Approval can come from

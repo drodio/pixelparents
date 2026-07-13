@@ -87,7 +87,7 @@ export function buildIcs(ev: IcsEvent): string {
 
   push("BEGIN:VCALENDAR");
   push("VERSION:2.0");
-  push("PRODID:-//Pixel Parents//Events//EN");
+  push("PRODID:-//GoPixel//Events//EN");
   push("CALSCALE:GREGORIAN");
   push("METHOD:PUBLISH");
   push("BEGIN:VEVENT");

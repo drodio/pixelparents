@@ -8,7 +8,7 @@ import { fetchJson } from "../http";
 import { nameOverlaps } from "../identity";
 
 const BASE = "https://api.openalex.org";
-const MAILTO = "enrichment@pixelparents.org";
+const MAILTO = "enrichment@gopixel.org";
 
 type Author = {
   id?: string;

@@ -7,11 +7,11 @@ import { createReport } from "@/lib/db/reports";
 
 // --- Report a bug or abuse / contact form.
 //
-// `hello@pixelparents.org` is NOT a real mailbox, so this no longer emails a dead
+// `hello@gopixel.org` is NOT a real mailbox, so this no longer emails a dead
 // address. Reports are PERSISTED to the `reports` DB table (the source of truth)
 // and triaged from /admin/reports. As a best-effort courtesy we also email the
 // REAL admins (env superadmins + the `admins` table, via getAdminRecipients) that
-// a new report arrived — but we never send to hello@pixelparents.org. All config
+// a new report arrived — but we never send to hello@gopixel.org. All config
 // is env-driven (PUBLIC repo — no personal contact hardcoded).
 
 const apiKey = process.env.RESEND_API_KEY;
@@ -19,10 +19,10 @@ const resend = apiKey ? new Resend(apiKey) : null;
 
 // Same FROM fallback as lib/email.ts (use `||` so a blank value still yields a
 // valid sender — a blank "from" makes Resend reject every send).
-const FROM = process.env.RESEND_FROM?.trim() || "Pixel Parents <noreply@pixelparents.org>";
+const FROM = process.env.RESEND_FROM?.trim() || "GoPixel <noreply@gopixel.org>";
 
 // Absolute base URL for the admin link in the notification email (best-effort).
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://pixelparents.org")
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gopixel.org")
   .trim()
   .replace(/\/$/, "");
 
@@ -77,7 +77,7 @@ const LABELS: Record<Category, string> = {
 };
 
 // Best-effort fan-out to real admins that a new report landed. Never throws into
-// the request path, and never targets hello@pixelparents.org — the DB row is the
+// the request path, and never targets hello@gopixel.org — the DB row is the
 // source of truth; this is just a nudge to go look at /admin/reports.
 async function notifyAdmins(category: Category, contact: string, message: string): Promise<void> {
   if (!resend) return;
@@ -91,7 +91,7 @@ async function notifyAdmins(category: Category, contact: string, message: string
   if (recipients.length === 0) return;
 
   const text = [
-    `A new Pixel Parents report was submitted.`,
+    `A new GoPixel report was submitted.`,
     ``,
     `Category: ${LABELS[category]}`,
     `Contact:  ${contact || "(not provided)"}`,
@@ -107,7 +107,7 @@ async function notifyAdmins(category: Category, contact: string, message: string
       from: FROM,
       to: recipients,
       replyTo: contact && looksLikeEmail(contact) ? contact : undefined,
-      subject: `Pixel Parents report: ${LABELS[category]}`,
+      subject: `GoPixel report: ${LABELS[category]}`,
       text,
     });
   } catch (err) {

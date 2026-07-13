@@ -45,6 +45,24 @@ export function isStudentAccount(m: Pick<DisplayMember, "extra">): boolean {
   return ((m.extra ?? {}) as Record<string, unknown>).accountType === "student";
 }
 
+// An "alum" account = a graduated OHS student. An ADULT member (no age-gating, no
+// parent-link) — distinct from a current "student". Everyone who is neither a
+// student nor an alum is a parent/guardian (the default).
+export function isAlumAccount(m: Pick<DisplayMember, "extra">): boolean {
+  return ((m.extra ?? {}) as Record<string, unknown>).accountType === "alum";
+}
+
+export type MemberType = "parent" | "student" | "alum";
+
+// The single classifier the whole app should use to bucket a member. Absence of
+// accountType (or any unrecognized value) reads as "parent" — matching every
+// pre-existing row.
+export function memberTypeOf(m: Pick<DisplayMember, "extra">): MemberType {
+  if (isStudentAccount(m)) return "student";
+  if (isAlumAccount(m)) return "alum";
+  return "parent";
+}
+
 // Read a member's verified OHS student emails from its `extra` jsonb, tolerating
 // both the array (`verifiedStudentEmails`) and the legacy singular field
 // (`verifiedStudentEmail`). Mirrors lib/verify.ts `verifiedEmailsOf` but inlined

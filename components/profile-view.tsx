@@ -133,7 +133,7 @@ export async function ProfileView({
         <h1 className="text-2xl font-semibold">This profile isn&apos;t available</h1>
         <p className="max-w-md text-white/55">
           {visibility === "private"
-            ? "This Pixel Parents profile is private — only the owner can view it."
+            ? "This GoPixel profile is private — only the owner can view it."
             : loggedIn
               ? "This profile is shared with OHS families, and your account isn't recognized as one."
               : "This profile is shared with OHS families. Sign in with your OHS family account to view it."}
@@ -148,7 +148,7 @@ export async function ProfileView({
         )}
         {variant === "public" ? (
           <Link href="/" className="text-sm text-white/50 hover:underline">
-            Pixel Parents →
+            GoPixel →
           </Link>
         ) : (
           <Link href="/directory" className="text-sm text-amber-400 hover:underline">
@@ -319,8 +319,8 @@ export async function ProfileView({
               builder.contributions > 0
                 ? `${builder.contributions} contribution${
                     builder.contributions === 1 ? "" : "s"
-                  } to Pixel Parents`
-                : "A Pixel Parents builder"
+                  } to GoPixel`
+                : "A GoPixel builder"
             }
           >
             <IconCode className="h-4 w-4" strokeWidth={2} />
@@ -403,8 +403,8 @@ export async function ProfileView({
               className="inline-flex items-center gap-1.5 rounded-full border border-amber-400/25 bg-amber-400/[0.08] px-2.5 py-1 text-[11px] font-medium text-amber-200"
               title={
                 enrichment.editedByOwner
-                  ? "Drafted by Pixel Parents from public data, then refined by this member."
-                  : "Drafted by Pixel Parents from this member's public data — they control it."
+                  ? "Drafted by GoPixel from public data, then refined by this member."
+                  : "Drafted by GoPixel from this member's public data — they control it."
               }
             >
               <IconSparkles className="h-3 w-3" />

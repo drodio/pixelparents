@@ -64,7 +64,7 @@ import {
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Community post — Pixel Parents",
+  title: "Community post — GoPixel",
   robots: { index: false, follow: false },
 };
 
@@ -155,13 +155,13 @@ export default async function ExchangePostPage({
         <p className="mx-auto mt-2 max-w-md text-sm text-white/55">
           {viewerSignup
             ? "Confirm your OHS student's Stanford email to view and respond to posts."
-            : "Join Pixel Parents to view the Community."}
+            : "Join GoPixel to view the Community."}
         </p>
         <Link
           href={viewerSignup ? "/verify" : "/signup"}
           className="mt-5 inline-block rounded-full bg-amber-400 px-5 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
         >
-          {viewerSignup ? "Verify now" : "Join Pixel Parents"}
+          {viewerSignup ? "Verify now" : "Join GoPixel"}
         </Link>
       </div>,
     );

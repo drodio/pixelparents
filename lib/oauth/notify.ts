@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import { getBaseUrl } from "@/lib/url";
 
-// Admin notification for newly registered "Sign in with Pixel Parents" apps.
+// Admin notification for newly registered "Sign in with GoPixel" apps.
 //
 // Lives here (not lib/email.ts) because it belongs to the OIDC feature, and is
 // env-driven exactly like the rest of the mail path: PUBLIC repo, so no personal
@@ -12,7 +12,7 @@ import { getBaseUrl } from "@/lib/url";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
-const FROM = process.env.RESEND_FROM?.trim() || "Pixel Parents <noreply@pixelparents.org>";
+const FROM = process.env.RESEND_FROM?.trim() || "GoPixel <noreply@gopixel.org>";
 const TO = process.env.NOTIFY_TO ?? "";
 
 // Notify DROdio that a new Sign-in app was registered. The `minorData` flag marks
@@ -37,8 +37,8 @@ export async function notifyAdminNewOAuthApp(notice: {
   const base = getBaseUrl();
   const text = [
     notice.minorData
-      ? `A new "Sign in with Pixel Parents" app requesting MINOR data was just registered.`
-      : `A new "Sign in with Pixel Parents" app was just registered.`,
+      ? `A new "Sign in with GoPixel" app requesting MINOR data was just registered.`
+      : `A new "Sign in with GoPixel" app was just registered.`,
     ``,
     `App name: ${notice.name}`,
     `Scopes:   ${notice.scopes.join(", ") || "—"}`,

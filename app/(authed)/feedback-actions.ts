@@ -26,8 +26,8 @@ import {
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
-const FROM = process.env.RESEND_FROM?.trim() || "Pixel Parents <noreply@pixelparents.org>";
-const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://pixelparents.org")
+const FROM = process.env.RESEND_FROM?.trim() || "GoPixel <noreply@gopixel.org>";
+const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "https://gopixel.org")
   .trim()
   .replace(/\/$/, "");
 
@@ -70,7 +70,7 @@ async function notifyAdmins(pagePath: string | null, message: string): Promise<v
     await resend.emails.send({
       from: FROM,
       to: recipients,
-      subject: "Pixel Parents feedback",
+      subject: "GoPixel feedback",
       text,
     });
   } catch (err) {

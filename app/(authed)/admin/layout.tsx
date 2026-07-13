@@ -38,13 +38,13 @@ export default async function AdminLayout({
         >
           <Image
             src="/images/pixel-mascot.png"
-            alt="Pixel Parents"
+            alt="GoPixel"
             width={50}
             height={50}
             className="h-[50px] w-[50px]"
           />
           <span className="text-lg font-semibold tracking-tight">
-            Pixel Parents Admin
+            GoPixel Admin
           </span>
         </Link>
         <UserButton appearance={clerkAppearance} />

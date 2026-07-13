@@ -92,7 +92,7 @@ function AnchorHeading({
 }
 
 /**
- * Renders the builders.md source with the Pixel Parents dark theme.
+ * Renders the builders.md source with the GoPixel dark theme.
  * Element styling lives here so editing builders.md never requires touching CSS.
  */
 export default function Markdown({ content }: { content: string }) {

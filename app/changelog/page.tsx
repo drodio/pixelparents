@@ -7,8 +7,8 @@ import { ChangelogSubscribe } from "./subscribe";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Changelog — Pixel Parents",
-  description: "What we've shipped on Pixel Parents.",
+  title: "Changelog — GoPixel",
+  description: "What we've shipped on GoPixel.",
 };
 
 export default async function ChangelogPage() {
@@ -21,7 +21,7 @@ export default async function ChangelogPage() {
           <div>
             <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">Changelog</h1>
             <p className="mt-2 text-white/60">
-              Everything we&apos;ve shipped on Pixel Parents — newest first.
+              Everything we&apos;ve shipped on GoPixel — newest first.
             </p>
           </div>
           <ChangelogSubscribe />
@@ -39,7 +39,7 @@ export default async function ChangelogPage() {
 
         <footer className="mt-16 border-t border-white/10 pt-6 text-sm text-white/45">
           <Link href="/" className="text-white/65 hover:underline">
-            Pixel Parents →
+            GoPixel →
           </Link>
         </footer>
       </div>

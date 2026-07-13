@@ -222,8 +222,8 @@ export function buildIntroEmail(input: {
   // Who-helps-whom framing. On an Ask the responder is helping the author; on an
   // Offer the author is helping the responder.
   const context = isOffer
-    ? `${responder.name} took ${asker.name} up on their offer "${topic}" on the Pixel Parents Community board.`
-    : `${responder.name} offered to help ${asker.name} with "${topic}" on the Pixel Parents Community board.`;
+    ? `${responder.name} took ${asker.name} up on their offer "${topic}" on the GoPixel Community board.`
+    : `${responder.name} offered to help ${asker.name} with "${topic}" on the GoPixel Community board.`;
 
   const text = [
     `You're connected! 🎉`,
