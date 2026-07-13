@@ -171,7 +171,7 @@ export function EnrichmentPanel({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <IconSparkles className="h-4 w-4 text-amber-400" />
-          <span className="text-sm font-medium text-white/80">Auto-built profile</span>
+          <span className="text-sm font-medium text-white/80">AI-assisted profile</span>
           {buildStatus === "building" && (
             <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/10 px-2 py-0.5 text-[11px] font-medium text-amber-300">
               Building… ~1 min
@@ -199,6 +199,14 @@ export function EnrichmentPanel({
           </button>
         )}
       </div>
+
+      {/* Human-in-control framing: this is part of YOUR profile, drafted by the
+          machine — you keep full control to edit, approve, or clear any of it.
+          Not a separate, walled-off "auto" thing. */}
+      <p className="mt-1 text-xs text-white/45">
+        We draft this from your public data — it&apos;s <strong>your profile</strong>,
+        and you&apos;re in full control to edit, approve, or clear any of it below.
+      </p>
 
       {/* Opt-in control — default OFF; clear consent copy. */}
       <label className="mt-3 flex items-start gap-2 text-sm text-white/80">
@@ -231,11 +239,15 @@ export function EnrichmentPanel({
 
       {optedIn && curated && (
         <div className="mt-4 flex flex-col gap-5">
-          {/* Curated info (owner-editable). */}
-          <div className="flex flex-col gap-3 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+          {/* Curated info (owner-editable) — presented as part of the profile, not a
+              walled-off block, so it flows as one unified, editable section. */}
+          <div className="flex flex-col gap-3">
             <div className="flex items-center justify-between gap-2">
               <span className="text-xs font-semibold uppercase tracking-wide text-white/40">
-                Bio &amp; expertise{curated.editedByOwner ? " · edited by you" : ""}
+                Your bio &amp; expertise{" "}
+                <span className="font-normal normal-case tracking-normal text-white/35">
+                  {curated.editedByOwner ? "· edited by you" : "· AI-drafted, editable"}
+                </span>
               </span>
               {!editing ? (
                 <button
