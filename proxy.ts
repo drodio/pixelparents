@@ -13,16 +13,20 @@ import { NextResponse } from "next/server";
 const isProtectedRoute = createRouteMatcher(["/admin(.*)", "/account(.*)"]);
 
 // Multi-domain (Clerk): this ONE deployment serves the Clerk PRIMARY
-// (pixelparents.org) and the SATELLITE (gopixel.org). On the satellite host we flip
-// Clerk into satellite mode (its FAPI is clerk.gopixel.org) and point sign-in at the
-// primary, so the cross-domain handshake runs instead of gopixel.org being treated
-// as its own primary. On the primary host these are unset → behavior is byte-for-byte
-// unchanged. Kept in lockstep with the same conditional on <ClerkProvider> (see
-// app/(authed)/layout.tsx). Domains are public config, not secrets.
-const PRIMARY_SIGN_IN_URL = "https://pixelparents.org/sign-in";
+// (gopixel.org) and the SATELLITE (pixelparents.org). On the satellite host we flip
+// Clerk into satellite mode (its FAPI is clerk.pixelparents.org) and point sign-in at
+// the primary (gopixel.org), so the cross-domain handshake runs instead of
+// pixelparents.org being treated as its own primary. On the primary host these are
+// unset → gopixel.org gets native sign-in. Kept in lockstep with the same conditional
+// on <ClerkProvider> (see app/(authed)/layout.tsx). Domains are public config, not
+// secrets. NOTE: this must ship together with the new gopixel.org-primary publishable
+// key in NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (the key rotates when Clerk's primary
+// changes) — deploying the flip against the old pixelparents.org-primary key breaks
+// auth on both domains.
+const PRIMARY_SIGN_IN_URL = "https://gopixel.org/sign-in";
 function isSatelliteHost(host: string | null): boolean {
   const h = (host ?? "").toLowerCase();
-  return h === "gopixel.org" || h === "www.gopixel.org";
+  return h === "pixelparents.org" || h === "www.pixelparents.org";
 }
 
 export default clerkMiddleware(
@@ -42,7 +46,7 @@ export default clerkMiddleware(
   },
   (req) =>
     isSatelliteHost(req.headers.get("host"))
-      ? { isSatellite: true, domain: "gopixel.org", signInUrl: PRIMARY_SIGN_IN_URL }
+      ? { isSatellite: true, domain: "pixelparents.org", signInUrl: PRIMARY_SIGN_IN_URL }
       : {},
 );
 
