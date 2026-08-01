@@ -516,6 +516,18 @@ export function ShowcaseClient({
   const isMobile = viewportWidth < 768;
   const [sheetOpen, setSheetOpen] = useState(false);
 
+  // On DESKTOP the same secondary filters used to sprawl inline under the search
+  // box. Parents found the detailed interest facet overwhelming (feedback,
+  // Jul 2026), so they now sit behind a "More filters" disclosure. Starts open
+  // when the page loaded with filters already applied (e.g. a shared/bookmarked
+  // URL), so results never look filtered for no visible reason.
+  const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(
+    () =>
+      initialState.interests.length > 0 ||
+      initialState.sortKey !== "name" ||
+      initialState.sortDir !== "asc",
+  );
+
   // Count of active secondary filters, shown as a badge on the mobile Filters
   // button so it's clear filtering is in effect without opening the sheet.
   const activeFilterCount =
@@ -898,11 +910,30 @@ export function ShowcaseClient({
           </button>
         </div>
 
-        {/* Desktop: secondary filters inline. Rendered only when NOT on a phone
-            (isMobile defaults to false so SSR/first paint matches), so the same
-            `secondaryControls` element never mounts twice. The md:hidden on the
-            wrapper additionally guards the brief pre-mount window. */}
-        {!isMobile && <div className="hidden md:block">{secondaryControls}</div>}
+        {/* Desktop: secondary filters behind a "More filters" disclosure.
+            Rendered only when NOT on a phone (isMobile defaults to false so
+            SSR/first paint matches), so the same `secondaryControls` element
+            never mounts twice. The md:hidden on the wrapper additionally guards
+            the brief pre-mount window. */}
+        {!isMobile && (
+          <div className="hidden md:block">
+            <button
+              type="button"
+              onClick={() => setDesktopFiltersOpen((v) => !v)}
+              aria-expanded={desktopFiltersOpen}
+              className={`${controlCls} inline-flex shrink-0 items-center gap-2 hover:bg-white/10`}
+            >
+              <IconFilter className="h-4 w-4" />
+              {desktopFiltersOpen ? "Fewer filters" : "More filters"}
+              {activeFilterCount > 0 && (
+                <span className="grid h-5 min-w-5 place-items-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+                  {activeFilterCount}
+                </span>
+              )}
+            </button>
+            {desktopFiltersOpen && <div className="mt-4">{secondaryControls}</div>}
+          </div>
+        )}
       </div>
 
       {/* Mobile: secondary filters in a bottom sheet. Rendered only when on a

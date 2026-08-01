@@ -5,6 +5,57 @@ compiled from talking with OHS parents (tabs: Ava Notes / Ava Changes / Sofia
 Changes / To-Do's), plus the affiliation-disclaimer request relayed from an OHS
 staff contact via Daniel.
 
+## Progress Update as of [July 31, 2026 — 7:33 PM Pacific]
+
+### Summary of changes since last update
+
+Third commit: collapsed the desktop secondary filters behind a "More filters"
+disclosure on both Directory and Community, then verified the whole branch in a
+real browser. Typecheck + lint clean, 874/874 tests pass.
+
+### Detail of changes made:
+
+- **"More filters" disclosure on desktop.** Both surfaces already collapsed
+  their secondary filters into a mobile bottom sheet; on md+ they sprawled
+  inline, which is what parents found overwhelming.
+  - `app/(authed)/directory/showcase-client.tsx` and
+    `app/(authed)/community/exchange-board-client.tsx` now wrap the shared
+    `secondaryControls` in a toggle button that reads "More filters" /
+    "Fewer filters" and carries the same active-filter count badge the mobile
+    button uses.
+  - Directory starts OPEN when the page loaded with filters already applied
+    (interests / non-default sort restored from the URL), so a shared or
+    bookmarked link never looks filtered for no visible reason. Community has no
+    URL-restored filter state, so it starts closed.
+  - The mobile sheet path is untouched — `secondaryControls` still mounts in
+    exactly one place, guarded by the existing `isMobile` check.
+
+### Browser verification (dev server, localhost)
+
+Actually exercised, not just typechecked:
+
+- Landing: disclaimer renders under the CTA and reads correctly.
+- Signup role switching, all three roles:
+  - parent → section titled "First parent's info", WeChat field PRESENT
+  - student → "Your info" + the parent-invite note (the reported bug is fixed)
+  - alum → "Your info" + the reworded welcome-back note, no parent mention
+  - WeChat field correctly ABSENT for student and alum (asserted via DOM)
+- Sidebar renders signed-out and shows the new order: Dashboard, Community,
+  Resources, Events, Directory, Family, Developers.
+- The two filter disclosures are behind auth and were NOT exercised live — they
+  typecheck and lint but still need an eyeball with a signed-in account.
+
+### Potential concerns to address:
+
+- **Pre-existing, not from this branch:** the landing and signup pages log React
+  hydration mismatches from `components/` `InterestTiles` — inline styles are
+  emitted as numbers client-side (`left: 611.61`) vs `"611.611px"` strings
+  server-side. Harmless today but it's a real mismatch and worth a separate fix.
+- The Directory disclosure's open-on-load condition checks interests and sort but
+  NOT the age or radius filters, because those aren't part of `initialState` in
+  the same shape. A URL restoring only an age range would open collapsed with a
+  count badge showing. Minor, but it's an inconsistency.
+
 ## Progress Update as of [July 31, 2026 — 7:27 PM Pacific]
 
 ### Summary of changes since last update

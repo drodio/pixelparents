@@ -119,6 +119,11 @@ export function ExchangeBoardClient({
   // stay inline. Track viewport so the controls render in exactly one place.
   const [isMobile, setIsMobile] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // On DESKTOP these used to sprawl inline. Parents found the detailed
+  // interest/tag facet overwhelming (feedback, Jul 2026), so on md+ they now sit
+  // behind a "More filters" disclosure, mirroring the directory. Starts closed —
+  // this board has no URL-restored filter state, so there's nothing to reveal.
+  const [desktopFiltersOpen, setDesktopFiltersOpen] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia("(max-width: 767px)");
     const onChange = () => setIsMobile(mq.matches);
@@ -312,9 +317,28 @@ export function ExchangeBoardClient({
         </button>
       </div>
 
-      {/* Desktop: secondary controls inline. Rendered only when NOT mobile so
-          the shared `secondaryControls` element never mounts twice. */}
-      {!isMobile && <div className="hidden md:block">{secondaryControls}</div>}
+      {/* Desktop: secondary controls behind a "More filters" disclosure.
+          Rendered only when NOT mobile so the shared `secondaryControls` element
+          never mounts twice. */}
+      {!isMobile && (
+        <div className="hidden md:block">
+          <button
+            type="button"
+            onClick={() => setDesktopFiltersOpen((v) => !v)}
+            aria-expanded={desktopFiltersOpen}
+            className="inline-flex shrink-0 items-center gap-2 rounded-full border border-white/15 bg-white/[0.04] px-3.5 py-1.5 text-xs font-medium text-white/70 transition-colors hover:bg-white/10"
+          >
+            <IconFilter className="h-4 w-4" />
+            {desktopFiltersOpen ? "Fewer filters" : "More filters"}
+            {activeFilterCount > 0 && (
+              <span className="grid h-5 min-w-5 place-items-center rounded-full bg-amber-400 px-1 text-[11px] font-bold text-black">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+          {desktopFiltersOpen && <div className="mt-4">{secondaryControls}</div>}
+        </div>
+      )}
 
       {/* Mobile: secondary controls in a bottom sheet. */}
       {isMobile && (
