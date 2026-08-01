@@ -12,6 +12,7 @@ import {
   rsvpCountsFor,
   myRsvpsFor,
   editableEventIds,
+  authorTokensForEvents,
 } from "@/lib/db/events";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
@@ -121,10 +122,11 @@ export default async function EventsPage() {
 
   const rows = await listAllEvents();
   const ids = rows.map((r) => r.id);
-  const [counts, myRsvps, editable] = await Promise.all([
+  const [counts, myRsvps, editable, authorTokens] = await Promise.all([
     rsvpCountsFor(ids),
     myRsvpsFor(viewerSignup!.id, ids),
     editableEventIds(viewerSignup!.id, ids),
+    authorTokensForEvents(rows),
   ]);
 
   const events: CalendarEvent[] = rows.map((r) =>
@@ -132,6 +134,7 @@ export default async function EventsPage() {
       counts: counts.get(r.id),
       myRsvp: myRsvps.get(r.id) ?? null,
       canEdit: editable.has(r.id),
+      authorToken: r.authorSignupId ? (authorTokens.get(r.authorSignupId) ?? null) : null,
     }),
   );
 

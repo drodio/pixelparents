@@ -20,6 +20,7 @@ function ev(partial: Partial<CalendarEvent> & { id: string; startsAt: string }):
     onlineUrl: null,
     source: "user",
     authorLabel: null,
+    authorToken: null,
     goingCount: 0,
     interestedCount: 0,
     canEdit: false,

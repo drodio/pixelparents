@@ -21,6 +21,9 @@ export function toCalendarEvent(
     counts?: { going: number; interested: number };
     myRsvp: "going" | "interested" | null;
     canEdit: boolean;
+    // Resolved by the caller (it needs a signups lookup + the shareable-profile
+    // gate). Omitted → the organizer name renders as plain text.
+    authorToken?: string | null;
   },
 ): CalendarEvent {
   return {
@@ -35,6 +38,7 @@ export function toCalendarEvent(
     onlineUrl: row.onlineUrl ?? null,
     source: row.source === "ohs" ? "ohs" : "user",
     authorLabel: row.authorLabel ?? null,
+    authorToken: opts.authorToken ?? null,
     goingCount: opts.counts?.going ?? 0,
     interestedCount: opts.counts?.interested ?? 0,
     canEdit: opts.canEdit,

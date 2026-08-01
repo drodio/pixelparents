@@ -20,6 +20,7 @@ import {
   rsvpCountsFor,
   myRsvpsFor,
   editableEventIds,
+  authorTokensForEvents,
   listRsvpsForEvent,
   listEventAdmins,
 } from "@/lib/db/events";
@@ -64,10 +65,12 @@ export default async function EventDetailPage({
   ]);
 
   const canEdit = editable.has(id) && row.source === "user";
+  const authorTokens = await authorTokensForEvents([row]);
   const event = toCalendarEvent(row, {
     counts: counts.get(id),
     myRsvp: myRsvps.get(id) ?? null,
     canEdit,
+    authorToken: row.authorSignupId ? (authorTokens.get(row.authorSignupId) ?? null) : null,
   });
 
   // Resolve attendee + admin display names in ONE batch. Going/interested names

@@ -5,6 +5,58 @@ compiled from talking with OHS parents (tabs: Ava Notes / Ava Changes / Sofia
 Changes / To-Do's), plus the affiliation-disclaimer request relayed from an OHS
 staff contact via Daniel.
 
+## Progress Update as of [July 31, 2026 — 7:27 PM Pacific]
+
+### Summary of changes since last update
+
+Second commit on this branch: the Events half of Ava's doc. Fixed the
+online/in-person mislabelling at its root (the importer, not the data) and made
+the event organizer's name link to their profile. Typecheck + lint clean,
+874/874 tests pass (5 new).
+
+### Detail of changes made:
+
+- **Online vs in-person tags were wrong for EVERY OHS event, not just a few.**
+  `lib/db/events.ts` hard-coded `isOnline: false` on import, and `PlaceBadge`
+  (`app/(authed)/events/event-bits.tsx`) renders anything not-online as
+  "In person". So all ~30 imported school-calendar entries showed "In person",
+  which is why Ava saw it on both PTC and Back to School Night. Stanford OHS is
+  an *online* school, so the default was backwards.
+  - New `isOhsEventOnline(title)` in `lib/events/ohs-parser.ts`: defaults to
+    online, flips to in-person only on an explicit on-campus hint
+    (`graduation`, `commencement`, `reunion`, `on campus`, `in person`,
+    `summer session`, `summer institute`). Case-insensitive substring match.
+  - Extending it for the rest is a one-line list addition — that's the hook for
+    Ava's offer to flag more manually.
+  - Applied on insert **and** in the `onConflictDoUpdate` set block. The update
+    path matters more than the insert: rows are already in the table with
+    `isOnline=false`, so without it the existing bad tags would never heal. They
+    correct themselves on the next OHS sync.
+  - 5 new tests in `lib/events/ohs-parser.test.ts` covering Ava's two reported
+    cases, calendar markers, on-campus hints, and case-insensitivity.
+- **Organizer now links to their profile** (Ava: parents with questions had no
+  way to reach whoever created an event).
+  - New `authorTokensForEvents(rows)` in `lib/db/events.ts`: batch-resolves
+    `author_signup_id` → `share_token`, gated on `hasShareableProfile` (the same
+    gate the community thread uses), so it can't surface a profile the viewer
+    isn't allowed to open.
+  - `authorToken` threaded through `CalendarEvent` → `toCalendarEvent` → both
+    call sites (`events/page.tsx`, `events/[id]/page.tsx`).
+  - `events-calendar-client.tsx` renders the organizer as a `<Link>` to
+    `/directory/<token>` when present, plain text otherwise (OHS imports and
+    non-shareable profiles are unchanged).
+
+### Potential concerns to address:
+
+- The in-person hint list is heuristic. It will mislabel an on-campus event whose
+  title doesn't contain any hint word. Defaulting to online is the safer error
+  for an online school, but it IS a guess — a real `is_online` field on the OHS
+  source would be better if the calendar ever exposes one.
+- Existing OHS rows only correct themselves when the sync next runs. Worth
+  confirming the sync is scheduled (or triggering it once) rather than assuming.
+- `authorTokensForEvents` adds one extra `signups` query to the events page. It's
+  batched and id-scoped, so it should be cheap, but it is a new query on a hot path.
+
 ## Progress Update as of [July 31, 2026 — 7:19 PM Pacific]
 
 ### Summary of changes since last update

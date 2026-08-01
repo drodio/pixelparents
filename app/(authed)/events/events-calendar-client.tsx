@@ -599,7 +599,21 @@ function DetailDrawer({ event, onClose }: { event: CalendarEvent; onClose: () =>
 
       <div className="mt-3 flex flex-wrap items-center gap-3 text-sm">
         <PlaceBadge event={event} />
-        {event.authorLabel && <span className="text-white/45">· {event.authorLabel}</span>}
+        {/* Organizer. Links to their directory profile when they have a
+            shareable one, so a parent with a question about the event can reach
+            them (parent feedback, Jul 2026). Falls back to plain text for
+            OHS-imported events and non-shareable profiles. */}
+        {event.authorLabel &&
+          (event.authorToken ? (
+            <Link
+              href={`/directory/${event.authorToken}`}
+              className="text-white/45 underline decoration-white/25 underline-offset-2 transition-colors hover:text-white/70"
+            >
+              · {event.authorLabel}
+            </Link>
+          ) : (
+            <span className="text-white/45">· {event.authorLabel}</span>
+          ))}
       </div>
 
       {event.isOnline && event.onlineUrl && (
