@@ -19,6 +19,7 @@ import { IconGlobe } from "@/components/icons";
 import {
   IconPhone,
   IconMail,
+  IconMessage,
   IconCode,
   IconLinkedin,
   IconGithub,
@@ -517,6 +518,19 @@ export async function ProfileView({
                 <a href={`mailto:${displayEmail}`} className="text-amber-400 hover:underline">
                   {displayEmail}
                 </a>
+              </span>
+            )}
+            {/* WeChat ID. Rides the same "phone" opt-in as the other direct-contact
+                channel, and is deliberately suppressed while we're substituting a
+                parent's contact for an un-certified minor — that path is about
+                withholding the student's own reachability, so it fails closed.
+                Only parents can set this today, so a student row carries none. */}
+            {visible.has("phone") && !usingParentContact && signup.wechatId?.trim() && (
+              <span className="inline-flex items-center gap-1.5">
+                <IconMessage className="h-4 w-4 text-white/50" />
+                <span className="text-white/85">
+                  WeChat: <span className="text-amber-400">{signup.wechatId.trim()}</span>
+                </span>
               </span>
             )}
           </div>
