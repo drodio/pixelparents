@@ -9,6 +9,68 @@ Continues from `PRD/feat-ava-feedback-batch-1.md` — read that first for the
 source-of-truth doc, the full item list, and the "already shipped, do NOT
 rebuild" section.
 
+## Progress Update as of [July 31, 2026 — 9:35 PM Pacific]
+
+### Summary of changes since last update
+
+Built the last clearly-specified item from Ava's doc: a reply in a community
+thread can now link an existing resource board without leaving the page. All four
+`verify` steps (typecheck, lint, test, **build**) run green locally.
+
+### Detail of changes made:
+
+- **"Link a resource board" in the reply composer.** Ava's framing: someone asks
+  a question a board already answers, and whoever replies should be able to point
+  at it.
+  - Key realization that kept this small: replies **already** linkify bare
+    http(s) URLs (`lib/linkify.tsx`), so this needed no new message kind, no
+    schema change, and no new rendering path. The only missing piece was *finding*
+    the board. Contrast with the `@mention` system, which needed markers,
+    serialization, and re-resolution because it stores identity.
+  - `app/(authed)/community/actions.ts`: new `searchResourceBoardsAction`.
+    Same `verifiedCaller()` gate as `searchMentionMembersAction`. Returns only
+    `{id, title}`, both already visible to any verified member on `/resources`,
+    so it exposes nothing new. An empty query lists recent boards so someone who
+    doesn't know what they want still sees options.
+  - `app/(authed)/community/[id]/board-link-picker.tsx`: new client component.
+    Debounced (180ms) search, outside-click + Escape to dismiss, keyboard-
+    reachable, `role="listbox"`.
+  - `app/(authed)/community/[id]/response-thread.tsx`: renders the picker under
+    the reply textarea. On pick it appends `"<title> — <origin>/resources/<id>"`
+    to the body, clamped to `REPLY_BODY_MAX`. The URL is absolute on purpose —
+    `Linkify` deliberately ignores relative paths, so a relative link would
+    render as dead text.
+  - The parent owns the body state; the picker never touches the textarea.
+
+### Verification run
+
+- `npm run typecheck` — exit 0
+- `npm run lint` — exit 0 (first pass FAILED on
+  `react-hooks/set-state-in-effect`: `setLoading(true)` sat in the effect body;
+  moved inside the debounce timeout)
+- `npm test` — exit 0, 874/874
+- `npm run build` — exit 0
+
+Checked by exit code, not by eyeballing output — an earlier run in this session
+printed a misleading "LINT OK" because `&&` chained off `tail` rather than off
+`npm`.
+
+### Potential concerns to address:
+
+- **The picker is not live-verified.** Community threads are behind auth AND
+  require an existing ask with a response, so it couldn't be exercised locally.
+  It typechecks, lints, builds, and mirrors the existing mention-picker patterns,
+  but a signed-in pass is genuinely needed before trusting it.
+- `searchResourceBoardsAction` filters in JS over `listBoards(limit: 200)` rather
+  than querying with a SQL `ILIKE`. Fine at current board counts and it reuses the
+  audited visibility path, but it will not scale past a few hundred boards.
+- Inserted text is plain — there's no board *card* in the rendered reply, just a
+  linkified URL with the title beside it. That was the deliberate small-scope
+  choice; a richer embed would need a real message kind.
+- The picker attaches only to the plain comment/private-note composer, not to the
+  event-proposal or poll modes (they have their own field sets). That seems right
+  but is worth confirming with Ava.
+
 ## Progress Update as of [July 31, 2026 — 8:37 PM Pacific]
 
 ### Summary of changes since last update

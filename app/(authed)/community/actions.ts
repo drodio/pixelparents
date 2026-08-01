@@ -12,6 +12,7 @@ import { signups, type SignupRow } from "@/lib/db/schema/signups";
 import { isStudentAccount } from "@/lib/family-display";
 import { createNotification } from "@/lib/db/notifications";
 import { getBaseUrl } from "@/lib/url";
+import { listBoards } from "@/lib/db/resources";
 import { deriveConnectionParty, buildIntroEmail } from "@/lib/intro";
 import { sendConnectionIntro } from "@/lib/email";
 import {
@@ -104,6 +105,34 @@ export async function searchMentionMembersAction(input: {
   } catch (err) {
     console.error("searchMentionMembersAction failed:", err);
     return { ok: false, error: "Couldn't search members." };
+  }
+}
+
+// Live autocomplete for the "Link a resource board" picker in a reply composer.
+//
+// Parent feedback (Jul 2026): when someone asks a question that a resource board
+// already answers, the person replying had no way to point at that board without
+// leaving the page to go copy its URL. Replies already linkify bare URLs, so the
+// only thing missing was FINDING the board — this action is that lookup.
+//
+// Same gate as the @-mention search: verified OHS families only. Returns nothing
+// but a board id + title, both of which are already visible to any verified
+// member on /resources, so this leaks no new information.
+export async function searchResourceBoardsAction(input: {
+  query: string;
+}): Promise<
+  { ok: true; results: { id: string; title: string }[] } | { ok: false; error: string }
+> {
+  const caller = await verifiedCaller();
+  if (!caller) return { ok: false, error: "You must be a verified OHS family." };
+  const q = (input.query ?? "").trim().toLowerCase();
+  try {
+    const boards = await listBoards({ viewerSignupId: caller.user.id, limit: 200 });
+    const matched = q.length === 0 ? boards : boards.filter((b) => b.title.toLowerCase().includes(q));
+    return { ok: true, results: matched.slice(0, 8).map((b) => ({ id: b.id, title: b.title })) };
+  } catch (err) {
+    console.error("searchResourceBoardsAction failed:", err);
+    return { ok: false, error: "Couldn't search resource boards." };
   }
 }
 

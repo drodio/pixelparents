@@ -23,6 +23,7 @@ import {
   POLL_MAX_OPTIONS,
 } from "@/lib/exchange-thread-validate";
 import { Linkify } from "@/lib/linkify";
+import { BoardLinkPicker } from "./board-link-picker";
 import { applyOptimisticVote, type PollTally } from "@/lib/exchange";
 import {
   replyToResponseAction,
@@ -932,14 +933,34 @@ function Composer({ responseId, onDone }: { responseId: string; onDone: () => vo
           )}
         </div>
       ) : (
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          maxLength={REPLY_BODY_MAX}
-          rows={3}
-          placeholder={mode === "private" ? "Write a private note…" : "Write a reply…"}
-          className={`${controlCls} mt-3`}
-        />
+        <>
+          <textarea
+            value={body}
+            onChange={(e) => setBody(e.target.value)}
+            maxLength={REPLY_BODY_MAX}
+            rows={3}
+            placeholder={mode === "private" ? "Write a private note…" : "Write a reply…"}
+            className={`${controlCls} mt-3`}
+          />
+          {/* Point a reply at an existing resource board without leaving the page
+              (parent feedback, Jul 2026). Appends "<title> — <absolute url>";
+              Linkify turns the URL into a real link when the reply renders, so
+              this needs no new message kind or storage. Clamped to the same
+              REPLY_BODY_MAX the textarea enforces. */}
+          <div className="mt-2">
+            <BoardLinkPicker
+              disabled={pending}
+              onInsert={(snippet) =>
+                setBody((prev) =>
+                  (prev.trim().length > 0 ? `${prev.replace(/\s+$/, "")}\n${snippet}` : snippet).slice(
+                    0,
+                    REPLY_BODY_MAX,
+                  ),
+                )
+              }
+            />
+          </div>
+        </>
       )}
 
       {error && <p className="mt-2 text-sm text-red-300">{error}</p>}
