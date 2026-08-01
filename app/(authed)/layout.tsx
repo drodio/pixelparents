@@ -71,13 +71,14 @@ export default async function AuthedLayout({
   await enforceVerificationGate();
 
   // Multi-domain (Clerk): this ONE deployment serves the Clerk PRIMARY
-  // (pixelparents.org) and the SATELLITE (gopixel.org). On the satellite host we run
-  // Clerk in satellite mode (FAPI clerk.gopixel.org) with sign-in on the primary, so
-  // the cross-domain handshake works; on the primary these are false/undefined and
-  // behavior is byte-for-byte unchanged. MUST stay in lockstep with the same
-  // conditional in proxy.ts (the middleware). Domains are public config, not secrets.
+  // (gopixel.org) and the SATELLITE (pixelparents.org). On the satellite host we run
+  // Clerk in satellite mode (FAPI clerk.pixelparents.org) with sign-in on the primary
+  // (gopixel.org), so the cross-domain handshake works; on the primary these are
+  // false/undefined and gopixel.org gets native sign-in. MUST stay in lockstep with
+  // the same conditional in proxy.ts (the middleware), and ships with the rotated
+  // gopixel.org-primary publishable key. Domains are public config, not secrets.
   const host = ((await headers()).get("host") ?? "").toLowerCase();
-  const isSatellite = host === "gopixel.org" || host === "www.gopixel.org";
+  const isSatellite = host === "pixelparents.org" || host === "www.pixelparents.org";
 
   // Theme every Clerk surface under this provider (sign-in, UserButton popover,
   // "Manage account" modal) with the shared dark/amber appearance so Clerk's
@@ -87,8 +88,8 @@ export default async function AuthedLayout({
     <ClerkProvider
       appearance={clerkAppearance}
       isSatellite={isSatellite}
-      domain={isSatellite ? "gopixel.org" : undefined}
-      signInUrl={isSatellite ? "https://pixelparents.org/sign-in" : undefined}
+      domain={isSatellite ? "pixelparents.org" : undefined}
+      signInUrl={isSatellite ? "https://gopixel.org/sign-in" : undefined}
     >
       {/* Ties PostHog events to the signed-in account (anonymous when signed out). */}
       <PostHogIdentify />
