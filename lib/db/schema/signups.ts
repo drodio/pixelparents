@@ -43,6 +43,10 @@ export const signups = pgTable("signups", {
   ohsAffiliation: text("ohs_affiliation"),
   technicalDepth: text("technical_depth"),
   linkedinUrl: text("linkedin_url"),
+  // Optional WeChat ID. Many OHS parent families coordinate on WeChat rather than
+  // LinkedIn or email (parent feedback, Jul 2026), so it sits alongside the other
+  // handles as an alternate way for the community to reach a parent.
+  wechatId: text("wechat_id"),
   skillsets: text("skillsets").array(),
   timeCommitment: text("time_commitment"),
 

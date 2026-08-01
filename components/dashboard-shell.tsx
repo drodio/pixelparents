@@ -39,19 +39,20 @@ const NAV: NavItem[] = [
   // need help") or Offers ("I can help") + get matched. The surface gates to
   // verified families; the tab shows for all authed users (unverified → a prompt).
   { href: "/community", label: "Community", Icon: IconHeart },
+  // "Resources" is the community RESOURCE BOARDS: Reddit-like, OHS-only,
+  // permanent, community-curated boards. Any verified member can create a board
+  // and add link/file/text contributions; boards + contributions are upvotable
+  // and auto-labeled with topic tags. Sits directly under Community (parent
+  // feedback, Jul 2026: Resources is the second-most-reached-for surface, so it
+  // ranks above the calendar); the surface gates to verified OHS families.
+  { href: "/resources", label: "Resources", Icon: IconBook },
   // "Events" is the shared OHS calendar: a month grid of community-created events
-  // plus the auto-imported Stanford OHS school-year calendar. Placed right after
-  // Community; the surface gates to verified OHS families (like Community/Directory).
+  // plus the auto-imported Stanford OHS school-year calendar. The surface gates
+  // to verified OHS families (like Community/Directory).
   { href: "/events", label: "Events", Icon: IconCalendar },
   // "Directory" is the consolidated member showcase (grid + map + stats) with
   // in-tab profile views, now served at /directory.
   { href: "/directory", label: "Directory", Icon: IconUsers },
-  // "Resources" is the community RESOURCE BOARDS: Reddit-like, OHS-only,
-  // permanent, community-curated boards. Any verified member can create a board
-  // and add link/file/text contributions; boards + contributions are upvotable
-  // and auto-labeled with topic tags. Placed right after Directory; the surface
-  // gates to verified OHS families (like Community/Directory/Events).
-  { href: "/resources", label: "Resources", Icon: IconBook },
   { href: "/family", label: "Family", Icon: IconHome },
   // Developers now lives INSIDE the shell (no more new-tab jump): signed-in users
   // get the in-dashboard developer hub at /dashboard/developers. The public
