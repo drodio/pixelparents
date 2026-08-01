@@ -287,6 +287,7 @@ export function MemberCard({
       /^https?:\/\/(www\.)?linkedin\.com\/in\//,
       "",
     ),
+    wechatId: member.wechatId ?? "",
     websiteUrl: websiteUrlOf((member.extra ?? {}) as Record<string, unknown>) ?? "",
     ohsAffiliation: member.ohsAffiliation ?? "",
     city: member.city ?? "",
@@ -450,6 +451,17 @@ export function MemberCard({
               className="w-full rounded-r-lg bg-transparent py-2 pr-3 text-white outline-none"
             />
           </div>
+        </div>
+        {/* WeChat ID — set at signup by parents, editable here afterwards. Shown
+            on the profile behind the same "phone" share opt-in. */}
+        <div className="sm:col-span-2">
+          <label className={labelCls}>WeChat ID</label>
+          <input
+            value={v.wechatId}
+            onChange={(e) => set("wechatId", e.target.value)}
+            placeholder="your-wechat-id"
+            className={inputCls}
+          />
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>Personal website</label>

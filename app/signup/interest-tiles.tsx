@@ -153,7 +153,13 @@ export default function InterestTiles({
             <div
               key={i}
               className="absolute flex -translate-x-1/2 -translate-y-1/2 flex-col items-center justify-center gap-1 text-center"
-              style={{ left: c.x, top: c.y, width: 134 }}
+              // Explicit px STRINGS, not raw numbers. c.x/c.y come out of the
+              // Voronoi clip as long floats (e.g. 611.610851749219). React's
+              // server renderer serializes those to a rounded style attribute
+              // ("611.611px") while the client keeps full precision, so every
+              // tile logged a hydration mismatch on the landing + signup pages.
+              // Fixing the precision here makes both sides emit identical CSS.
+              style={{ left: `${c.x.toFixed(2)}px`, top: `${c.y.toFixed(2)}px`, width: "134px" }}
             >
               <div
                 key={nonce[i]}
