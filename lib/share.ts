@@ -9,6 +9,10 @@ export const SHARE_FIELDS = [
   { key: "children", label: "Children (name, grade, interests, notes)" },
   { key: "phone", label: "Phone number" },
   { key: "email", label: "Email address" },
+  // WeChat ID — its OWN toggle rather than riding the phone one, so a member can
+  // share a phone but hide WeChat or vice versa ("make it like the phone number
+  // so they have the option to keep it private" — parent feedback, Aug 2026).
+  { key: "wechat", label: "WeChat ID" },
   // Professional links (LinkedIn + GitHub). NEW field — intentionally absent
   // from DEFAULT_SHARE_FIELDS below so it is OFF by default; a member must opt in.
   { key: "links", label: "LinkedIn & GitHub links" },
@@ -65,6 +69,13 @@ export const DEFAULT_SHARE_FIELDS: ShareFieldKey[] = [
   "children",
   "phone",
   "email",
+  // "wechat" IS defaulted on, unlike the other new fields above. The
+  // leave-it-out rule exists to stop a PRE-EXISTING member's already-stored data
+  // from suddenly appearing — but wechat_id is a brand-new column, so no existing
+  // member has one. The only people this can affect are those who deliberately
+  // typed a WeChat ID into the form, and silently never showing it would make the
+  // field write-only. It stays independently toggleable off.
+  "wechat",
 ];
 
 // 32 url-safe chars — same unguessable-token recipe as the developer API keys.

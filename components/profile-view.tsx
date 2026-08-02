@@ -169,7 +169,10 @@ export async function ProfileView({
   const skillsets = visible.has("interests")
     ? (signup.skillsets ?? []).filter((s): s is string => Boolean(s?.trim()))
     : [];
-  const showContact = visible.has("phone") || visible.has("email");
+  // WeChat counts toward showing the Contact block: a member who shares ONLY
+  // their WeChat ID would otherwise have the whole section suppressed.
+  const showContact =
+    visible.has("phone") || visible.has("email") || visible.has("wechat");
   // Builder recognition (commit check or manual flag) — community badge, not PII,
   // so it's shown to anyone who can view this profile regardless of share fields.
   const builder = builderStatusOf((signup.extra ?? {}) as Record<string, unknown>);
@@ -520,12 +523,13 @@ export async function ProfileView({
                 </a>
               </span>
             )}
-            {/* WeChat ID. Rides the same "phone" opt-in as the other direct-contact
-                channel, and is deliberately suppressed while we're substituting a
-                parent's contact for an un-certified minor — that path is about
+            {/* WeChat ID. Has its OWN share toggle (not the phone one), so a
+                member can share a phone but hide WeChat or vice versa — parent
+                feedback, Aug 2026. Still suppressed while we're substituting a
+                parent's contact for an un-certified minor: that path is about
                 withholding the student's own reachability, so it fails closed.
                 Only parents can set this today, so a student row carries none. */}
-            {visible.has("phone") && !usingParentContact && signup.wechatId?.trim() && (
+            {visible.has("wechat") && !usingParentContact && signup.wechatId?.trim() && (
               <span className="inline-flex items-center gap-1.5">
                 <IconMessage className="h-4 w-4 text-white/50" />
                 <span className="text-white/85">

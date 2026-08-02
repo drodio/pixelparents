@@ -49,13 +49,45 @@ const OHS_IN_PERSON_TITLE_HINTS: readonly string[] = [
   "in-person",
   "summer session",
   "summer institute",
+  // Added from the parent review (Aug 2026): Homecoming is on campus and was the
+  // one in-person entry the original hint list failed to catch.
+  "homecoming",
+  "pixel gathering",
 ];
 
-// Classify an OHS calendar entry as online vs in-person. Defaults to online for
-// the reason above; only an explicit on-campus hint flips it.
-export function isOhsEventOnline(title: string): boolean {
+// What KIND of thing an OHS calendar entry is.
+//
+// A parent review of all 21 school-calendar entries (Aug 2026) found the
+// online-vs-in-person split was the wrong question for most of them: holidays and
+// breaks are CLOSURES, not events, and labelling them "Online" is meaningless.
+// Finals genuinely run both ways. So the badge is driven by this instead:
+//
+//   holiday   — Labor Day, Thanksgiving, MLK, Presidents' Day, Memorial Day
+//   break     — Winter Break, Spring Break
+//   in_person — Homecoming, Pixel Gathering & Graduation Weekend
+//   hybrid    — Fall/Spring Semester Finals ("online and in person both")
+//   online    — everything else (classes, study days, reading week, PTC, BTSN)
+//
+// Order matters: closures are checked before campus hints so a hypothetical
+// "Graduation Holiday" reads as a holiday rather than an in-person event.
+export type OhsEventKind = "holiday" | "break" | "in_person" | "hybrid" | "online";
+
+const HYBRID_TITLE_HINTS: readonly string[] = ["finals"];
+
+export function classifyOhsEvent(title: string): OhsEventKind {
   const t = title.toLowerCase();
-  return !OHS_IN_PERSON_TITLE_HINTS.some((hint) => t.includes(hint));
+  if (t.includes("holiday")) return "holiday";
+  if (t.includes("break")) return "break";
+  if (OHS_IN_PERSON_TITLE_HINTS.some((hint) => t.includes(hint))) return "in_person";
+  if (HYBRID_TITLE_HINTS.some((hint) => t.includes(hint))) return "hybrid";
+  return "online";
+}
+
+// Whether to store is_online=true for this entry. Only a genuinely in-person
+// event is false; closures stay "online" in the DB purely so the existing
+// online/in-person FILTER keeps behaving, while the BADGE uses classifyOhsEvent.
+export function isOhsEventOnline(title: string): boolean {
+  return classifyOhsEvent(title) !== "in_person";
 }
 
 function slugify(s: string): string {
