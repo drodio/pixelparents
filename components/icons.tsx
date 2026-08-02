@@ -107,6 +107,15 @@ export function IconMail(props: IconProps) {
   );
 }
 
+// Speech bubble — used for the WeChat handle in the profile Contact block.
+export function IconMessage(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M21 11.5a8.4 8.4 0 0 1-9 8.5 9.7 9.7 0 0 1-2.9-.4L3 21l1.5-4.2A8.2 8.2 0 0 1 3 11.5 8.4 8.4 0 0 1 12 3a8.4 8.4 0 0 1 9 8.5Z" />
+    </Icon>
+  );
+}
+
 // Filled heart — used for the "made with love" footer.
 export function IconHeart(props: IconProps) {
   return (
