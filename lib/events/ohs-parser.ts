@@ -30,6 +30,34 @@ export type ParsedOhsEvent = {
   endDate: Date;
 };
 
+// Titles on the OHS calendar that describe something that physically happens on
+// campus. Everything else defaults to ONLINE, because Stanford OHS is an online
+// school — the importer used to hard-code `isOnline: false`, which labelled every
+// imported entry "In person", including Parent-Teacher Conferences and Back to
+// School Night (parent feedback, Jul 2026).
+//
+// Matched case-insensitively as substrings against the event title. This list is
+// meant to be extended as families spot more — adding a phrase here is the whole
+// change needed.
+const OHS_IN_PERSON_TITLE_HINTS: readonly string[] = [
+  "graduation",
+  "commencement",
+  "reunion",
+  "on campus",
+  "on-campus",
+  "in person",
+  "in-person",
+  "summer session",
+  "summer institute",
+];
+
+// Classify an OHS calendar entry as online vs in-person. Defaults to online for
+// the reason above; only an explicit on-campus hint flips it.
+export function isOhsEventOnline(title: string): boolean {
+  const t = title.toLowerCase();
+  return !OHS_IN_PERSON_TITLE_HINTS.some((hint) => t.includes(hint));
+}
+
 function slugify(s: string): string {
   return s
     .toLowerCase()

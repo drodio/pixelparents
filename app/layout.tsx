@@ -33,7 +33,7 @@ export const metadata: Metadata = {
     apple: "/icons/apple-touch-icon.png",
   },
   openGraph: {
-    title: "Pixel Parent Tech: Join our Builder Community",
+    title: "GoPixel: Join our Builder Community",
     description:
       "Parents building software to improve the experience for Stanford OHS students.",
     siteName: "GoPixel",
@@ -42,7 +42,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Pixel Parent Tech: Join our Builder Community",
+    title: "GoPixel: Join our Builder Community",
   },
 };
 

@@ -11,6 +11,8 @@ import {
 } from "@/lib/db/schema/events";
 import { signups, type SignupRow } from "@/lib/db/schema/signups";
 import { isStudentAccount } from "@/lib/family-display";
+import { isOhsEventOnline } from "@/lib/events/ohs-parser";
+import { hasShareableProfile } from "@/lib/directory";
 
 // Data layer for the Events calendar. Thin DB access: every function self-heals
 // the events schema first (the country-column P0 lesson — new tables must be
@@ -104,6 +106,30 @@ export async function editableEventIds(
     .from(eventAdmins)
     .where(and(eq(eventAdmins.signupId, signupId), inArray(eventAdmins.eventId, eventIds)));
   for (const r of rows) out.add(r.eventId);
+  return out;
+}
+
+// Map author_signup_id -> directory share token for a batch of events, so the
+// calendar can link an organizer's name to their profile (parent feedback,
+// Jul 2026: parents with a question about an event had no way to reach whoever
+// created it).
+//
+// Only organizers who pass hasShareableProfile get an entry — the same gate the
+// community thread uses — so this can never surface a profile the viewer isn't
+// allowed to open. Callers treat a missing entry as "render the name as text".
+// The caller is responsible for having already passed the verified-OHS-family
+// gate, which is what makes the "ohs" share visibility resolve.
+export async function authorTokensForEvents(
+  rows: { authorSignupId: string | null }[],
+): Promise<Map<string, string>> {
+  const out = new Map<string, string>();
+  const ids = [...new Set(rows.map((r) => r.authorSignupId).filter((v): v is string => Boolean(v)))];
+  if (ids.length === 0) return out;
+  await ensureFamiliesSchema();
+  const authors = await getDb().select().from(signups).where(inArray(signups.id, ids));
+  for (const a of authors) {
+    if (hasShareableProfile(a) && a.shareToken) out.set(a.id, a.shareToken);
+  }
   return out;
 }
 
@@ -315,7 +341,11 @@ export async function upsertOhsEvents(rows: OhsUpsert[]): Promise<number> {
         startsAt: r.startsAt,
         endsAt: r.endsAt,
         allDay: true,
-        isOnline: false,
+        // Stanford OHS is an online school, so an imported calendar entry is
+        // online unless its title says otherwise. This used to be a hard-coded
+        // `false`, which labelled every OHS entry "In person" — wrong for
+        // Parent-Teacher Conferences, Back to School Night, and most of the rest.
+        isOnline: isOhsEventOnline(r.title),
         source: "ohs",
         authorLabel: "OHS (Automatically Added)",
       })
@@ -330,6 +360,10 @@ export async function upsertOhsEvents(rows: OhsUpsert[]): Promise<number> {
           title: r.title,
           startsAt: r.startsAt,
           endsAt: r.endsAt,
+          // Re-classify on every sync, not just on insert. Rows imported before
+          // the online/in-person fix are already in the table with isOnline=false,
+          // so without this they'd keep showing "In person" forever.
+          isOnline: isOhsEventOnline(r.title),
           updatedAt: new Date(),
         },
       });

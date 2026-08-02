@@ -121,6 +121,20 @@ export default async function Home() {
             <IconArrowRight className="h-5 w-5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
           </Link>
         )}
+
+        {/* Affiliation disclaimer. Lives on the HOME page (not just /terms and
+            /privacy) at the request of an OHS staff contact — it was the single
+            change he asked for. Kept warm rather than legalistic per Daniel, but
+            the operative phrase ("not affiliated with or endorsed by") matches
+            the legal pages verbatim so the three can't drift. */}
+        <p className="mt-6 max-w-xl text-balance text-center text-sm text-white/45">
+          A side project, not an official one. Made by OHS families on nights and
+          weekends, and{" "}
+          <span className="font-semibold text-white/70">
+            not affiliated with or endorsed by
+          </span>{" "}
+          Stanford University or Stanford OHS. We just really like this school.
+        </p>
       </div>
 
       <footer className="relative z-10 mt-8 text-center text-sm text-white/50">

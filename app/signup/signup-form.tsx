@@ -77,6 +77,9 @@ const empty = {
   phone: "",
   githubUsername: "",
   linkedinHandle: "",
+  // Optional WeChat ID, surfaced to parents only. Many OHS parent families
+  // coordinate on WeChat rather than LinkedIn/email (parent feedback, Jul 2026).
+  wechatId: "",
   // Personal/company website (optional). Stored in extra.websiteUrl; one of the
   // public sources the opt-in enrichment can build a profile from.
   websiteUrl: "",
@@ -379,6 +382,7 @@ export default function SignupForm({
         phone: v.phone,
         githubUsername: v.githubUsername,
         linkedinHandle: v.linkedinHandle,
+        wechatId: v.wechatId,
         websiteUrl: v.websiteUrl,
         enrichmentOptIn: v.enrichmentOptIn,
         ohsAffiliation: v.ohsAffiliation,
@@ -473,15 +477,14 @@ export default function SignupForm({
         {/* Role choice — who is signing up. Hidden in co-parent join mode (an
             invited co-parent is always a parent joining an existing family). */}
         {!joinToken && (
-          <Section
-            title="Who's signing up?"
-            description="This tailors the next step to you."
-          >
+          <Section title="Who's signing up?">
             <fieldset>
-              <legend className={legendCls}>
-                I&apos;m signing up as <span className="text-red-400">*</span>
-              </legend>
-              <div className="mt-2 flex flex-col gap-2">
+              {/* The Section heading already asks the question, so the legend is
+                  screen-reader-only — parent feedback (Jul 2026) was that the
+                  stacked "Who's signing up?" / "I'm signing up as" headers read
+                  as two separate questions. */}
+              <legend className="sr-only">I&apos;m signing up as</legend>
+              <div className="flex flex-col gap-2">
                 <label className="flex items-start gap-2 text-sm text-white/80">
                   <input
                     type="radio"
@@ -519,18 +522,30 @@ export default function SignupForm({
                   join your family.
                 </p>
               )}
+              {/* Alums have no parent-link step at all, so this note no longer
+                  raises one (parent feedback, Jul 2026: mentioning parent
+                  profiles here implied a step alums don't have). */}
               {v.accountType === "alum" && (
                 <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-white/75">
-                  Welcome back! You&apos;ll just complete your own profile — no parent
-                  link or children required (add OHS children only if you have them).
+                  Welcome back! You&apos;ll just complete your own profile. Add OHS
+                  children only if you have them.
                 </p>
               )}
             </fieldset>
           </Section>
         )}
 
+        {/* This section always collects the SIGNING-UP person's own details, but
+            it used to be hard-titled "First parent's info" for every role — so a
+            student or alum read it as "enter a parent before yourself" and got
+            stuck (parent feedback, Jul 2026). The title now follows the role; the
+            fields underneath are unchanged. */}
         <Section
-          title="First parent's info"
+          title={
+            !joinToken && (v.accountType === "student" || v.accountType === "alum")
+              ? "Your info"
+              : "First parent's info"
+          }
           description="The basics so other OHS families can recognize and reach you."
         >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -595,7 +610,7 @@ export default function SignupForm({
           </div>
           <div className="sm:col-span-2">
             <label className={labelCls} htmlFor="linkedinHandle">
-              LinkedIn (this really helps other parents get to know you)
+              LinkedIn (this helps other parents get to know you)
             </label>
             <div className={prefixWrapCls}>
               <span className="select-none px-3 py-2 text-sm text-white/40">linkedin.com/in/</span>
@@ -609,6 +624,25 @@ export default function SignupForm({
             </div>
             <FieldError msg={errors.linkedinHandle} />
           </div>
+
+          {/* WeChat is parent-only: it's how a large share of OHS parent families
+              actually coordinate (parent feedback, Jul 2026). Students and alums
+              don't get it — their reachability runs through the age-16 contact
+              gate in lib/contact-visibility.ts. */}
+          {(joinToken || v.accountType === "parent") && (
+            <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="wechatId">
+                WeChat ID (optional)
+              </label>
+              <input
+                id="wechatId"
+                value={v.wechatId}
+                onChange={(e) => set("wechatId", e.target.value)}
+                placeholder="your-wechat-id"
+                className={inputCls}
+              />
+            </div>
+          )}
 
           <div className="sm:col-span-2">
             <label className={labelCls} htmlFor="websiteUrl">

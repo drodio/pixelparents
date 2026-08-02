@@ -122,6 +122,10 @@ export type SignupPatch = Partial<{
   ohsAffiliation: string;
   technicalDepth: string;
   linkedinHandle: string;
+  // Optional WeChat ID (parent-only in the signup UI). Stored in its own
+  // `wechat_id` column; an alternate contact for families who coordinate on
+  // WeChat rather than LinkedIn/email (parent feedback, Jul 2026).
+  wechatId: string;
   skillsets: string[];
   timeCommitment: string;
   city: string;
@@ -168,6 +172,7 @@ export async function sanitizeSignupPatch(
   if ("technicalDepth" in patch) set.technicalDepth = oneOf(TECHNICAL_DEPTH, patch.technicalDepth);
   if ("timeCommitment" in patch) set.timeCommitment = oneOf(TIME_COMMITMENT, patch.timeCommitment);
   if ("linkedinHandle" in patch) set.linkedinUrl = linkedinUrlFromHandle(patch.linkedinHandle);
+  if ("wechatId" in patch) set.wechatId = text(patch.wechatId, 60) || null;
   if ("city" in patch) set.city = text(patch.city, 120) || null;
   if ("state" in patch) set.state = oneOf(US_STATES, patch.state);
   if ("country" in patch) set.country = oneOf(COUNTRIES, patch.country);

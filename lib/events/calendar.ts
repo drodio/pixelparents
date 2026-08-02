@@ -25,6 +25,12 @@ export type CalendarEvent = {
   onlineUrl: string | null;
   source: "user" | "ohs";
   authorLabel: string | null;
+  // The organizer's directory share token, when they have a shareable profile.
+  // Lets the UI link the organizer's name to /directory/<token> so a parent with
+  // a question can reach them (parent feedback, Jul 2026). Null for OHS-imported
+  // events and for organizers whose profile isn't shareable — the name then
+  // renders as plain text exactly as before.
+  authorToken: string | null;
   goingCount: number;
   interestedCount: number;
   // Whether the current viewer can edit this event (author or admin, never OHS).

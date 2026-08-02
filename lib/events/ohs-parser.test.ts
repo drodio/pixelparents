@@ -4,6 +4,7 @@ import {
   parseOhsCalendar,
   extractLinesFromHtml,
   seedOhsEvents,
+  isOhsEventOnline,
 } from "./ohs-parser";
 
 const YEAR = 2026;
@@ -102,6 +103,45 @@ describe("seedOhsEvents", () => {
     for (const ev of events) {
       expect(ev.externalKey).toMatch(/^ohs:2026:/);
       expect(ev.endDate.getTime()).toBeGreaterThanOrEqual(ev.startDate.getTime());
+    }
+  });
+});
+
+describe("isOhsEventOnline", () => {
+  // Stanford OHS is an online school. The importer previously hard-coded
+  // isOnline=false, so EVERY imported entry rendered "In person" — these two
+  // were the cases parents reported (Jul 2026).
+  it("treats Parent-Teacher Conferences and Back to School Night as online", () => {
+    expect(isOhsEventOnline("Parent-Teacher Conferences (no classes)")).toBe(true);
+    expect(isOhsEventOnline("Back to School Night")).toBe(true);
+  });
+
+  it("defaults calendar markers to online", () => {
+    for (const title of [
+      "First Day of Class",
+      "Winter Break",
+      "Grades Due",
+      "No Classes",
+    ]) {
+      expect(isOhsEventOnline(title)).toBe(true);
+    }
+  });
+
+  it("flips to in-person only on an explicit on-campus hint", () => {
+    expect(isOhsEventOnline("Graduation")).toBe(false);
+    expect(isOhsEventOnline("Commencement Ceremony")).toBe(false);
+    expect(isOhsEventOnline("Summer Session (on campus)")).toBe(false);
+    expect(isOhsEventOnline("Alumni Reunion")).toBe(false);
+  });
+
+  it("is case-insensitive", () => {
+    expect(isOhsEventOnline("GRADUATION")).toBe(false);
+    expect(isOhsEventOnline("graduation")).toBe(false);
+  });
+
+  it("classifies every seeded event without throwing", () => {
+    for (const ev of seedOhsEvents()) {
+      expect(typeof isOhsEventOnline(ev.title)).toBe("boolean");
     }
   });
 });

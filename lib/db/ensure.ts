@@ -107,6 +107,10 @@ export function ensureFamiliesSchema(): Promise<void> {
         sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS age16_certified_by uuid`,
         sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS age16_certified_at timestamptz`,
         sql`ALTER TABLE children ADD COLUMN IF NOT EXISTS age16_requested_at timestamptz`,
+        // WeChat ID: optional alternate contact. Many OHS parent families coordinate
+        // on WeChat rather than LinkedIn/email (parent feedback, Jul 2026), so the
+        // directory offers it alongside the other handles. Nullable + idempotent.
+        sql`ALTER TABLE signups ADD COLUMN IF NOT EXISTS wechat_id text`,
       ]);
     })().catch((e) => {
       familiesEnsured = null;
