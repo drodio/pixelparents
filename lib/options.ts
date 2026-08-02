@@ -12,6 +12,42 @@ export const OHS_AFFILIATIONS = [
 // Alias used by the developer API (kept in sync — same underlying list).
 export const AFFILIATIONS = OHS_AFFILIATIONS;
 
+// The affiliations a PARENT picks between. Students and alums are never asked —
+// their affiliation is derived from the role they chose in "Who's signing up?"
+// (see STUDENT_AFFILIATION / ALUM_AFFILIATION below), because re-asking it was
+// duplicated signup friction. Sliced from OHS_AFFILIATIONS rather than retyped
+// so the two can never drift; the runtime assert below fails loudly if the
+// canonical list is ever reordered.
+export const PARENT_AFFILIATIONS = OHS_AFFILIATIONS.slice(0, 3);
+export const STUDENT_AFFILIATION = OHS_AFFILIATIONS[3];
+export const ALUM_AFFILIATION = OHS_AFFILIATIONS[4];
+
+if (
+  !STUDENT_AFFILIATION.startsWith("Current OHS student") ||
+  !ALUM_AFFILIATION.startsWith("Alumni student") ||
+  PARENT_AFFILIATIONS.some((a) => !a.includes("parent"))
+) {
+  throw new Error(
+    "OHS_AFFILIATIONS order changed — update PARENT_AFFILIATIONS / STUDENT_AFFILIATION / ALUM_AFFILIATION.",
+  );
+}
+
+// The affiliation implied by the role picked in "Who's signing up?".
+//
+// Students and alums are NOT asked for their affiliation separately — the answer
+// is already determined by their role, and asking twice was duplicated signup
+// friction (parent feedback, Jul 2026). Parents ARE asked, because new vs
+// existing vs previous is a genuine choice, so this returns "" for them and the
+// form collects it.
+//
+// Returning "" (not null) matches the form's empty-string convention for
+// unanswered enum fields, and sanitizeSignupPatch's oneOf() maps it to null.
+export function affiliationForRole(role: "parent" | "student" | "alum"): string {
+  if (role === "student") return STUDENT_AFFILIATION;
+  if (role === "alum") return ALUM_AFFILIATION;
+  return "";
+}
+
 // Interest in helping build GoPixel software (signup question). Stored in
 // signups.extra.builderInterest.
 export const BUILDER_INTEREST = ["builder", "aspiring", "no"] as const;

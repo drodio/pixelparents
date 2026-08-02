@@ -4,7 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BotIdClient } from "botid/client";
 import {
-  OHS_AFFILIATIONS,
+  PARENT_AFFILIATIONS,
+  affiliationForRole,
   TECHNICAL_DEPTH,
   SKILLSETS,
   TIME_COMMITMENT,
@@ -187,6 +188,12 @@ export default function SignupForm({
   // message ("blocked" = bot-check/VPN/ad-blocker vs "failed" = transient) instead
   // of a generic error or a silently-dead button.
   const ensureError = useRef<null | "blocked" | "failed">(null);
+  // Render-visible mirror of `ensureError`. The ref has to stay: onContinue reads
+  // the reason SYNCHRONOUSLY right after `await ensureId()`, and a state update
+  // wouldn't have flushed by then. But a ref can't drive render (it doesn't
+  // re-render, and reading it during render is a React-hooks lint error), so the
+  // autosave-failure message reads this instead. Both are set together.
+  const [ensureErrorView, setEnsureErrorView] = useState<null | "blocked" | "failed">(null);
   const ensureId = useCallback(async (): Promise<string | null> => {
     if (idRef.current) return idRef.current;
     if (!ensuring.current) {
@@ -195,6 +202,7 @@ export default function SignupForm({
         .then((r) => {
           if ("id" in r) {
             ensureError.current = null;
+            setEnsureErrorView(null);
             idRef.current = r.id;
             if (typeof window !== "undefined") {
               try {
@@ -210,12 +218,14 @@ export default function SignupForm({
           // promise stays cached and wedges every future save AND invite on the
           // same failure (the button reads as permanently "not clickable").
           ensureError.current = r.error === "blocked" ? "blocked" : "failed";
+          setEnsureErrorView(ensureError.current);
           ensuring.current = null;
           return null;
         })
         .catch((err) => {
           console.error("ensureId draft creation threw:", err);
           ensureError.current = "failed";
+          setEnsureErrorView("failed");
           ensuring.current = null;
           return null;
         });
@@ -344,9 +354,18 @@ export default function SignupForm({
   }
   // Role choice (parent vs student). Persisted immediately so the thanks page
   // (read server-side from extra.accountType) routes to the right step-2.
+  // For a student or an alum, "Stanford OHS affiliation" is fully determined by
+  // the role they already picked in "Who's signing up?" — asking again is pure
+  // duplicated friction (parent feedback, Jul 2026). Only a PARENT has a real
+  // choice to make (new / existing / previous), so only a parent is asked.
   function setAccountType(choice: "parent" | "student" | "alum") {
-    setV((prev) => ({ ...prev, accountType: choice }));
-    queue({ accountType: choice }, true);
+    // Derive + persist the affiliation in the SAME save as the role, so the
+    // hidden field is always populated before completeSignup validates it.
+    // Switching back to "parent" clears it (affiliationForRole returns "") so
+    // they answer for themselves rather than silently submitting a student one.
+    const derived = affiliationForRole(choice);
+    setV((prev) => ({ ...prev, accountType: choice, ohsAffiliation: derived }));
+    queue({ accountType: choice, ohsAffiliation: derived }, true);
   }
   function toggleSkill(opt: string) {
     setV((prev) => {
@@ -822,26 +841,34 @@ export default function SignupForm({
           title="Stanford OHS & building together"
           description="Tell us how you're connected to OHS and whether you'd like to help build."
         >
-        <fieldset>
-          <legend className={legendCls}>
-            Stanford OHS affiliation <span className="text-red-400">*</span>
-          </legend>
-          <div className="mt-2 flex flex-col gap-2">
-            {OHS_AFFILIATIONS.map((opt) => (
-              <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
-                <input
-                  type="radio"
-                  name="ohsAffiliation"
-                  checked={v.ohsAffiliation === opt}
-                  onChange={() => set("ohsAffiliation", opt, true)}
-                  className="mt-1 h-4 w-4 accent-amber-500"
-                />
-                <span>{opt}</span>
-              </label>
-            ))}
-          </div>
-          <FieldError msg={errors.ohsAffiliation} />
-        </fieldset>
+        {/* Only PARENTS are asked this. A student or alum already answered it in
+            "Who's signing up?", and re-asking the same question with overlapping
+            options was the single most-duplicated step in the flow (parent
+            feedback, Jul 2026). Their affiliation is derived in setAccountType,
+            so the value is still persisted — just not re-collected. Parents keep
+            the question because new / existing / previous is a real choice. */}
+        {(joinToken || v.accountType === "parent") && (
+          <fieldset>
+            <legend className={legendCls}>
+              Stanford OHS affiliation <span className="text-red-400">*</span>
+            </legend>
+            <div className="mt-2 flex flex-col gap-2">
+              {PARENT_AFFILIATIONS.map((opt) => (
+                <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
+                  <input
+                    type="radio"
+                    name="ohsAffiliation"
+                    checked={v.ohsAffiliation === opt}
+                    onChange={() => set("ohsAffiliation", opt, true)}
+                    className="mt-1 h-4 w-4 accent-amber-500"
+                  />
+                  <span>{opt}</span>
+                </label>
+              ))}
+            </div>
+            <FieldError msg={errors.ohsAffiliation} />
+          </fieldset>
+        )}
 
         <fieldset>
           <legend className={legendCls}>
@@ -1060,15 +1087,27 @@ export default function SignupForm({
                   : "Add Your Child(ren) →"}
           </button>
           {/* On save failure, retry is the ONLY way forward — the button above is
-              disabled until the save succeeds. */}
+              disabled until the save succeeds. Show WHY alongside the retry: a
+              bot-check / VPN / ad-blocker block is not transient, so a bare
+              "click to retry" is a dead end that fails forever with no
+              explanation (this is what a tester actually hit, Jul 2026). The
+              same message already existed for the submit + invite paths; it just
+              never reached the autosave-failure UI. */}
           {status === "error" ? (
-            <button
-              type="button"
-              onClick={() => void flush()}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-red-400/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
-            >
-              <IconWarning className="h-4 w-4" /> Couldn&apos;t save — click to retry
-            </button>
+            <div className="flex flex-col gap-1.5">
+              <button
+                type="button"
+                onClick={() => void flush()}
+                className="inline-flex w-fit items-center gap-1.5 rounded-lg border border-red-400/50 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 transition-colors hover:bg-red-500/20"
+              >
+                <IconWarning className="h-4 w-4" /> Couldn&apos;t save — click to retry
+              </button>
+              <p className="max-w-prose text-sm text-white/60">
+                {ensureErrorView === "blocked"
+                  ? "We couldn't verify your browser. If you're using a VPN, private relay, or an ad/tracker blocker, turn it off for this page and try again."
+                  : "Something went wrong saving your info. Please check your connection and try again."}
+              </p>
+            </div>
           ) : (
             <SaveStatus status={status} />
           )}
