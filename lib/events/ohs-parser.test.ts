@@ -5,6 +5,7 @@ import {
   extractLinesFromHtml,
   seedOhsEvents,
   isOhsEventOnline,
+  classifyOhsEvent,
 } from "./ohs-parser";
 
 const YEAR = 2026;
@@ -143,5 +144,52 @@ describe("isOhsEventOnline", () => {
     for (const ev of seedOhsEvents()) {
       expect(typeof isOhsEventOnline(ev.title)).toBe("boolean");
     }
+  });
+});
+
+// Every one of the 21 OHS school-calendar entries, with the classification a
+// parent hand-reviewed and returned (Aug 2026). This table IS the spec — if a
+// rule changes, a row here should fail rather than a badge silently going wrong.
+describe("classifyOhsEvent — parent-reviewed 2026-27 calendar", () => {
+  const CASES: Array<[string, ReturnType<typeof classifyOhsEvent>]> = [
+    ["First Day of Class", "online"],
+    ["Labor Day Holiday (no classes)", "holiday"],
+    ["Back to School Night", "online"],
+    ["Parent-Teacher Conferences (no classes)", "online"],
+    ["Homecoming", "in_person"],
+    ["Thanksgiving Holiday", "holiday"],
+    ["Review / Last Day of Classes (Fall)", "online"],
+    ["Study Days (no classes)", "online"],
+    ["Fall Semester Finals", "hybrid"],
+    ["Winter Break", "break"],
+    ["Reading Week", "online"],
+    ["First Day of Spring Classes", "online"],
+    ["Martin Luther King Jr. Holiday (no classes)", "holiday"],
+    ["Presidents' Day Holiday (no classes)", "holiday"],
+    ["Spring Break", "break"],
+    ["Review / Last Day of Classes (Spring)", "online"],
+    ["Study Days (Spring)", "online"],
+    ["Spring Semester Finals (week 1)", "hybrid"],
+    ["Spring Semester Finals (week 2)", "hybrid"],
+    ["Memorial Day Holiday", "holiday"],
+    ["Pixel Gathering & Graduation Weekend", "in_person"],
+  ];
+
+  for (const [title, expected] of CASES) {
+    it(`classifies "${title}" as ${expected}`, () => {
+      expect(classifyOhsEvent(title)).toBe(expected);
+    });
+  }
+
+  it("only a genuinely in-person entry is stored as not-online", () => {
+    for (const [title, kind] of CASES) {
+      expect(isOhsEventOnline(title)).toBe(kind !== "in_person");
+    }
+  });
+
+  it("checks closures before campus hints", () => {
+    // A closure named after a campus event must still read as a closure.
+    expect(classifyOhsEvent("Graduation Holiday")).toBe("holiday");
+    expect(classifyOhsEvent("Homecoming Break")).toBe("break");
   });
 });

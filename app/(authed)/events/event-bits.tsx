@@ -2,8 +2,9 @@
 
 import { useTransition, useState } from "react";
 import { useRouter } from "next/navigation";
-import { IconCheck, IconStar, IconVideo, IconMapPin } from "@/components/icons";
+import { IconCheck, IconStar, IconVideo, IconMapPin, IconCalendar } from "@/components/icons";
 import type { CalendarEvent } from "@/lib/events/calendar";
+import { classifyOhsEvent } from "@/lib/events/ohs-parser";
 import { rsvpAction } from "./actions";
 
 // Format an event's date/time window for display, respecting all-day vs timed and
@@ -43,7 +44,31 @@ export function formatEventWhen(ev: CalendarEvent): string {
 }
 
 // Online/in-person chip with the right icon + label.
+//
+// For OHS school-calendar entries the online-vs-in-person split is often the
+// wrong question: a parent review of all 21 entries (Aug 2026) pointed out that
+// holidays and breaks are CLOSURES, not events, so labelling them "Online" is
+// meaningless — and finals genuinely run both ways. Those cases are classified
+// from the title (source of truth: lib/events/ohs-parser.ts) and get their own
+// chip. User-created events are untouched and still use the plain isOnline flag.
 export function PlaceBadge({ event, className = "" }: { event: CalendarEvent; className?: string }) {
+  if (event.source === "ohs") {
+    const kind = classifyOhsEvent(event.title);
+    if (kind === "holiday" || kind === "break") {
+      return (
+        <span className={`inline-flex items-center gap-1.5 text-xs text-amber-300/90 ${className}`}>
+          <IconCalendar className="h-3.5 w-3.5" /> {kind === "holiday" ? "Holiday" : "Break"}
+        </span>
+      );
+    }
+    if (kind === "hybrid") {
+      return (
+        <span className={`inline-flex items-center gap-1.5 text-xs text-violet-300 ${className}`}>
+          <IconVideo className="h-3.5 w-3.5" /> Online &amp; in person
+        </span>
+      );
+    }
+  }
   if (event.isOnline) {
     return (
       <span className={`inline-flex items-center gap-1.5 text-xs text-sky-300 ${className}`}>
