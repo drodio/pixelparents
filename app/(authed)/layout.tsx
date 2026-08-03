@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { currentUser } from "@clerk/nextjs/server";
 import { clerkAppearance } from "@/lib/clerk-appearance";
+import { clerkAuthUrls, isSatelliteHost } from "@/lib/clerk-urls";
 import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { getFamilyForEmail } from "@/lib/db/signups";
@@ -77,19 +78,30 @@ export default async function AuthedLayout({
   // false/undefined and gopixel.org gets native sign-in. MUST stay in lockstep with
   // the same conditional in proxy.ts (the middleware), and ships with the rotated
   // gopixel.org-primary publishable key. Domains are public config, not secrets.
-  const host = ((await headers()).get("host") ?? "").toLowerCase();
-  const isSatellite = host === "pixelparents.org" || host === "www.pixelparents.org";
+  const host = (await headers()).get("host");
+  const isSatellite = isSatelliteHost(host);
+  const { signInUrl, signUpUrl } = clerkAuthUrls(isSatellite);
 
   // Theme every Clerk surface under this provider (sign-in, UserButton popover,
   // "Manage account" modal) with the shared dark/amber appearance so Clerk's
   // default light UI never leaks through. The verification gate above is
   // unaffected — appearance is purely presentational.
+  // signInUrl / signUpUrl are pinned on BOTH hosts, never left undefined. When
+  // they're unset Clerk falls back to its own Account Portal
+  // (accounts.<domain>/sign-in | /sign-up) — and that portal is NOT provisioned
+  // for this instance: accounts.gopixel.org returns 404 and
+  // accounts.pixelparents.org returns 403. Leaving signUpUrl unset (and
+  // signInUrl unset on the primary) is what sent people to dead pages from the
+  // "Sign up" link and from any Clerk-initiated auth redirect. This app hosts
+  // its own /sign-in and /sign-up, so every Clerk link must point back here.
+  // See lib/clerk-urls.ts (unit-tested) for the invariant.
   return (
     <ClerkProvider
       appearance={clerkAppearance}
       isSatellite={isSatellite}
       domain={isSatellite ? "pixelparents.org" : undefined}
-      signInUrl={isSatellite ? "https://gopixel.org/sign-in" : undefined}
+      signInUrl={signInUrl}
+      signUpUrl={signUpUrl}
     >
       {/* Ties PostHog events to the signed-in account (anonymous when signed out). */}
       <PostHogIdentify />
