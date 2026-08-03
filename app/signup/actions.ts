@@ -290,9 +290,12 @@ export async function completeSignup(id: string): Promise<SignupState> {
   }
 
   const extra = (row.extra ?? {}) as Record<string, unknown>;
-  if (!BUILDER_INTEREST.includes(extra.builderInterest as never)) {
-    errors.builderInterest = "Please choose an option";
-  }
+  // builderInterest is NO LONGER required here. Creating an account stopped
+  // asking it (Aug 2026) when signup was cut back to the basics — and leaving
+  // this check in place made every new signup fail with "Please fix the
+  // highlighted fields above" pointing at a question that is not on the page,
+  // which is unfixable from the user's side. It's now part of finishing your
+  // profile (see lib/profile-completeness.ts) instead.
   if (Object.keys(errors).length > 0) return { ok: false, errors };
 
   if (!extra.notified) {

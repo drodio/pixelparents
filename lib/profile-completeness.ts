@@ -15,11 +15,16 @@ import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
 // that make the directory and interest-matching actually work for them.
 
 export type ProfileGap = {
-  key: "interests" | "location" | "affiliation";
+  key: "interests" | "location" | "affiliation" | "builder";
   label: string;
   // Where the member goes to fill it in.
   href: string;
 };
+
+// The valid answers to "are you interested in helping build GoPixel software?".
+// Mirrors BUILDER_INTEREST in lib/options.ts; kept local so this module stays
+// dependency-light and safe to import from a server component.
+const BUILDER_ANSWERS = new Set(["builder", "aspiring", "no"]);
 
 export function profileGaps(row: SignupRow | null | undefined): ProfileGap[] {
   if (!row) return [];
@@ -42,6 +47,15 @@ export function profileGaps(row: SignupRow | null | undefined): ProfileGap[] {
   const isStudentOrAlum = isStudentAccount(row) || isAlumAccount(row);
   if (!isStudentOrAlum && !row.ohsAffiliation?.trim()) {
     gaps.push({ key: "affiliation", label: "Tell us your OHS affiliation", href: "/family" });
+  }
+
+  // Builder interest. This USED to be a required question at signup, and
+  // completeSignup hard-rejected a signup without it — which broke every new
+  // account the moment the question was removed from the form. It's collected
+  // here instead, and it still powers the builder counts on the landing page.
+  const extra = (row.extra ?? {}) as Record<string, unknown>;
+  if (!BUILDER_ANSWERS.has(String(extra.builderInterest ?? ""))) {
+    gaps.push({ key: "builder", label: "Tell us if you'd like to help build", href: "/family" });
   }
 
   return gaps;
