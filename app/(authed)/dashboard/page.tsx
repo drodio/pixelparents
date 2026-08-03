@@ -8,6 +8,7 @@ import { getStats, getBreakdowns } from "@/lib/db/aggregates";
 import { getSharedInterestMatches } from "@/lib/db/interest-matches";
 import { isFamilyVerified } from "@/lib/directory";
 import { readApprovalStatus, type ApprovalStatus } from "@/lib/approval";
+import { profileGaps } from "@/lib/profile-completeness";
 import { SharedInterests } from "./shared-interests";
 import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
@@ -179,6 +180,9 @@ export default async function DashboardPage() {
     ? readApprovalStatus((signup.extra ?? {}) as Record<string, unknown>)
     : null;
 
+  // What's still missing after the (now minimal) account creation.
+  const gaps = profileGaps(signup);
+
   return (
     <DashboardShell firstName={firstName} email={email} status={status} isAdmin={isAdmin}>
       <header className="mb-8">
@@ -189,6 +193,34 @@ export default async function DashboardPage() {
       </header>
 
       <div className="flex flex-col gap-8">
+        {/* Finish-your-profile nudge. Creating an account now asks only for the
+            basics, so this is where the rest gets picked up — named precisely
+            ("Add your interests") rather than a vague "complete your profile",
+            and it disappears on its own once there's nothing left to add. Only
+            fields that make the directory + interest matching work are counted;
+            see lib/profile-completeness.ts. */}
+        {gaps.length > 0 && (
+          <section className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.06] p-5">
+            <h2 className="text-base font-semibold text-white">Finish setting up your profile</h2>
+            <p className="mt-1 text-sm text-white/60">
+              Signing up only needed the basics. A couple more details help other OHS
+              families find you and match on shared interests.
+            </p>
+            <div className="mt-4 flex flex-wrap gap-2">
+              {gaps.map((g) => (
+                <Link
+                  key={g.key}
+                  href={g.href}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
+                >
+                  {g.label}
+                  <IconArrowRight className="h-4 w-4" />
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {signup ? (
           <VerificationCard status={status ?? "pending"} />
         ) : (

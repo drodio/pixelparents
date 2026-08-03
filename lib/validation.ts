@@ -22,9 +22,13 @@ export const signupSchema = z.object({
     .trim()
     .max(39)
     .regex(/^[A-Za-z0-9-]*$/, "Use only letters, numbers, and dashes"),
-  ohsAffiliation: z.enum(OHS_AFFILIATIONS, {
-    error: "Please select your OHS affiliation",
-  }),
+  // OPTIONAL as of Aug 2026. Creating an account now asks only for the basics
+  // (role + name + email + phone); affiliation is part of finishing your profile
+  // afterwards, where it's editable on /family like everything else. Students and
+  // alums never answer it directly — it's derived from their role (see
+  // affiliationForRole in lib/options.ts) — so in practice only a parent leaves
+  // it blank, and only until they complete their profile.
+  ohsAffiliation: optionalEnum(OHS_AFFILIATIONS),
   technicalDepth: optionalEnum(TECHNICAL_DEPTH),
   // LinkedIn is captured as a handle (the part after linkedin.com/in/).
   linkedinHandle: z
