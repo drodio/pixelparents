@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { clerkAuthUrls, isSatelliteHost } from "@/lib/clerk-urls";
 import { NextResponse } from "next/server";
 
 // The admin area and the developer /account page are gated (sensitive: admin
@@ -23,11 +24,11 @@ const isProtectedRoute = createRouteMatcher(["/admin(.*)", "/account(.*)"]);
 // key in NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (the key rotates when Clerk's primary
 // changes) — deploying the flip against the old pixelparents.org-primary key breaks
 // auth on both domains.
-const PRIMARY_SIGN_IN_URL = "https://gopixel.org/sign-in";
-function isSatelliteHost(host: string | null): boolean {
-  const h = (host ?? "").toLowerCase();
-  return h === "pixelparents.org" || h === "www.pixelparents.org";
-}
+// Host matching + auth URLs come from lib/clerk-urls.ts so the middleware and
+// <ClerkProvider> can never drift. Leaving signInUrl/signUpUrl unset makes Clerk
+// fall back to accounts.<domain>, which is NOT provisioned for this instance
+// (404 on gopixel.org, 403 on pixelparents.org) — a silent break, so both are
+// always supplied.
 
 export default clerkMiddleware(
   async (auth, req) => {
@@ -46,8 +47,12 @@ export default clerkMiddleware(
   },
   (req) =>
     isSatelliteHost(req.headers.get("host"))
-      ? { isSatellite: true, domain: "pixelparents.org", signInUrl: PRIMARY_SIGN_IN_URL }
-      : {},
+      ? {
+          isSatellite: true,
+          domain: "pixelparents.org",
+          ...clerkAuthUrls(true),
+        }
+      : clerkAuthUrls(false),
 );
 
 export const config = {
