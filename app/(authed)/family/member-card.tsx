@@ -104,6 +104,14 @@ function FamilyVisibilityControl({
 }
 
 const labelCls = "block text-sm font-medium text-white/80";
+// Mirrors BUILDER_INTEREST in lib/options.ts, with the user-facing wording the
+// signup form used before this question moved here.
+const BUILDER_INTEREST_OPTIONS = [
+  { value: "builder", label: "Yes! I am a builder (technical / software developer / engineer / etc) and I'd like to contribute" },
+  { value: "aspiring", label: "Yes! But I'm not a builder, although I'd like to become one" },
+  { value: "no", label: "No, that's far from my interests or area of expertise" },
+] as const;
+
 const inputCls =
   "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none focus:border-white/40 focus:ring-1 focus:ring-white/40";
 
@@ -290,6 +298,9 @@ export function MemberCard({
     wechatId: member.wechatId ?? "",
     websiteUrl: websiteUrlOf((member.extra ?? {}) as Record<string, unknown>) ?? "",
     ohsAffiliation: member.ohsAffiliation ?? "",
+    builderInterest: String(
+      ((member.extra ?? {}) as Record<string, unknown>).builderInterest ?? "",
+    ),
     city: member.city ?? "",
     state: member.state ?? "",
     country: member.country ?? "",
@@ -499,6 +510,28 @@ export function MemberCard({
                 className="mt-1 h-4 w-4 accent-amber-500"
               />
               <span>{opt}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      {/* Builder interest. Used to be asked during signup; moved here when
+          account creation was cut back to the basics (Aug 2026). The dashboard
+          "finish your profile" nudge links to this page, so it has to be
+          editable here or that nudge would be a dead end. */}
+      <fieldset>
+        <legend className={labelCls}>Interested in helping build GoPixel?</legend>
+        <div className="mt-2 flex flex-col gap-2">
+          {BUILDER_INTEREST_OPTIONS.map(({ value, label }) => (
+            <label key={value} className="flex items-start gap-2 text-sm text-white/80">
+              <input
+                type="radio"
+                name={`builderInterest-${member.id}`}
+                checked={v.builderInterest === value}
+                onChange={() => set("builderInterest", value, true)}
+                className="mt-1 h-4 w-4 accent-amber-500"
+              />
+              <span>{label}</span>
             </label>
           ))}
         </div>
