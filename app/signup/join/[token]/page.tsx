@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
 import { getFamilyByInviteToken } from "@/lib/family";
-import { getInterestPool } from "@/lib/interests";
 import SignupForm from "../../signup-form";
 
 export const dynamic = "force-dynamic";
@@ -28,7 +27,6 @@ export default async function JoinPage({
   // Seed the interest picker with the community's existing interests — same as
   // the primary /signup page — so an invited co-parent gets the same suggestions
   // and doesn't re-type near-duplicate spellings of interests that already exist.
-  const interestPool = await getInterestPool();
 
   if (!family) {
     return (
@@ -66,7 +64,7 @@ export default async function JoinPage({
         </div>
 
         <div className="mt-10">
-          <SignupForm joinToken={token} suggestedInterests={interestPool} />
+          <SignupForm joinToken={token} />
         </div>
       </div>
     </main>

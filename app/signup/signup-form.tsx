@@ -3,15 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { BotIdClient } from "botid/client";
-import {
-  PARENT_AFFILIATIONS,
-  affiliationForRole,
-  TECHNICAL_DEPTH,
-  SKILLSETS,
-  TIME_COMMITMENT,
-  US_STATES,
-  COUNTRIES,
-} from "@/lib/options";
+import { affiliationForRole } from "@/lib/options";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import { IconWarning } from "@/components/icons";
@@ -20,13 +12,8 @@ import {
   createCoParentDraft,
   patchSignup,
   completeSignup,
-  sendCoParentInvites,
   type SignupPatch,
 } from "./actions";
-import { parseInviteEmails } from "@/lib/invite";
-import { TagPicker, PhotoUploader } from "./thanks/family-form";
-import { CityAutocomplete } from "@/components/city-autocomplete";
-import type { City } from "@/lib/cities";
 
 // Bump when the `empty` shape changes incompatibly — stored drafts from an older
 // shape are discarded on restore rather than spread in with stale keys.
@@ -62,14 +49,8 @@ function Section({
 }
 
 const labelCls = "block text-sm font-medium text-white/80";
-// Sub-group headers (fieldset legends) are bold to stand out from field labels.
-const legendCls = "block text-sm font-bold text-white/80";
 const inputCls =
   "mt-1 w-full rounded-lg border border-white/15 bg-white/5 px-3 py-2 text-white placeholder-white/30 outline-none transition-colors focus:border-amber-400/60 focus:ring-1 focus:ring-amber-400/60";
-// Prefixed inputs (linkedin.com/in/, github.com/) share one focus treatment so
-// every text field in the form lights up the same amber on focus.
-const prefixWrapCls =
-  "mt-1 flex items-center rounded-lg border border-white/15 bg-white/5 transition-colors focus-within:border-amber-400/60 focus-within:ring-1 focus-within:ring-amber-400/60";
 
 const empty = {
   firstName: "",
@@ -110,12 +91,10 @@ const empty = {
 // is attached to an EXISTING family (via createCoParentDraft) instead of minting
 // a new one, so the invitee's children come from the shared family.
 export default function SignupForm({
-  suggestedInterests = [],
   joinToken,
   refToken,
   defaultAccountType,
 }: {
-  suggestedInterests?: string[];
   joinToken?: string;
   // Referral attribution token from a "spread the word" link (?ref=…). Passed to
   // createDraftSignup so the new family records who referred them. No PII.
@@ -240,62 +219,8 @@ export default function SignupForm({
       ? "We couldn't verify your browser. If you're using a VPN, private relay, or an ad/tracker blocker, turn it off for this page and try again."
       : "Something went wrong saving your info. Please check your connection and try again.";
 
-  // --- Co-parent invite UI state ---
-  const [inviteRaw, setInviteRaw] = useState("");
-  const [confirmEmails, setConfirmEmails] = useState<string[] | null>(null);
-  const [inviteState, setInviteState] = useState<"idle" | "sending" | "sent" | "error">("idle");
-  const [inviteNote, setInviteNote] = useState<string | null>(null);
 
-  function onInviteClick() {
-    setInviteNote(null);
-    const emails = parseInviteEmails(inviteRaw);
-    if (emails.length === 0) {
-      setInviteNote("Enter one or more valid email addresses, separated by commas.");
-      return;
-    }
-    setConfirmEmails(emails);
-  }
 
-  async function onConfirmInvite() {
-    const emails = confirmEmails ?? [];
-    setConfirmEmails(null);
-    setInviteState("sending");
-    setInviteNote(null);
-    const id = idRef.current ?? (await ensureId());
-    if (!id) {
-      setInviteState("error");
-      setInviteNote(draftErrorMessage());
-      return;
-    }
-    let res: Awaited<ReturnType<typeof sendCoParentInvites>>;
-    try {
-      res = await sendCoParentInvites(id, emails);
-    } catch (err) {
-      console.error("sendCoParentInvites threw:", err);
-      setInviteState("error");
-      setInviteNote("We couldn't send those invites. Please try again.");
-      return;
-    }
-    if (res.ok && res.sent > 0) {
-      setInviteState("sent");
-      setInviteRaw("");
-      const reserved = res.reserved ?? res.sent;
-      // Two distinct shortfalls: quota trimmed by the lifetime cap (reserved <
-      // requested) vs. individual sends that failed (sent < reserved).
-      const cappedShort = reserved < res.requested;
-      const failedShort = res.sent < reserved;
-      let note = `Sent ${res.sent} invite${res.sent === 1 ? "" : "s"}. They'll get a link to fill out their info.`;
-      if (failedShort) note += ` (${reserved - res.sent} couldn't be sent — please try again.)`;
-      if (cappedShort) note += ` (${res.requested - reserved} not sent — invite limit reached.)`;
-      setInviteNote(note);
-    } else if (res.error === "limit") {
-      setInviteState("error");
-      setInviteNote("You've reached the invite limit for this signup.");
-    } else {
-      setInviteState("error");
-      setInviteNote("We couldn't send those invites. Please try again.");
-    }
-  }
 
   const save = useCallback(
     async (patch: SignupPatch) => {
@@ -312,46 +237,6 @@ export default function SignupForm({
     setV((prev) => ({ ...prev, [key]: value }));
     queue({ [key]: value } as SignupPatch, immediate);
   }
-  // LinkedIn drives the student-resource pill box. When a handle is present we
-  // also persist the current opt-in choice (default "yes") so it isn't lost if
-  // the parent leaves the pre-checked option untouched.
-  function setLinkedin(value: string) {
-    setV((prev) => ({ ...prev, linkedinHandle: value }));
-    const patch: SignupPatch = { linkedinHandle: value };
-    if (value.trim() !== "") patch.studentResourceOptIn = v.studentResource === "yes";
-    queue(patch);
-  }
-  function setStudentResource(choice: "yes" | "no") {
-    setV((prev) => ({ ...prev, studentResource: choice }));
-    queue({ studentResourceOptIn: choice === "yes" }, true);
-  }
-  // State only applies to US families. When the country is switched away from the
-  // US, clear any previously-picked state in the same save so the row stays
-  // consistent (and the map plots by country centroid, not a stale state pin).
-  function setCountry(value: string) {
-    const clearState = value !== "United States";
-    setV((prev) => ({ ...prev, country: value, ...(clearState ? { state: "" } : {}) }));
-    queue({ country: value, ...(clearState ? { state: "" } : {}) }, true);
-  }
-  // A city suggestion was picked: fill city AND auto-populate country (and US
-  // state when the city carries one). Non-US picks clear any stale state so the
-  // existing country/state consistency rule (US-only state) still holds. Country
-  // remains independently editable afterward.
-  function pickCity(picked: City) {
-    const isUS = picked.country === "United States";
-    const nextState = isUS ? (picked.state ?? "") : "";
-    setV((prev) => ({
-      ...prev,
-      city: picked.name,
-      country: picked.country,
-      state: nextState,
-    }));
-    queue({ city: picked.name, country: picked.country, state: nextState }, true);
-  }
-  function setBuilderInterest(choice: "builder" | "aspiring" | "no") {
-    setV((prev) => ({ ...prev, builderInterest: choice }));
-    queue({ builderInterest: choice }, true);
-  }
   // Role choice (parent vs student). Persisted immediately so the thanks page
   // (read server-side from extra.accountType) routes to the right step-2.
   // For a student or an alum, "Stanford OHS affiliation" is fully determined by
@@ -366,15 +251,6 @@ export default function SignupForm({
     const derived = affiliationForRole(choice);
     setV((prev) => ({ ...prev, accountType: choice, ohsAffiliation: derived }));
     queue({ accountType: choice, ohsAffiliation: derived }, true);
-  }
-  function toggleSkill(opt: string) {
-    setV((prev) => {
-      const next = prev.skillsets.includes(opt)
-        ? prev.skillsets.filter((s) => s !== opt)
-        : [...prev.skillsets, opt];
-      queue({ skillsets: next }, true);
-      return { ...prev, skillsets: next };
-    });
   }
 
   async function onContinue() {
@@ -627,448 +503,20 @@ export default function SignupForm({
             />
             <FieldError msg={errors.phone} />
           </div>
-          <div className="sm:col-span-2">
-            <label className={labelCls} htmlFor="linkedinHandle">
-              LinkedIn (this helps other parents get to know you)
-            </label>
-            <div className={prefixWrapCls}>
-              <span className="select-none px-3 py-2 text-sm text-white/40">linkedin.com/in/</span>
-              <input
-                id="linkedinHandle"
-                value={v.linkedinHandle}
-                onChange={(e) => setLinkedin(e.target.value)}
-                placeholder="your-handle"
-                className="w-full rounded-r-lg bg-transparent py-2 pr-3 text-white placeholder-white/30 outline-none"
-              />
-            </div>
-            <FieldError msg={errors.linkedinHandle} />
-          </div>
-
-          {/* WeChat is parent-only: it's how a large share of OHS parent families
-              actually coordinate (parent feedback, Jul 2026). Students and alums
-              don't get it — their reachability runs through the age-16 contact
-              gate in lib/contact-visibility.ts. */}
-          {(joinToken || v.accountType === "parent") && (
-            <div className="sm:col-span-2">
-              <label className={labelCls} htmlFor="wechatId">
-                WeChat ID (optional)
-              </label>
-              <input
-                id="wechatId"
-                value={v.wechatId}
-                onChange={(e) => set("wechatId", e.target.value)}
-                placeholder="your-wechat-id"
-                className={inputCls}
-              />
-            </div>
-          )}
-
-          <div className="sm:col-span-2">
-            <label className={labelCls} htmlFor="websiteUrl">
-              Personal website (optional)
-            </label>
-            <input
-              id="websiteUrl"
-              type="url"
-              inputMode="url"
-              value={v.websiteUrl}
-              onChange={(e) => set("websiteUrl", e.target.value)}
-              placeholder="https://yourname.com"
-              className={inputCls}
-              autoComplete="url"
-            />
-          </div>
-
-          {/* Explicit, default-OFF consent to build a profile from public data. */}
-          <div className="sm:col-span-2 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
-            <label className="flex items-start gap-2 text-sm text-white/85">
-              <input
-                type="checkbox"
-                checked={v.enrichmentOptIn}
-                onChange={(e) => set("enrichmentOptIn", e.target.checked, true)}
-                className="mt-1 h-4 w-4 accent-amber-500"
-              />
-              <span>
-                Build my profile automatically from public data (LinkedIn, GitHub,
-                personal website, etc.).{" "}
-                <em className="text-white/60">
-                  Off by default. We only use public, you-provided sources, never
-                  school systems. You can review, edit, share, or delete the result
-                  anytime — and choose whether it appears to other families.
-                </em>
-              </span>
-            </label>
-          </div>
-
-          {v.linkedinHandle.trim() !== "" && (
-            <div className="sm:col-span-2 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4">
-              <p className="text-sm font-bold text-white/80">
-                OHS Students&apos; <span className="text-amber-400">#1 ask</span> is
-                to connect with other parents (like you!) around your subject
-                matter expertise, so they can learn faster and with more variety.
-              </p>
-              <p className="mt-2 text-sm text-white/80">
-                Are you interested in being an available resource to OHS students?
-                (Examples: A 30 minute Zoom call to provide advice about your
-                career specialty. A small dinner with students and parents to
-                discuss a topic you have expertise in, etc.)
-              </p>
-              <p className="mt-2 text-sm text-white/80">
-                <strong>We are building some software to enable this.</strong> You
-                will be able to accept / decline any specific student requests.
-              </p>
-              <div className="mt-3 flex flex-col gap-3">
-                <label className="flex items-start gap-2 text-sm text-white/80">
-                  <input
-                    type="radio"
-                    name="studentResource"
-                    checked={v.studentResource === "yes"}
-                    onChange={() => setStudentResource("yes")}
-                    className="mt-1 h-4 w-4 accent-amber-500"
-                  />
-                  <span>
-                    Yes! Please use my LinkedIn profile to automatically build a
-                    profile out about me and my expertise that will be shared
-                    with students.{" "}
-                    <em>(you&apos;ll be able to edit it after the initial pass)</em>
-                  </span>
-                </label>
-                <label className="flex items-start gap-2 text-sm text-white/80">
-                  <input
-                    type="radio"
-                    name="studentResource"
-                    checked={v.studentResource === "no"}
-                    onChange={() => setStudentResource("no")}
-                    className="mt-1 h-4 w-4 accent-amber-500"
-                  />
-                  <span>
-                    No, I&apos;m not able to be available for OHS student requests
-                    right now
-                  </span>
-                </label>
-              </div>
-            </div>
-          )}
+          {/* LinkedIn, WeChat, personal website, the enrichment opt-in and the
+              student-resource prompt used to sit here. Creating an account is now
+              name + email + phone only; all of these are part of finishing your
+              profile and stay editable on /family (member-card.tsx). */}
         </div>
         </Section>
 
-        <Section
-          title="Where you're based"
-          description="Helps us place your family on the OHS community map."
-        >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={labelCls} htmlFor="country">Country</label>
-            <select
-              id="country"
-              value={v.country}
-              onChange={(e) => setCountry(e.target.value)}
-              className={inputCls}
-              autoComplete="country-name"
-            >
-              <option value="">Select…</option>
-              {COUNTRIES.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className={labelCls} htmlFor="city">City</label>
-            <CityAutocomplete
-              id="city"
-              value={v.city}
-              onCityChange={(city) => set("city", city)}
-              onSelect={pickCity}
-              inputClassName={inputCls}
-            />
-          </div>
-          {/* State applies to US families; the world map plots everyone else by
-              country centroid, so only show it when Country is United States. */}
-          {v.country === "United States" && (
-            <div>
-              <label className={labelCls} htmlFor="state">State</label>
-              <select
-                id="state"
-                value={v.state}
-                onChange={(e) => set("state", e.target.value, true)}
-                className={inputCls}
-              >
-                <option value="">Select…</option>
-                {US_STATES.map((s) => (
-                  <option key={s} value={s}>{s}</option>
-                ))}
-              </select>
-            </div>
-          )}
-        </div>
-        </Section>
-
-        <Section
-          title="Interests & photos"
-          description="What you're into, and a friendly face or two — both are optional."
-        >
-        <div>
-          <h3 className="text-base font-semibold text-white">
-            Your interests (select existing or add new ones)
-          </h3>
-          <TagPicker
-            value={v.parentInterests}
-            onChange={(next) => set("parentInterests", next, true)}
-            suggestions={suggestedInterests}
-            placeholder="Type an interest and press Enter"
-          />
-        </div>
-
-        <div>
-          <h3 className="text-base font-semibold text-white">
-            Would you like to share photos of you with your family?
-          </h3>
-          <p className="mt-1 text-xs text-white/40">
-            Resized &amp; optimized in your browser before upload. Add as many as
-            you&rsquo;d like.
-          </p>
-          <PhotoUploader
-            initialPhotos={[]}
-            initialPreviews={{}}
-            onSave={(photos) => queue({ photos }, true)}
-            candidates={[]}
-            showMainPill
-          />
-        </div>
-        </Section>
-
-        <Section
-          title="Stanford OHS & building together"
-          description="Tell us how you're connected to OHS and whether you'd like to help build."
-        >
-        {/* Only PARENTS are asked this. A student or alum already answered it in
-            "Who's signing up?", and re-asking the same question with overlapping
-            options was the single most-duplicated step in the flow (parent
-            feedback, Jul 2026). Their affiliation is derived in setAccountType,
-            so the value is still persisted — just not re-collected. Parents keep
-            the question because new / existing / previous is a real choice. */}
-        {(joinToken || v.accountType === "parent") && (
-          <fieldset>
-            <legend className={legendCls}>
-              Stanford OHS affiliation <span className="text-red-400">*</span>
-            </legend>
-            <div className="mt-2 flex flex-col gap-2">
-              {PARENT_AFFILIATIONS.map((opt) => (
-                <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
-                  <input
-                    type="radio"
-                    name="ohsAffiliation"
-                    checked={v.ohsAffiliation === opt}
-                    onChange={() => set("ohsAffiliation", opt, true)}
-                    className="mt-1 h-4 w-4 accent-amber-500"
-                  />
-                  <span>{opt}</span>
-                </label>
-              ))}
-            </div>
-            <FieldError msg={errors.ohsAffiliation} />
-          </fieldset>
-        )}
-
-        <fieldset>
-          <legend className={legendCls}>
-            Are you interested in helping us build GoPixel software?{" "}
-            <span className="text-red-400">*</span>
-          </legend>
-          <div className="mt-2 flex flex-col gap-2">
-            {[
-              {
-                value: "builder" as const,
-                label:
-                  "Yes! I am a builder (technical / software developer / engineer / etc) and I'd like to contribute",
-              },
-              {
-                value: "aspiring" as const,
-                label: "Yes! But I'm not a builder, although I'd like to become one",
-              },
-              {
-                value: "no" as const,
-                label: "No, that's far from my interests or area of expertise",
-              },
-            ].map((opt) => (
-              <label
-                key={opt.value}
-                className="flex items-start gap-2 text-sm text-white/80"
-              >
-                <input
-                  type="radio"
-                  name="builderInterest"
-                  checked={v.builderInterest === opt.value}
-                  onChange={() => setBuilderInterest(opt.value)}
-                  className="mt-1 h-4 w-4 accent-amber-500"
-                />
-                <span>{opt.label}</span>
-              </label>
-            ))}
-          </div>
-          <FieldError msg={errors.builderInterest} />
-
-          {v.builderInterest === "builder" && (
-            <div className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-white/80">
-              <strong>Welcome, technical parent!</strong> We appreciate you. Read
-              our{" "}
-              <a
-                href="https://gopixel.org/builders"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
-              >
-                builder guidelines page
-              </a>{" "}
-              to learn more about how we build together.
-            </div>
-          )}
-
-          {v.builderInterest === "aspiring" && (
-            <div className="mt-3 rounded-2xl border border-amber-400/30 bg-amber-400/10 p-4 text-sm text-white/80">
-              <em>
-                If you are not yet a builder, but want to become one, this parents
-                tech builder group is the perfect place to start.
-              </em>{" "}
-              Please read{" "}
-              <a
-                href="https://gopixel.org/builders#frequently-asked-questions"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="text-amber-400 underline decoration-amber-400/60 underline-offset-2 hover:text-amber-300"
-              >
-                the FAQs on our builder guidelines page
-              </a>{" "}
-              to learn how to get started.
-            </div>
-          )}
-        </fieldset>
-
-        {/* Builders see GitHub, technical depth, and skillsets. */}
-        {v.builderInterest === "builder" && (
-          <>
-            <div>
-              <label className={labelCls} htmlFor="githubUsername">
-                GitHub username
-              </label>
-              <div className={prefixWrapCls}>
-                <span className="select-none px-3 py-2 text-sm text-white/40">github.com/</span>
-                <input
-                  id="githubUsername"
-                  value={v.githubUsername}
-                  onChange={(e) => set("githubUsername", e.target.value)}
-                  placeholder="your-username"
-                  className="w-full rounded-r-lg bg-transparent py-2 pr-3 text-white placeholder-white/30 outline-none"
-                />
-              </div>
-              <FieldError msg={errors.githubUsername} />
-            </div>
-
-            <fieldset>
-              <legend className={legendCls}>Technical depth</legend>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {TECHNICAL_DEPTH.map((opt) => (
-                  <label key={opt} className="flex items-start gap-2 text-sm text-white/80">
-                    <input
-                      type="radio"
-                      name="technicalDepth"
-                      checked={v.technicalDepth === opt}
-                      onChange={() => set("technicalDepth", opt, true)}
-                      className="mt-1 h-4 w-4 accent-amber-500"
-                    />
-                    <span>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-
-            <fieldset>
-              <legend className={legendCls}>Skillsets</legend>
-              <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                {SKILLSETS.map((opt) => (
-                  <label key={opt} className="flex items-center gap-2 text-sm text-white/80">
-                    <input
-                      type="checkbox"
-                      checked={v.skillsets.includes(opt)}
-                      onChange={() => toggleSkill(opt)}
-                      className="h-4 w-4 accent-amber-500"
-                    />
-                    <span>{opt}</span>
-                  </label>
-                ))}
-              </div>
-            </fieldset>
-          </>
-        )}
-
-        {/* Both builders and aspiring builders see the time-commitment question. */}
-        {(v.builderInterest === "builder" || v.builderInterest === "aspiring") && (
-          <fieldset>
-            <legend className={legendCls}>
-              How much time can you dedicate to building software for OHS parents?
-            </legend>
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
-              {TIME_COMMITMENT.map((opt) => (
-                <label key={opt} className="flex items-center gap-2 text-sm text-white/80">
-                  <input
-                    type="radio"
-                    name="timeCommitment"
-                    checked={v.timeCommitment === opt}
-                    onChange={() => set("timeCommitment", opt, true)}
-                    className="h-4 w-4 accent-amber-500"
-                  />
-                  <span>{opt}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-        )}
-        </Section>
-
-        {/* Invite a spouse / other parent(s) to fill out their own info. They
-            join the same family and share these children. Hidden for student
-            accounts — a student links their parent in step-2 instead. */}
-        {!(!joinToken && v.accountType === "student") && (
-        <Section
-          title="Invite a co-parent"
-          description="Optional — they'll fill out their own info and join the same family."
-        >
-        <div>
-          <label className={labelCls} htmlFor="coParentInvites">
-            Invite your spouse / other parent(s) to fill their information out, too:
-          </label>
-          <div className="mt-2 flex flex-col gap-2 sm:flex-row">
-            <input
-              id="coParentInvites"
-              value={inviteRaw}
-              onChange={(e) => {
-                setInviteRaw(e.target.value);
-                if (inviteState !== "idle") setInviteState("idle");
-              }}
-              placeholder="comma separated emails"
-              className={`${inputCls} mt-0 flex-1`}
-              autoComplete="off"
-            />
-            <button
-              type="button"
-              onClick={onInviteClick}
-              className="shrink-0 rounded-lg border border-white/30 px-5 py-2 font-semibold text-white transition-colors hover:bg-white/10"
-            >
-              Invite
-            </button>
-          </div>
-          {inviteNote && (
-            <p
-              className={`mt-2 text-sm ${
-                inviteState === "sent" ? "text-emerald-300" : inviteState === "error" ? "text-red-300" : "text-white/60"
-              }`}
-            >
-              {inviteNote}
-            </p>
-          )}
-        </div>
-        </Section>
-        )}
+        {/* Location, interests & photos, OHS affiliation, builder interest and
+            the co-parent invite USED to live here. Creating an account now asks
+            only for the basics (role + name + email + phone) — everything else
+            moved into finishing your profile afterwards, where it is editable on
+            /family. Removing them here is safe because member-card.tsx already
+            edits every one of those fields (parent feedback, Aug 2026: signup
+            was far too long). */}
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <button
@@ -1114,41 +562,6 @@ export default function SignupForm({
         </div>
       </div>
 
-      {/* Custom in-app confirmation dialog (not window.confirm). */}
-      {confirmEmails && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"
-          role="dialog"
-          aria-modal="true"
-          onClick={() => setConfirmEmails(null)}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-2xl border border-white/15 bg-neutral-900 p-6 text-white shadow-2xl"
-          >
-            <p className="text-sm text-white/85">
-              About to send invites to {confirmEmails.join(", ")}. They will have the ability to make
-              edits to your family and children information.
-            </p>
-            <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                type="button"
-                onClick={() => setConfirmEmails(null)}
-                className="rounded-full border border-white/30 px-5 py-2 font-semibold text-white transition-colors hover:bg-white/10"
-              >
-                No, cancel
-              </button>
-              <button
-                type="button"
-                onClick={onConfirmInvite}
-                className="rounded-full bg-white px-5 py-2 font-semibold text-black transition-opacity hover:opacity-90"
-              >
-                Yes, invite them
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

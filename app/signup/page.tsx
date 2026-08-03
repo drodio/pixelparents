@@ -86,7 +86,6 @@ export default async function SignupPage({
 
         <div className="mt-10">
           <SignupForm
-            suggestedInterests={interests}
             refToken={ref}
             defaultAccountType={defaultAccountType}
           />
