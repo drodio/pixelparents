@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { IconGradCap, IconCircleCheck, IconClock, IconWarning } from "@/components/icons";
 import { parseInviteEmails } from "@/lib/invite";
+import { LinkAccounts } from "@/app/(authed)/family/link-accounts";
 import { sendCoParentInvites } from "../actions";
 import type { StudentParentLinkStatus } from "./actions";
 
@@ -22,9 +23,13 @@ const inputCls =
 export default function StudentParentForm({
   signupId,
   initialStatus,
+  outgoingLinks = [],
 }: {
   signupId: string;
   initialStatus: StudentParentLinkStatus;
+  // Link requests this student has already sent, so they can see + withdraw one
+  // without leaving the step.
+  outgoingLinks?: { id: string; toEmail: string }[];
 }) {
   const [inviteRaw, setInviteRaw] = useState("");
   const [confirmEmails, setConfirmEmails] = useState<string[] | null>(null);
@@ -35,6 +40,9 @@ export default function StudentParentForm({
   const [hasParent, setHasParent] = useState(
     initialStatus.hasLinkedParent || initialStatus.hasPendingInvite,
   );
+  // Default to "they already have an account" — that is the case this step was
+  // missing, and inviting someone who is already a member creates a duplicate.
+  const [mode, setMode] = useState<"link" | "invite">("link");
 
   function onInviteClick() {
     setInviteNote(null);
@@ -85,11 +93,51 @@ export default function StudentParentForm({
             </h3>
             <p className="mt-1 text-sm text-white/70">
               Student accounts need a parent or guardian linked to your family.
-              Invite yours below — they&apos;ll get a private link to add their own
-              info and join the same family as you.
             </p>
           </div>
         </div>
+
+        {/* Two ways to satisfy this, because "invite your parent" is nonsense
+            when the parent already signed up. Linking sends THEM a request to
+            approve rather than an invite to create a second account. */}
+        <div
+          className="mt-4 inline-flex rounded-full border border-white/15 bg-white/[0.04] p-0.5 text-sm"
+          role="group"
+          aria-label="How to add your parent"
+        >
+          <button
+            type="button"
+            onClick={() => setMode("link")}
+            aria-pressed={mode === "link"}
+            className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
+              mode === "link" ? "bg-amber-400 text-black" : "text-white/60 hover:text-white"
+            }`}
+          >
+            They already have an account
+          </button>
+          <button
+            type="button"
+            onClick={() => setMode("invite")}
+            aria-pressed={mode === "invite"}
+            className={`rounded-full px-4 py-1.5 font-medium transition-colors ${
+              mode === "invite" ? "bg-amber-400 text-black" : "text-white/60 hover:text-white"
+            }`}
+          >
+            Invite them
+          </button>
+        </div>
+
+        {mode === "link" ? (
+          <div className="mt-5">
+            <p className="mb-3 text-sm text-white/70">
+              Enter the email your parent or guardian uses for GoPixel. They&apos;ll get a
+              request to approve, and once they accept you&apos;re in the same family —
+              no second account needed.
+            </p>
+            <LinkAccounts incoming={[]} outgoing={outgoingLinks} compact />
+          </div>
+        ) : (
+        <>
 
         <div className="mt-5">
           <label className={labelCls} htmlFor="parentInvite">
@@ -132,6 +180,8 @@ export default function StudentParentForm({
             </p>
           )}
         </div>
+        </>
+        )}
       </section>
 
       {/* Family status: tells the student where their parent link stands. */}

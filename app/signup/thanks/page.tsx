@@ -14,6 +14,7 @@ import { ShareSettings } from "./share-settings";
 import { ThanksInviteCta } from "./thanks-invite-cta";
 import { getVerifyState } from "./verify-actions";
 import { getStudentParentLinkStatus } from "./actions";
+import { listOutgoingLinkRequests } from "@/lib/db/family-links";
 import { StudentVerify } from "@/components/student-verify";
 import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
 
@@ -99,6 +100,9 @@ export default async function ThanksPage({
   const studentLinkStatus = isStudent
     ? await getStudentParentLinkStatus(validId)
     : null;
+  // Pending link requests this student already sent, so the step can show +
+  // withdraw them without a round trip elsewhere.
+  const outgoingLinks = isStudent ? await listOutgoingLinkRequests(validId) : [];
 
   // Family-level photos are now collected on the first signup form; the thanks
   // page only needs whether any exist (to vary the heading), not their URLs.
@@ -199,7 +203,11 @@ export default async function ThanksPage({
             // STUDENT path: the required step-2 action is "invite your parent /
             // guardian" (reusing the co-parent invite mechanism). Students do
             // NOT add children.
-            <StudentParentForm signupId={validId} initialStatus={studentLinkStatus} />
+            <StudentParentForm
+              signupId={validId}
+              initialStatus={studentLinkStatus}
+              outgoingLinks={outgoingLinks.map((r) => ({ id: r.id, toEmail: r.toEmail }))}
+            />
           ) : (
             // PARENT path: unchanged — add children + the existing UI.
             <FamilyForm

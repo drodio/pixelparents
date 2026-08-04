@@ -9,6 +9,12 @@ import { signups } from "@/lib/db/schema/signups";
 import { notifyInterestMatches } from "@/lib/db/interest-notify";
 import { primaryEmail } from "@/lib/clerk";
 import { familyIdForEmail } from "@/lib/db/signups";
+import {
+  createFamilyLinkRequest,
+  approveFamilyLinkRequest,
+  declineFamilyLinkRequest,
+  cancelFamilyLinkRequest,
+} from "@/lib/db/family-links";
 import { sanitizeSignupPatch, type SignupPatch } from "@/app/signup/actions";
 import { countUserCommits } from "@/lib/github";
 import { builderStatusOf, type BuilderStatus } from "@/lib/builder";
@@ -437,4 +443,70 @@ export async function deleteEnrichment(
     console.error("deleteEnrichment failed:", err);
     return { ok: false };
   }
+}
+
+// --- Family linking -----------------------------------------------------------
+//
+// Linking lets two EXISTING accounts become one family, which the old
+// invite-token flow couldn't express. It covers the two real cases: a student
+// whose parent already has an account (so "invite your parent" is nonsense), and
+// any two members who want to merge later from /family.
+//
+// Every action below resolves the caller from the SESSION (never from a client
+// argument) and then defers the decision rules to lib/family-links.ts, which is
+// unit-tested. Approving grants mutual access to profiles and children, so it is
+// always two-sided: one side asks, the other approves.
+
+// Resolve the caller's own signup row id from the session.
+async function callerSignupId(): Promise<string | null> {
+  const user = await currentUser();
+  const email = primaryEmail(user);
+  if (!email) return null;
+  const [row] = await getDb()
+    .select({ id: signups.id })
+    .from(signups)
+    .where(eq(signups.email, email))
+    .limit(1);
+  return row?.id ?? null;
+}
+
+export async function requestFamilyLinkAction(
+  targetEmail: string,
+): Promise<{ ok: boolean; message: string }> {
+  const me = await callerSignupId();
+  if (!me) return { ok: false, message: "Please sign in first." };
+  const res = await createFamilyLinkRequest(me, targetEmail);
+  revalidatePath("/family");
+  return { ok: res.ok, message: res.message };
+}
+
+export async function approveFamilyLinkAction(
+  requestId: string,
+): Promise<{ ok: boolean; message: string }> {
+  const me = await callerSignupId();
+  if (!me) return { ok: false, message: "Please sign in first." };
+  const res = await approveFamilyLinkRequest(requestId, me);
+  revalidatePath("/family");
+  revalidatePath("/dashboard");
+  return res;
+}
+
+export async function declineFamilyLinkAction(
+  requestId: string,
+): Promise<{ ok: boolean; message: string }> {
+  const me = await callerSignupId();
+  if (!me) return { ok: false, message: "Please sign in first." };
+  const res = await declineFamilyLinkRequest(requestId, me);
+  revalidatePath("/family");
+  return res;
+}
+
+export async function cancelFamilyLinkAction(
+  requestId: string,
+): Promise<{ ok: boolean; message: string }> {
+  const me = await callerSignupId();
+  if (!me) return { ok: false, message: "Please sign in first." };
+  const res = await cancelFamilyLinkRequest(requestId, me);
+  revalidatePath("/family");
+  return res;
 }
