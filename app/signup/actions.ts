@@ -2,7 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { eq } from "drizzle-orm";
-import { checkBotId } from "botid/server";
+import { observeBot } from "@/lib/bot-gate";
+import { logEvent } from "@/lib/db/app-logs";
 import { getDb, getSql } from "@/lib/db";
 import { signups, families, type Photo } from "@/lib/db/schema/signups";
 import {
@@ -51,8 +52,18 @@ const UUID_RE =
 export async function createDraftSignup(
   refToken?: string,
 ): Promise<{ id: string } | { error: string }> {
-  const v = await checkBotId();
-  if (v.isBot) return { error: "blocked" };
+  // Observe-only: BotID's proof header is stripped by ad blockers / VPNs /
+  // private relay, so blocking on it locked real OHS parents out of signing up.
+  // We record the verdict instead of acting on it (see lib/bot-gate.ts).
+  const v = await observeBot();
+  if (v.isBot) {
+    void logEvent({
+      level: "warn",
+      event: "bot.flagged",
+      message: "BotID flagged createDraftSignup — allowed anyway (fail-open)",
+      context: { verdict: v, action: "createDraftSignup" },
+    });
+  }
   try {
     const family = await createFamily();
     // Optional referral attribution: if this signup arrived via a family/student
@@ -71,9 +82,22 @@ export async function createDraftSignup(
         ...(ref ? { extra: { referredBy: ref } } : {}),
       })
       .returning({ id: signups.id });
+    void logEvent({
+      event: "signup.draft.created",
+      message: "Draft signup row created",
+      actorSignupId: row.id,
+      context: { referredBy: ref ?? null, botFlagged: v.isBot },
+    });
     return { id: row.id };
   } catch (err) {
     console.error("createDraftSignup failed:", err);
+    void logEvent({
+      level: "error",
+      event: "signup.draft.failed",
+      message: "createDraftSignup threw",
+      error: err,
+      context: { botFlagged: v.isBot },
+    });
     return { error: "failed" };
   }
 }
@@ -85,8 +109,15 @@ export async function createDraftSignup(
 export async function createCoParentDraft(
   inviteToken: string,
 ): Promise<{ id: string } | { error: string }> {
-  const v = await checkBotId();
-  if (v.isBot) return { error: "blocked" };
+  const v = await observeBot();
+  if (v.isBot) {
+    void logEvent({
+      level: "warn",
+      event: "bot.flagged",
+      message: "BotID flagged createCoParentDraft — allowed anyway (fail-open)",
+      context: { verdict: v, action: "createCoParentDraft" },
+    });
+  }
   try {
     const family = await getFamilyByInviteToken(inviteToken);
     if (!family) return { error: "invalid-token" };
@@ -258,6 +289,17 @@ export async function patchSignup(id: string, patch: SignupPatch): Promise<{ ok:
     return { ok: true };
   } catch (err) {
     console.error("patchSignup failed:", err);
+    // The exact failure that made "Couldn't save — click to retry" unreadable
+    // for weeks: previously this error existed only in Vercel logs we had no
+    // access to. Now it is queryable per-signup from the admin explorer.
+    void logEvent({
+      level: "error",
+      event: "signup.patch.failed",
+      message: "patchSignup DB update threw",
+      actorSignupId: id,
+      error: err,
+      context: { columns: Object.keys(set) },
+    });
     return { ok: false };
   }
 }
@@ -393,9 +435,14 @@ export async function submitSignup(
   _prev: SignupState,
   formData: FormData,
 ): Promise<SignupState> {
-  const verification = await checkBotId();
+  const verification = await observeBot();
   if (verification.isBot) {
-    return { ok: false, message: "Submission blocked — please try again." };
+    void logEvent({
+      level: "warn",
+      event: "bot.flagged",
+      message: "BotID flagged submitSignup — allowed anyway (fail-open)",
+      context: { verdict: verification, action: "submitSignup" },
+    });
   }
 
   const raw = {

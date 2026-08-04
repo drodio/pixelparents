@@ -10,6 +10,7 @@ const items = [
   { href: "/admin/oauth-apps", label: "Sign-in Apps" },
   { href: "/admin/reports", label: "Reports" },
   { href: "/admin/feedback", label: "Feedback" },
+  { href: "/admin/logs", label: "Logs" },
 ];
 
 export default function AdminNav({
