@@ -241,6 +241,42 @@ export async function notifyCoParentInvite(n: {
   });
 }
 
+// --- Family linking: someone with an EXISTING account asked to join ---------
+//
+// Distinct from notifyCoParentInvite above: that one hands a stranger a private
+// link to CREATE an account. This one tells someone who already has an account
+// that a request is waiting for their approval. Without it the request only ever
+// appears in-app, so a parent who doesn't happen to visit never learns a student
+// is blocked on them.
+export async function notifyFamilyLinkRequest(n: {
+  to: string;
+  fromName: string;
+  fromIsStudent: boolean;
+  familyUrl: string;
+}): Promise<boolean> {
+  const who = n.fromName || "Someone";
+  const role = n.fromIsStudent ? " (an OHS student)" : "";
+  const text = [
+    `Hi,`,
+    ``,
+    `${who}${role} asked to link their GoPixel account with yours, so you'd`,
+    `share one family profile.`,
+    ``,
+    `Nothing has changed yet — it only happens if you approve it. You can review`,
+    `who would join, then approve or decline, here:`,
+    ``,
+    `\u{1F449} ${n.familyUrl}`,
+    ``,
+    `If you approve, you'll share family and children information with them. If`,
+    `you weren't expecting this, you can safely decline.`,
+  ].join("\n");
+  return sendEmail({
+    to: n.to,
+    subject: `${who} wants to link families on GoPixel`,
+    text,
+  });
+}
+
 // --- Community: warm double intro after a mutual accept ("you're connected") ---
 // Sends the SAME composed body to both connected parties (each may see the
 // other's shared contact). Best-effort like every other send. The body is built

@@ -11,6 +11,9 @@ import {
   type LinkCheck,
 } from "@/lib/family-links";
 import { logEvent } from "@/lib/db/app-logs";
+import { notifyFamilyLinkRequest } from "@/lib/email";
+import { getBaseUrl } from "@/lib/url";
+import { after } from "next/server";
 
 // Self-healing DDL — this repo has no migrate-on-deploy, so a new table must
 // create itself on first use or the feature is dead until someone migrates.
@@ -154,6 +157,30 @@ export async function createFamilyLinkRequest(
     message: "Family link request created",
     actorSignupId: fromSignupId,
     context: { toSignupId: target!.id },
+  });
+
+  // Tell them by email too. Without this the request only ever shows in-app, so
+  // a parent who doesn't visit never learns a student is blocked on them.
+  // after() so a slow/failing mail provider can't delay or fail the request.
+  const meName = (me.firstName ?? "").trim();
+  const meIsStudent = isStudentAccount({ extra: me.extra as Record<string, unknown> | null });
+  const toEmail = target!.email;
+  after(async () => {
+    try {
+      await notifyFamilyLinkRequest({
+        to: toEmail,
+        fromName: meName,
+        fromIsStudent: meIsStudent,
+        familyUrl: `${getBaseUrl()}/family`,
+      });
+    } catch (err) {
+      void logEvent({
+        level: "warn",
+        event: "family.link.email_failed",
+        message: "Link-request email failed (request itself is unaffected)",
+        error: err,
+      });
+    }
   });
 
   return { ok: true, message: neutral, created: true };
