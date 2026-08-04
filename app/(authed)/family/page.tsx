@@ -19,6 +19,11 @@ import { IconGradCap, IconUsers } from "@/components/icons";
 import FamilyForm from "@/app/signup/thanks/family-form";
 import { getVerifyState } from "@/app/signup/thanks/verify-actions";
 import { MemberCard } from "./member-card";
+import { LinkAccounts } from "./link-accounts";
+import {
+  listIncomingLinkRequests,
+  listOutgoingLinkRequests,
+} from "@/lib/db/family-links";
 import {
   FamilyInviteCard,
   SpreadTheWordCard,
@@ -100,10 +105,13 @@ export default async function FamilyPage() {
   const { parentMembers, studentMembers, studentProfileByAccountId, unmatchedKids } =
     buildFamilyDisplay(family.members, family.kids, self.id, verifiedEmailsOf);
 
-  const [interestPool, verifyState, inviteToken] = await Promise.all([
+  const [interestPool, verifyState, inviteToken, incomingLinks, outgoingLinks] =
+    await Promise.all([
     getInterestPool(),
     getVerifyState(self.id),
     getInviteTokenForFamily(self.familyId),
+    listIncomingLinkRequests(self.id),
+    listOutgoingLinkRequests(self.id),
   ]);
 
   // Invite links (the growth flywheel). All reuse the family's existing
@@ -148,6 +156,30 @@ export default async function FamilyPage() {
       </header>
 
       <div className="flex flex-col gap-10">
+        {/* Link EXISTING accounts into this family. Distinct from the invite
+            cards below: invites are for people with no account yet, this is for
+            people who already have one (a student whose parent already signed
+            up, a co-parent, another student). Two-sided by design — see
+            lib/family-links.ts. */}
+        <section className="flex flex-col gap-4">
+          <h2 className="text-xs font-semibold uppercase tracking-[0.1em] text-white/40">
+            Linked accounts
+          </h2>
+          <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-5">
+            <LinkAccounts
+              incoming={incomingLinks.map((r) => ({
+                id: r.id,
+                fromName: r.fromName,
+                fromIsStudent: r.fromIsStudent,
+                movingCount: r.movingCount,
+                movingNames: r.movingNames,
+                movingHasOtherAdults: r.movingHasOtherAdults,
+              }))}
+              outgoing={outgoingLinks.map((r) => ({ id: r.id, toEmail: r.toEmail }))}
+            />
+          </div>
+        </section>
+
         {/* Grow the community — invites (the growth flywheel). Prominent, warm,
             and reusing the existing family inviteToken + join/signup flows. */}
         <section className="flex flex-col gap-4">
