@@ -220,12 +220,6 @@ export async function createAskAction(input: {
 
   const kind = validateKind(input.kind);
   if (!kind.ok) return { ok: false, error: kind.error };
-  const editGuard = await guardWrite(caller.user.id, [
-    { value: input.title, label: "title" },
-    { value: input.body, label: "post" },
-  ]);
-  if (!editGuard.ok) return { ok: false, error: editGuard.error };
-
   const title = validateAskTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
   const body = validateAskBody(input.body);
@@ -297,6 +291,15 @@ export async function updateAskAction(input: {
 
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS family." };
+
+  // Editing is a write. Without this, a member could post clean text and then
+  // edit it into an ad or an attack, and a muted member could keep publishing
+  // by repeatedly rewriting one old post.
+  const guard = await guardWrite(caller.user.id, [
+    { value: input.title, label: "title" },
+    { value: input.body, label: "post" },
+  ]);
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const kind = validateKind(input.kind);
   if (!kind.ok) return { ok: false, error: kind.error };

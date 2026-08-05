@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { guardWrite } from "@/lib/write-guard";
 import { after } from "next/server";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
@@ -166,6 +167,13 @@ export async function createEventAction(input: EventFormInput): Promise<ActionRe
     const caller = await verifiedCaller();
     if (!caller) return { ok: false, error: "You must be a verified OHS family to create an event." };
 
+    const guard = await guardWrite(caller.user.id, [
+      { value: input.title, label: "event title" },
+      { value: input.description, label: "event description" },
+      { value: input.location, label: "location" },
+    ]);
+    if (!guard.ok) return { ok: false, error: guard.error };
+
     const v = validateEventForm(input);
     if (!v.ok) return v;
 
@@ -196,6 +204,13 @@ export async function updateEventAction(input: { id: string } & EventFormInput):
   try {
     const caller = await verifiedCaller();
     if (!caller) return { ok: false, error: "You must be a verified OHS family." };
+
+    const guard = await guardWrite(caller.user.id, [
+      { value: input.title, label: "event title" },
+      { value: input.description, label: "event description" },
+      { value: input.location, label: "location" },
+    ]);
+    if (!guard.ok) return { ok: false, error: guard.error };
 
     // Authorization: the event must exist, be a USER event, and the caller must be
     // an admin of it (author or added admin). OHS events are never editable.

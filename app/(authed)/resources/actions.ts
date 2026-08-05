@@ -44,6 +44,7 @@ import {
   autoLabelBoard,
   type ContributionKind,
 } from "@/lib/resources-label";
+import { guardWrite } from "@/lib/write-guard";
 
 // Server actions for the OHS "Resource Boards" — a Reddit-like, OHS-only,
 // permanent, community-curated library. Every action authorizes ENTIRELY
@@ -100,6 +101,14 @@ export async function createBoardAction(input: {
 }): Promise<ActionResult> {
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS member to create a board." };
+
+  // Mute/ban + content policy, ahead of field validation: a restricted member
+  // should be told they're restricted, not nitpicked about title length first.
+  const guard = await guardWrite(caller.user.id, [
+    { value: input.title, label: "board title" },
+    { value: input.description, label: "board description" },
+  ]);
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const title = validateBoardTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
@@ -165,6 +174,12 @@ export async function updateBoardAction(input: {
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS member." };
 
+  const guard = await guardWrite(caller.user.id, [
+    { value: input.title, label: "board title" },
+    { value: input.description, label: "board description" },
+  ]);
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const title = validateBoardTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
   const description = validateBoardDescription(input.description);
@@ -210,6 +225,14 @@ export async function createContributionAction(input: {
 
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS member to contribute." };
+
+  const guard = await guardWrite(caller.user.id, [
+    { value: input.title, label: "title" },
+    { value: input.body, label: "contribution" },
+    // The filename is member-supplied text that other members see.
+    { value: input.fileName, label: "file name" },
+  ]);
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const title = validateContributionTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
@@ -331,6 +354,12 @@ export async function updateContributionAction(input: {
 
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+
+  const guard = await guardWrite(caller.user.id, [
+    { value: input.title, label: "title" },
+    { value: input.body, label: "contribution" },
+  ]);
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const title = validateContributionTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
@@ -478,6 +507,9 @@ export async function addBoardChatAction(input: {
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS member to add a group chat." };
 
+  const guard = await guardWrite(caller.user.id, [{ value: input.title, label: "group chat name" }]);
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const title = validateChatTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
   const url = validateChatUrl(input.url);
@@ -513,6 +545,9 @@ export async function updateBoardChatAction(input: {
   if (!UUID_RE.test(input.id)) return { ok: false, error: "Unknown group chat." };
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS member." };
+
+  const guard = await guardWrite(caller.user.id, [{ value: input.title, label: "group chat name" }]);
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const title = validateChatTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
