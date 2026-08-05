@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull } from "drizzle-orm";
 import { getDb, getSql } from "@/lib/db";
 import { enforcementActions, type EnforcementActionRow } from "@/lib/db/schema/enforcement";
 import { signups } from "@/lib/db/schema/signups";
@@ -111,25 +111,28 @@ export async function revokeEnforcement(
   adminEmail: string,
 ): Promise<{ ok: boolean; message: string }> {
   await ensureEnforcementTable();
+  // isNull(), not eq(col, null): Drizzle renders `eq` as `= NULL`, which is
+  // never true in SQL, so the first update matched NOTHING and every lift fell
+  // through to the second query below. Conditioning on "not yet revoked" also
+  // makes this idempotent — two admins clicking Lift can't overwrite the first
+  // one's attribution.
   const res = await getDb()
     .update(enforcementActions)
     .set({ revokedAt: new Date(), revokedByEmail: adminEmail })
-    .where(and(eq(enforcementActions.id, actionId), eq(enforcementActions.revokedAt, null as never)))
+    .where(and(eq(enforcementActions.id, actionId), isNull(enforcementActions.revokedAt)))
     .returning({ id: enforcementActions.id, signupId: enforcementActions.signupId });
 
   if (res.length === 0) {
-    // Fall back to an unconditional update — the NULL comparison above is
-    // strict, and a already-revoked row should report clearly rather than error.
+    // Nothing updated: either the row is already revoked, or it doesn't exist.
+    // Distinguish them, because "already lifted" is a fine outcome and "unknown
+    // action" means the admin is looking at a stale page.
     const [row] = await getDb()
       .select({ revokedAt: enforcementActions.revokedAt })
       .from(enforcementActions)
       .where(eq(enforcementActions.id, actionId))
       .limit(1);
-    if (row?.revokedAt) return { ok: false, message: "That action was already lifted." };
-    await getDb()
-      .update(enforcementActions)
-      .set({ revokedAt: new Date(), revokedByEmail: adminEmail })
-      .where(eq(enforcementActions.id, actionId));
+    if (!row) return { ok: false, message: "Unknown action." };
+    return { ok: false, message: "That action was already lifted." };
   }
 
   void logEvent({
