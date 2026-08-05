@@ -85,6 +85,10 @@ const empty = {
   // "student" routes step-2 to "add your parent / guardian". In co-parent join
   // mode this is forced to "parent" (a co-parent is always a parent).
   accountType: "parent" as "parent" | "student" | "alum",
+  // Community terms. Required before an account can be completed — conduct
+  // rules have to be agreed BEFORE anyone can post, or enforcement rests on
+  // rules nobody consented to.
+  termsAccepted: false,
 };
 
 // `joinToken`, when present, puts the form in co-parent "join mode": the draft
@@ -278,6 +282,7 @@ export default function SignupForm({
         githubUsername: v.githubUsername,
         linkedinHandle: v.linkedinHandle,
         wechatId: v.wechatId,
+        termsAccepted: v.termsAccepted,
         websiteUrl: v.websiteUrl,
         enrichmentOptIn: v.enrichmentOptIn,
         ohsAffiliation: v.ohsAffiliation,
@@ -518,12 +523,48 @@ export default function SignupForm({
             edits every one of those fields (parent feedback, Aug 2026: signup
             was far too long). */}
 
+        <label className="mt-2 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/75">
+          <input
+            type="checkbox"
+            checked={v.termsAccepted}
+            onChange={(e) => set("termsAccepted", e.target.checked, true)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-amber-500"
+          />
+          <span>
+            I agree to the{" "}
+            <a
+              href="/terms"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-400 underline underline-offset-2 hover:text-amber-300"
+            >
+              community terms
+            </a>{" "}
+            and{" "}
+            <a
+              href="/privacy"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-400 underline underline-offset-2 hover:text-amber-300"
+            >
+              privacy policy
+            </a>
+            . GoPixel is a space for OHS families — no advertising, and be kind.
+          </span>
+        </label>
+
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <button
             type="button"
             onClick={onContinue}
-            disabled={submitting || status === "error"}
-            title={status === "error" ? "Your info hasn't been saved yet — retry the save first." : undefined}
+            disabled={submitting || status === "error" || !v.termsAccepted}
+            title={
+              status === "error"
+                ? "Your info hasn't been saved yet — retry the save first."
+                : !v.termsAccepted
+                  ? "Please agree to the community terms first."
+                  : undefined
+            }
             className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {submitting

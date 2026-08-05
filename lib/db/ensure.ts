@@ -111,6 +111,10 @@ export function ensureFamiliesSchema(): Promise<void> {
         // on WeChat rather than LinkedIn/email (parent feedback, Jul 2026), so the
         // directory offers it alongside the other handles. Nullable + idempotent.
         sql`ALTER TABLE signups ADD COLUMN IF NOT EXISTS wechat_id text`,
+        // Terms acceptance, recorded at signup (Aug 2026). Nullable: existing
+        // members predate it and are not retro-blocked.
+        sql`ALTER TABLE signups ADD COLUMN IF NOT EXISTS terms_accepted_at timestamptz`,
+        sql`ALTER TABLE signups ADD COLUMN IF NOT EXISTS terms_version text`,
       ]);
     })().catch((e) => {
       familiesEnsured = null;

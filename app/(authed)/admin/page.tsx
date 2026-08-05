@@ -5,6 +5,7 @@ import { signups, children, type ChildRow } from "@/lib/db/schema/signups";
 import { isAdminEmail, isEnvAdmin, dbAdminEmails } from "@/lib/admin";
 import { signedPhotoUrls } from "@/lib/blob";
 import { ParentsTable, type ParentRow } from "./parents-table";
+import { enforcementSummaries } from "@/lib/db/enforcement";
 
 export const dynamic = "force-dynamic";
 
@@ -59,6 +60,10 @@ export default async function ParentsPage() {
     ),
   );
   const signed = await signedPhotoUrls(allPathnames);
+
+  // ONE batched query for every listed member, so the Enforcement column
+  // never becomes an N+1.
+  const enforcement = await enforcementSummaries(rows.map((r) => r.id));
   const urlByPath = new Map<string, string>();
   allPathnames.forEach((p, i) => {
     if (signed[i]) urlByPath.set(p, signed[i]);
@@ -104,6 +109,12 @@ export default async function ParentsPage() {
       photos,
       dbAdmin: adminSet.has(r.email.toLowerCase()),
       envAdmin: isEnvAdmin(r.email),
+      enforcement: (() => {
+        const e = enforcement.get(r.id);
+        return e
+          ? { summary: e.summary, muted: e.restriction.muted, banned: e.restriction.banned }
+          : undefined;
+      })(),
       kids: (kidsByFamily.get(r.familyId) ?? []).map((k) => ({
         id: k.id,
         firstName: k.firstName,

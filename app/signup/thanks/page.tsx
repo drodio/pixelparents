@@ -169,14 +169,27 @@ export default async function ThanksPage({
   return (
     <main className="min-h-dvh bg-black text-white">
       {!hasExistingData && (
-        <Image
-          src="/images/banner.webp"
-          alt=""
-          width={2000}
-          height={1125}
-          priority
-          className="aspect-[13/5] w-full object-cover object-top"
-        />
+        /* Community photo from a real Pixel event. KEPT — the warmth is the
+           point of this page, and a wall of form fields would read as cold. But
+           it is capped rather than full-bleed: at aspect-[13/5] it consumed most
+           of the fold on a desktop, pushing the one required action ("Add your
+           parent") below the scroll, and an uncaptioned photo of unfamiliar
+           people directly above "Ava, nice to meet you" reads as though it is
+           supposed to be YOUR photo. Capped + captioned, it says "this is a real
+           community" without competing with the task. */
+        <figure className="relative">
+          <Image
+            src="/images/banner.webp"
+            alt="GoPixel families at a Pixel community event"
+            width={2000}
+            height={1125}
+            priority
+            className="h-36 w-full object-cover object-center sm:h-48"
+          />
+          <figcaption className="absolute bottom-0 w-full bg-gradient-to-t from-black/80 to-transparent px-6 pb-2 pt-8 text-xs text-white/70">
+            OHS families at a Pixel community event
+          </figcaption>
+        </figure>
       )}
       <div className="mx-auto w-full max-w-2xl px-6 py-12">
         {admin && id ? (

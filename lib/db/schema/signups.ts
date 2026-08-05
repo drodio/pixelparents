@@ -47,6 +47,11 @@ export const signups = pgTable("signups", {
   // LinkedIn or email (parent feedback, Jul 2026), so it sits alongside the other
   // handles as an alternate way for the community to reach a parent.
   wechatId: text("wechat_id"),
+  // When this member accepted the community terms, and which version. Recorded
+  // at signup so conduct rules are agreed BEFORE anyone can post — without it,
+  // enforcement (mute/ban) rests on rules nobody consented to.
+  termsAcceptedAt: timestamp("terms_accepted_at", { withTimezone: true }),
+  termsVersion: text("terms_version"),
   skillsets: text("skillsets").array(),
   timeCommitment: text("time_commitment"),
 

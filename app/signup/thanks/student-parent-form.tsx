@@ -134,7 +134,12 @@ export default function StudentParentForm({
               request to approve, and once they accept you&apos;re in the same family —
               no second account needed.
             </p>
-            <LinkAccounts incoming={[]} outgoing={outgoingLinks} compact />
+            <LinkAccounts
+              incoming={[]}
+              outgoing={outgoingLinks}
+              draftSignupId={signupId}
+              compact
+            />
           </div>
         ) : (
         <>

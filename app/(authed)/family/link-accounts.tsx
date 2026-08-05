@@ -6,6 +6,8 @@ import {
   approveFamilyLinkAction,
   declineFamilyLinkAction,
   cancelFamilyLinkAction,
+  requestFamilyLinkAsDraftAction,
+  cancelFamilyLinkAsDraftAction,
 } from "./actions";
 
 export type IncomingLink = {
@@ -31,9 +33,14 @@ export function LinkAccounts({
   incoming,
   outgoing,
   compact = false,
+  draftSignupId,
 }: {
   incoming: IncomingLink[];
   outgoing: OutgoingLink[];
+  // Present on /signup/thanks, where the member has no Clerk session yet and the
+  // page authorizes by this secret row id instead. Absent on /family, which is
+  // session-authorized.
+  draftSignupId?: string;
   // Trims the copy for the signup step, where the surrounding page already
   // explains what's going on.
   compact?: boolean;
@@ -47,7 +54,9 @@ export function LinkAccounts({
     if (!value) return;
     setNote(null);
     start(async () => {
-      const r = await requestFamilyLinkAction(value);
+      const r = draftSignupId
+        ? await requestFamilyLinkAsDraftAction(draftSignupId, value)
+        : await requestFamilyLinkAction(value);
       setNote({ ok: r.ok, text: r.message });
       if (r.ok) setEmail("");
     });
@@ -172,7 +181,14 @@ export function LinkAccounts({
                 <button
                   type="button"
                   disabled={pending}
-                  onClick={() => act(cancelFamilyLinkAction, r.id)}
+                  onClick={() =>
+                    act(
+                      draftSignupId
+                        ? (id) => cancelFamilyLinkAsDraftAction(draftSignupId, id)
+                        : cancelFamilyLinkAction,
+                      r.id,
+                    )
+                  }
                   className="text-xs text-white/50 underline hover:text-white/80 disabled:opacity-50"
                 >
                   Withdraw

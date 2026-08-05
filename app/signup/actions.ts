@@ -17,6 +17,7 @@ import {
   ACCOUNT_TYPE,
 } from "@/lib/options";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
+import { TERMS_VERSION } from "@/lib/terms";
 import { generateShareToken } from "@/lib/share";
 import {
   notifyNewSignup,
@@ -157,6 +158,8 @@ export type SignupPatch = Partial<{
   // `wechat_id` column; an alternate contact for families who coordinate on
   // WeChat rather than LinkedIn/email (parent feedback, Jul 2026).
   wechatId: string;
+  // Acceptance of the community terms. Stored with a version + timestamp.
+  termsAccepted: boolean;
   skillsets: string[];
   timeCommitment: string;
   city: string;
@@ -204,6 +207,12 @@ export async function sanitizeSignupPatch(
   if ("timeCommitment" in patch) set.timeCommitment = oneOf(TIME_COMMITMENT, patch.timeCommitment);
   if ("linkedinHandle" in patch) set.linkedinUrl = linkedinUrlFromHandle(patch.linkedinHandle);
   if ("wechatId" in patch) set.wechatId = text(patch.wechatId, 60) || null;
+  // Only ever SET acceptance — never clear it. Un-accepting would silently
+  // erase a legal record, and there is no product reason to do it.
+  if (patch.termsAccepted === true) {
+    set.termsAcceptedAt = new Date();
+    set.termsVersion = TERMS_VERSION;
+  }
   if ("city" in patch) set.city = text(patch.city, 120) || null;
   if ("state" in patch) set.state = oneOf(US_STATES, patch.state);
   if ("country" in patch) set.country = oneOf(COUNTRIES, patch.country);
