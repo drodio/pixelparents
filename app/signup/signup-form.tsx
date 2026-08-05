@@ -258,6 +258,22 @@ export default function SignupForm({
   }
 
   async function onContinue() {
+    // Terms are enforced HERE rather than by disabling the button.
+    //
+    // A disabled submit is a dead end: the member gets no explanation, and if the
+    // checkbox state were ever wrong they would be silently unable to sign up
+    // with nothing to act on. Signup has been broken twice by exactly that shape
+    // of failure, so this path fails safe — the click always registers and the
+    // reason is always visible.
+    if (!v.termsAccepted) {
+      setErrors({ termsAccepted: "Please agree to the community terms to continue." });
+      setMessage("Please agree to the community terms to continue.");
+      // Bring the checkbox into view — on a phone it sits below the fold.
+      if (typeof document !== "undefined") {
+        document.getElementById("termsAccepted")?.scrollIntoView({ block: "center" });
+      }
+      return;
+    }
     setSubmitting(true);
     setMessage(null);
     setErrors({});
@@ -525,6 +541,7 @@ export default function SignupForm({
 
         <label className="mt-2 flex items-start gap-3 rounded-xl border border-white/10 bg-white/[0.02] p-4 text-sm text-white/75">
           <input
+            id="termsAccepted"
             type="checkbox"
             checked={v.termsAccepted}
             onChange={(e) => set("termsAccepted", e.target.checked, true)}
@@ -550,6 +567,7 @@ export default function SignupForm({
               privacy policy
             </a>
             . GoPixel is a space for OHS families — no advertising, and be kind.
+            <FieldError msg={errors.termsAccepted} />
           </span>
         </label>
 
@@ -557,13 +575,11 @@ export default function SignupForm({
           <button
             type="button"
             onClick={onContinue}
-            disabled={submitting || status === "error" || !v.termsAccepted}
+            disabled={submitting || status === "error"}
             title={
               status === "error"
                 ? "Your info hasn't been saved yet — retry the save first."
-                : !v.termsAccepted
-                  ? "Please agree to the community terms first."
-                  : undefined
+                : undefined
             }
             className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
