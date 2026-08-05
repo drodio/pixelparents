@@ -7,6 +7,7 @@ import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
 import { getSignupByEmail } from "@/lib/db/signups";
 import { isFamilyVerified } from "@/lib/directory";
+import { guardWrite } from "@/lib/write-guard";
 import { getDb } from "@/lib/db";
 import { signups, type SignupRow } from "@/lib/db/schema/signups";
 import { isStudentAccount } from "@/lib/family-display";
@@ -209,8 +210,22 @@ export async function createAskAction(input: {
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS family to post." };
 
+  // Mute/ban + content policy. Runs before validation so a restricted member is
+  // told they're restricted rather than nitpicked about field lengths first.
+  const guard = await guardWrite(caller.user.id, [
+    { value: input.title, label: "title" },
+    { value: input.body, label: "post" },
+  ]);
+  if (!guard.ok) return { ok: false, error: guard.error };
+
   const kind = validateKind(input.kind);
   if (!kind.ok) return { ok: false, error: kind.error };
+  const editGuard = await guardWrite(caller.user.id, [
+    { value: input.title, label: "title" },
+    { value: input.body, label: "post" },
+  ]);
+  if (!editGuard.ok) return { ok: false, error: editGuard.error };
+
   const title = validateAskTitle(input.title);
   if (!title.ok) return { ok: false, error: title.error };
   const body = validateAskBody(input.body);
@@ -402,6 +417,12 @@ export async function respondToAskAction(input: {
 
   const caller = await verifiedCaller();
   if (!caller) return { ok: false, error: "You must be a verified OHS family to respond." };
+
+  const guard = await guardWrite(caller.user.id, [
+    { value: input.offer, label: "reply" },
+    { value: input.proposes, label: "reply" },
+  ]);
+  if (!guard.ok) return { ok: false, error: guard.error };
 
   const offer = validateAskOffer(input.offer);
   if (!offer.ok) return { ok: false, error: offer.error };

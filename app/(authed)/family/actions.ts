@@ -470,6 +470,7 @@ async function callerSignupId(): Promise<string | null> {
   return row?.id ?? null;
 }
 
+// Session-authorized: used from /family, where the caller is signed in.
 export async function requestFamilyLinkAction(
   targetEmail: string,
 ): Promise<{ ok: boolean; message: string }> {
@@ -478,6 +479,35 @@ export async function requestFamilyLinkAction(
   const res = await createFamilyLinkRequest(me, targetEmail);
   revalidatePath("/family");
   return { ok: res.ok, message: res.message };
+}
+
+// Draft-id-authorized: used from /signup/thanks, which a brand-new member reaches
+// BEFORE they have a Clerk session (the page is keyed by the secret ?id= of their
+// own signup row). Requiring a session there produced "Please sign in first." on
+// the one step a student cannot skip.
+//
+// This is the same authorization model the rest of that page already uses —
+// patchSignup/patchChild authorize by the row UUID alone — so it grants exactly
+// the access the holder of that link already has, and nothing more.
+export async function requestFamilyLinkAsDraftAction(
+  signupId: string,
+  targetEmail: string,
+): Promise<{ ok: boolean; message: string }> {
+  if (!UUID_RE.test(signupId)) return { ok: false, message: "We couldn't find your signup." };
+  const res = await createFamilyLinkRequest(signupId, targetEmail);
+  revalidatePath("/family");
+  return { ok: res.ok, message: res.message };
+}
+
+// Same reasoning for withdrawing a request from the signup step.
+export async function cancelFamilyLinkAsDraftAction(
+  signupId: string,
+  requestId: string,
+): Promise<{ ok: boolean; message: string }> {
+  if (!UUID_RE.test(signupId)) return { ok: false, message: "We couldn't find your signup." };
+  const res = await cancelFamilyLinkRequest(requestId, signupId);
+  revalidatePath("/family");
+  return res;
 }
 
 export async function approveFamilyLinkAction(

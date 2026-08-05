@@ -69,6 +69,8 @@ export type ParentRow = {
   dbAdmin: boolean;
   envAdmin: boolean;
   kids: { id: string; firstName: string; grade: string | null }[];
+  // Precomputed by the page (one batched query, never N+1).
+  enforcement?: { summary: string; muted: boolean; banned: boolean };
   submittedLabel: string;
   createdAtMs: number;
 };
@@ -159,6 +161,9 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
         <tr>
           <SortHeader label="Status" k="status" {...hp} />
           <SortHeader label="Name" k="name" {...hp} />
+          {/* Enforcement history at a glance, so a repeat offender is obvious
+              in the list rather than rediscovered on a detail page. */}
+          <th className={thCls}>Enforcement</th>
           <SortHeader label="Children" k="children" {...hp} />
           <SortHeader
             label="Contact"
@@ -219,6 +224,31 @@ export function ParentsTable({ rows }: { rows: ParentRow[] }) {
                 onSaveName={(firstName, lastName) => save(r.id, { firstName, lastName })}
               />
             </th>
+            {/* Enforcement history — see the Enforcement header above. */}
+            <td className={`${tdCls} whitespace-nowrap`}>
+              {r.enforcement && r.enforcement.summary !== "\u2014" ? (
+                <span
+                  className={`rounded-md border px-2 py-0.5 text-xs font-medium ${
+                    r.enforcement.banned
+                      ? "border-red-500/40 bg-red-500/10 text-red-300"
+                      : r.enforcement.muted
+                        ? "border-yellow-500/40 bg-yellow-500/10 text-yellow-300"
+                        : "border-white/15 text-white/55"
+                  }`}
+                  title={r.enforcement.summary}
+                >
+                  {r.enforcement.summary}
+                </span>
+              ) : (
+                <Link
+                  href={`/admin/enforcement?signupId=${r.id}`}
+                  className="text-white/25 hover:text-amber-400"
+                  title="Take action on this member"
+                >
+                  \u2014
+                </Link>
+              )}
+            </td>
             <td className={tdCls}>
               {r.kids.length === 0 ? (
                 <span className="text-white/30">—</span>
