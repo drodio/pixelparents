@@ -7,6 +7,7 @@ import { affiliationForRole } from "@/lib/options";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import { IconWarning } from "@/components/icons";
+import { countryHint } from "@/lib/phone";
 import {
   createDraftSignup,
   createCoParentDraft,
@@ -521,7 +522,24 @@ export default function SignupForm({
               onChange={(e) => set("phone", e.target.value)}
               className={inputCls}
               autoComplete="tel"
+              placeholder="+86 138 0013 8000"
             />
+            {/* Country hint, not country validation. OHS families are worldwide,
+                so the field accepts any plausible number; this just confirms it
+                read the number the way the member meant. Nothing is shown when
+                we can't tell, because a wrong flag is worse than no flag. */}
+            {(() => {
+              const hint = countryHint(v.phone);
+              return hint ? (
+                <p className="mt-1 text-xs text-white/50">
+                  <span aria-hidden="true">{hint.flag}</span> Detected {hint.label}
+                </p>
+              ) : (
+                <p className="mt-1 text-xs text-white/40">
+                  Outside the US? Include your country code, e.g. +86.
+                </p>
+              );
+            })()}
             <FieldError msg={errors.phone} />
           </div>
           {/* LinkedIn, WeChat, personal website, the enrichment opt-in and the
