@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useTransition } from "react";
-import { SHARE_FIELDS, type ShareFieldKey, type ShareVisibility } from "@/lib/share";
+import { shareFieldsFor, type ShareFieldKey, type ShareVisibility } from "@/lib/share";
 import { setShareFields } from "@/lib/share-actions";
 import { VisibilityControl } from "@/components/visibility-control";
 
@@ -11,11 +11,16 @@ export function ShareSettings({
   initialUrl,
   initialFields,
   initialVisibility,
+  isStudent = false,
 }: {
   signupId: string;
   initialUrl: string | null;
   initialFields: ShareFieldKey[];
   initialVisibility: ShareVisibility;
+  // Drives the wording and which toggles appear. Defaults to the parent list so
+  // an un-updated caller keeps today's behaviour rather than silently hiding a
+  // parent's "Children" toggle.
+  isStudent?: boolean;
 }) {
   const [fields, setFields] = useState<ShareFieldKey[]>(initialFields);
   const [error, setError] = useState<string | null>(null);
@@ -104,7 +109,7 @@ export function ShareSettings({
             Choose what&apos;s visible in the OHS directory showcase:
           </p>
           <div className="grid gap-2 sm:grid-cols-2">
-            {SHARE_FIELDS.map((f) => (
+            {shareFieldsFor({ isStudent }).map((f) => (
               <label key={f.key} className="flex items-center gap-2 text-sm text-white/80">
                 <input
                   type="checkbox"

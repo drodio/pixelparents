@@ -153,6 +153,7 @@ export default async function ThanksPage({
       initialVisibility={coerceShareVisibility(signup.shareVisibility)}
       initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
       initialFields={shareFieldsOrDefault(signup.shareFields)}
+      isStudent={isStudentAccount(signup)}
     />
   );
 
