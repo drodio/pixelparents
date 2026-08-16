@@ -24,6 +24,7 @@ import {
   setFamilyMemberVisibility,
 } from "./actions";
 import { EnrichmentPanel } from "./enrichment-panel";
+import { countryHint } from "@/lib/phone";
 import {
   websiteUrlOf,
   enrichmentOptInOf,
@@ -431,7 +432,23 @@ export function MemberCard({
             value={v.phone}
             onChange={(e) => set("phone", e.target.value)}
             className={inputCls}
+            type="tel"
+            placeholder="+86 138 0013 8000"
           />
+          {/* Hint only — see the signup field. Any plausible number is accepted
+              whether or not we can name the country. */}
+          {(() => {
+            const hint = countryHint(v.phone);
+            return hint ? (
+              <p className="mt-1 text-xs text-white/50">
+                <span aria-hidden="true">{hint.flag}</span> Detected {hint.label}
+              </p>
+            ) : v.phone.trim() ? (
+              <p className="mt-1 text-xs text-white/40">
+                Include your country code (e.g. +86) if you&apos;re outside the US.
+              </p>
+            ) : null;
+          })()}
         </div>
         <div className="sm:col-span-2">
           <label className={labelCls}>GitHub username</label>
