@@ -26,6 +26,31 @@ export const SHARE_FIELDS = [
 
 export type ShareFieldKey = (typeof SHARE_FIELDS)[number]["key"];
 
+// The same list, worded for whoever is actually looking at it.
+//
+// From the Aug 2026 student walkthrough: "because I signed up as a student,
+// choose what's visible has to be customized to the student ... a student
+// probably wouldn't have parent interest or children on here."
+//
+// Two rules, and they're different on purpose:
+//   - RELABEL "interests". A student does have interests; calling them "Parent
+//     interests" just makes the setting look like it belongs to someone else,
+//     so a student can't tell what they're agreeing to share.
+//   - REMOVE "children". A student has none, and a toggle that controls nothing
+//     is worse than absent: it implies the account holds data it doesn't.
+//
+// Only LABELS and VISIBILITY change here, never the KEYS. Stored `shareFields`
+// arrays are keys, so a member who switches roles keeps their saved choices and
+// nothing has to be migrated.
+export function shareFieldsFor(opts: {
+  isStudent: boolean;
+}): { key: ShareFieldKey; label: string }[] {
+  return SHARE_FIELDS.filter((f) => !(opts.isStudent && f.key === "children")).map((f) => ({
+    key: f.key,
+    label: opts.isStudent && f.key === "interests" ? "Your interests" : f.label,
+  }));
+}
+
 // Visibility tiers for the /p share page.
 export type ShareVisibility = "ohs" | "private";
 

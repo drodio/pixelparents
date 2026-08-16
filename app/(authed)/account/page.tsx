@@ -2,6 +2,7 @@ import { UserButton } from "@clerk/nextjs";
 import { currentUser } from "@clerk/nextjs/server";
 import Link from "next/link";
 import { clerkAppearance } from "@/lib/clerk-appearance";
+import { isStudentAccount } from "@/lib/family-display";
 import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { readApprovalStatus } from "@/lib/approval";
@@ -143,6 +144,7 @@ export default async function AccountPage() {
             initialVisibility={coerceShareVisibility(signup.shareVisibility)}
             initialUrl={signup.shareToken ? shareUrlFor(signup.shareToken) : null}
             initialFields={shareFieldsOrDefault(signup.shareFields)}
+            isStudent={isStudentAccount(signup)}
           />
         </section>
       )}
