@@ -289,31 +289,59 @@ export async function approveFamilyLinkRequest(
   const decider = await findById(deciderSignupId);
   if (!decider) return { ok: false, message: "We couldn't find your account." };
 
+  // The guard's third argument is the ADDRESSEE's family, so "a member of the
+  // target's family may decide" means what it says. Passing the decider's own
+  // familyId here made that clause compare the decider to themselves (always
+  // true), so the "wasn't sent to you" refusal could never fire.
+  const addressee = req.toSignupId ? await findById(req.toSignupId) : null;
   const check = canDecideLink(
     { toSignupId: req.toSignupId, toEmail: req.toEmail, status: req.status },
     { signupId: decider.id, email: decider.email, familyId: decider.familyId },
-    decider.familyId,
+    addressee?.familyId ?? null,
   );
   if (!check.ok) return { ok: false, message: check.reason };
 
-  if (req.fromFamilyId === decider.familyId) {
-    return { ok: false, message: "You're already in the same family." };
+  // Merge the requester's family as it is NOW, not the snapshot taken when the
+  // request was created. If they moved families in between (another link
+  // approved first, a re-signup), repointing the snapshot moves the wrong rows
+  // — or none — while still reporting "Linked."
+  const requester = await findById(req.fromSignupId);
+  if (!requester) {
+    await getDb()
+      .update(familyLinkRequests)
+      .set({ status: "cancelled", decidedAt: new Date(), decidedBySignupId: decider.id })
+      .where(eq(familyLinkRequests.id, requestId));
+    return { ok: false, message: "That account no longer exists, so we closed the request." };
   }
+
+  if (requester.familyId === decider.familyId) {
+    // Already one family (e.g. a duplicate request was approved first). Close
+    // this one rather than erroring: a pending request that can never be
+    // approved sits in both lists forever, reading "pending" on one side while
+    // the other side already shows the person as linked.
+    await getDb()
+      .update(familyLinkRequests)
+      .set({ status: "cancelled", decidedAt: new Date(), decidedBySignupId: decider.id })
+      .where(eq(familyLinkRequests.id, requestId));
+    return { ok: true, message: "You're already one family — we closed this request." };
+  }
+
+  const fromFamilyId = requester.familyId;
 
   try {
     const db = getSql();
     // One transaction: repoint members + children, then close the request. The
     // old family row is left behind (harmless, and keeps invite tokens valid).
     await db.transaction([
-      db`UPDATE signups SET family_id = ${decider.familyId} WHERE family_id = ${req.fromFamilyId}`,
-      db`UPDATE children SET family_id = ${decider.familyId} WHERE family_id = ${req.fromFamilyId}`,
+      db`UPDATE signups SET family_id = ${decider.familyId} WHERE family_id = ${fromFamilyId}`,
+      db`UPDATE children SET family_id = ${decider.familyId} WHERE family_id = ${fromFamilyId}`,
       db`UPDATE family_link_requests
            SET status = 'approved', decided_at = now(), decided_by_signup_id = ${decider.id}
          WHERE id = ${requestId}`,
       // Any other pending request from that same family is now moot.
       db`UPDATE family_link_requests
            SET status = 'cancelled', decided_at = now()
-         WHERE from_family_id = ${req.fromFamilyId} AND status = 'pending' AND id <> ${requestId}`,
+         WHERE from_family_id = ${fromFamilyId} AND status = 'pending' AND id <> ${requestId}`,
     ]);
 
     void logEvent({
@@ -352,10 +380,12 @@ export async function declineFamilyLinkRequest(
   const decider = await findById(deciderSignupId);
   if (!decider) return { ok: false, message: "We couldn't find your account." };
 
+  // Same contract as approve: the third argument is the ADDRESSEE's family.
+  const addressee = req.toSignupId ? await findById(req.toSignupId) : null;
   const check = canDecideLink(
     { toSignupId: req.toSignupId, toEmail: req.toEmail, status: req.status },
     { signupId: decider.id, email: decider.email, familyId: decider.familyId },
-    decider.familyId,
+    addressee?.familyId ?? null,
   );
   if (!check.ok) return { ok: false, message: check.reason };
 
