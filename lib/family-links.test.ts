@@ -6,6 +6,7 @@ import {
   canCreateAnotherRequest,
   linkNotFoundMessage,
   MAX_PENDING_OUTGOING,
+  displayName,
 } from "./family-links";
 
 const requester = {
@@ -132,5 +133,35 @@ describe("canCreateAnotherRequest", () => {
     expect(canCreateAnotherRequest(0)).toEqual({ ok: true });
     expect(canCreateAnotherRequest(MAX_PENDING_OUTGOING - 1)).toEqual({ ok: true });
     expect(canCreateAnotherRequest(MAX_PENDING_OUTGOING).ok).toBe(false);
+  });
+});
+
+describe("displayName", () => {
+  it("returns the full name, because a first name alone is not an identity", () => {
+    // The bug this fixes: "Ava wants to join your family" in a family that knows
+    // more than one Ava. Approving merges profile and child info, so the
+    // approver has to know WHICH person they're accepting.
+    expect(displayName({ firstName: "Ava", lastName: "Yu" })).toBe("Ava Yu");
+  });
+
+  it("falls back to whichever part exists rather than showing nothing", () => {
+    expect(displayName({ firstName: "Ava", lastName: null })).toBe("Ava");
+    expect(displayName({ firstName: null, lastName: "Yu" })).toBe("Yu");
+  });
+
+  it("returns null when there's genuinely no name, so callers can say 'Someone'", () => {
+    expect(displayName({ firstName: "", lastName: "  " })).toBeNull();
+    expect(displayName(null)).toBeNull();
+    expect(displayName(undefined)).toBeNull();
+  });
+});
+
+describe("membersMovedByLink names", () => {
+  it("lists movers by full name", () => {
+    const r = membersMovedByLink([
+      { id: "1", firstName: "Ava", lastName: "Yu", isStudent: true },
+      { id: "2", firstName: "Xin", lastName: "Sun", isStudent: false },
+    ]);
+    expect(r.names).toEqual(["Ava Yu", "Xin Sun"]);
   });
 });
