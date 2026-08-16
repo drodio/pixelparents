@@ -13,6 +13,7 @@ import {
   getStudentBuilderCount,
 } from "@/lib/db/signups";
 import { getInterestPool } from "@/lib/interests";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 // Reflect live counts + interests.
 export const dynamic = "force-dynamic";
@@ -76,6 +77,13 @@ export default async function Home() {
         className="pointer-events-none absolute inset-x-0 top-0 z-0 h-[60vh] bg-[radial-gradient(60%_70%_at_50%_-10%,rgba(245,158,11,0.16),transparent_70%)]"
       />
 
+      {/* Theme toggle on the PUBLIC landing too, not just behind auth: a parent
+          who can't read the dark UI has to be able to fix that before they've
+          signed in, otherwise the control is behind the wall it's needed for. */}
+      <div className="absolute left-4 top-4 z-20 sm:left-6 sm:top-6">
+        <ThemeToggle />
+      </div>
+
       {isAdmin ? (
         // Signed-in admins get a quick link into the admin area.
         <Link href="/admin" className={cornerBtnCls}>
@@ -127,7 +135,7 @@ export default async function Home() {
             change he asked for. Kept warm rather than legalistic per Daniel, but
             the operative phrase ("not affiliated with or endorsed by") matches
             the legal pages verbatim so the three can't drift. */}
-        <p className="mt-6 max-w-xl text-balance text-center text-sm text-white/45">
+        <p className="mt-6 max-w-xl text-balance text-center text-sm text-white/55">
           A side project, not an official one. Made by OHS families on nights and
           weekends, and{" "}
           <span className="font-semibold text-white/70">

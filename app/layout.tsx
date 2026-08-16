@@ -67,7 +67,30 @@ export default function RootLayout({
     <html
       lang="en"
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+      // Set before paint by the script below. The attribute is declared here so
+      // the very first frame already has a theme rather than inheriting one.
+      data-theme="dark"
+      suppressHydrationWarning
     >
+      <head>
+        {/*
+          Theme, applied BEFORE first paint.
+
+          This has to be a blocking inline script. Doing it in an effect means
+          the browser paints the dark UI first and then repaints light — a flash
+          of exactly the thing a light-mode member switched away from, on every
+          single navigation.
+
+          A stored choice always wins. With nothing stored we follow the OS,
+          which is the point: a parent whose laptop is in light mode gets a
+          readable site without having to discover a toggle first.
+        */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `(function(){try{var s=localStorage.getItem('gopixel-theme');var t=s==='light'||s==='dark'?s:(window.matchMedia&&window.matchMedia('(prefers-color-scheme: light)').matches?'light':'dark');document.documentElement.setAttribute('data-theme',t);}catch(e){}})();`,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col">
         {children}
         <ServiceWorkerRegister />
