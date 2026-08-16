@@ -212,3 +212,149 @@ samp {
     animation: none !important;
   }
 }
+
+
+/* ==========================================================================
+   LIGHT MODE
+   --------------------------------------------------------------------------
+   Why this lives in CSS instead of `dark:` variants on 2,336 class usages
+   across 135 files: that rewrite is enormous and every missed spot is an
+   unreadable patch. This maps the utilities the app actually uses, and the
+   list was GENERATED from a scan of the codebase rather than written by hand,
+   so it can't silently miss one.
+
+   Tailwind v4 compiles SOLID colours to `var(--color-white)` but INLINES alpha
+   variants as literal hex (`.text-white\/80 { color: #fffc }`). So flipping
+   the variable alone would invert ~1,300 solid usages and leave ~1,900 alpha
+   usages dark — a half-inverted UI, worse than no light mode. Hence both
+   halves below.
+
+   `--color-black` is deliberately NOT flipped: `text-black` sits on amber
+   buttons, where it must stay dark in both themes. The one place it must
+   invert is the white-pill button, handled explicitly by the pairing rule.
+
+   Muted text is intentionally darker than a faithful alpha inversion would
+   give. This exists because parents reported they couldn't read the UI, so
+   low-alpha text gets a legibility floor (>= 0.62 on white ~= 4.9:1) rather
+   than a pretty port of the dark palette.
+   ========================================================================== */
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  /* Flips every SOLID text-white / bg-white in one move. */
+  --color-white: #18181b;
+
+  --background: #ffffff;
+  --foreground: #18181b;
+  --surface-0: #ffffff;
+  --surface-1: #f7f7f8;
+  --surface-2: #efeff1;
+  --text-muted: rgba(24, 24, 27, 0.66);
+}
+
+/* The page itself. */
+[data-theme="light"] body {
+  background: #ffffff;
+  color: #18181b;
+}
+
+[data-theme="light"] .bg-black{background-color:#ffffff}
+[data-theme="light"] .bg-black\/20{background-color:rgb(255 255 255 / 0.35)}
+[data-theme="light"] .bg-black\/30{background-color:rgb(255 255 255 / 0.45)}
+[data-theme="light"] .bg-black\/40{background-color:rgb(255 255 255 / 0.55)}
+[data-theme="light"] .bg-black\/50{background-color:rgb(255 255 255 / 0.65)}
+[data-theme="light"] .bg-black\/60{background-color:rgb(255 255 255 / 0.75)}
+[data-theme="light"] .bg-black\/70{background-color:rgb(255 255 255 / 0.85)}
+[data-theme="light"] .bg-black\/72{background-color:rgb(255 255 255 / 0.87)}
+[data-theme="light"] .bg-black\/80{background-color:rgb(255 255 255 / 0.95)}
+[data-theme="light"] .bg-black\/90{background-color:rgb(255 255 255 / 0.96)}
+[data-theme="light"] .bg-white\/10{background-color:rgb(24 24 27 / 0.05)}
+[data-theme="light"] .bg-white\/15{background-color:rgb(24 24 27 / 0.07)}
+[data-theme="light"] .bg-white\/20{background-color:rgb(24 24 27 / 0.09)}
+[data-theme="light"] .bg-white\/25{background-color:rgb(24 24 27 / 0.07)}
+[data-theme="light"] .bg-white\/30{background-color:rgb(24 24 27 / 0.09)}
+[data-theme="light"] .bg-white\/5{background-color:rgb(24 24 27 / 0.03)}
+[data-theme="light"] .border-white\/10{border-color:rgb(24 24 27 / 0.12)}
+[data-theme="light"] .border-white\/15{border-color:rgb(24 24 27 / 0.16)}
+[data-theme="light"] .border-white\/20{border-color:rgb(24 24 27 / 0.20)}
+[data-theme="light"] .border-white\/25{border-color:rgb(24 24 27 / 0.10)}
+[data-theme="light"] .border-white\/30{border-color:rgb(24 24 27 / 0.26)}
+[data-theme="light"] .border-white\/40{border-color:rgb(24 24 27 / 0.32)}
+[data-theme="light"] .border-white\/60{border-color:rgb(24 24 27 / 0.24)}
+[data-theme="light"] .border-white\/8{border-color:rgb(24 24 27 / 0.03)}
+[data-theme="light"] .divide-white\/10 > * + *{border-color:rgb(24 24 27 / 0.12)}
+[data-theme="light"] .placeholder-white\/30::placeholder{color:rgb(24 24 27 / 0.45)}
+[data-theme="light"] .ring-white\/10{--tw-ring-color:rgb(24 24 27 / 0.12)}
+[data-theme="light"] .ring-white\/40{--tw-ring-color:rgb(24 24 27 / 0.32)}
+[data-theme="light"] .shadow-black\/40{--tw-shadow-color:rgb(24 24 27 / 0.12)}
+[data-theme="light"] .text-white\/0{color:rgb(24 24 27 / 0.00)}
+[data-theme="light"] .text-white\/25{color:rgb(24 24 27 / 0.25)}
+[data-theme="light"] .text-white\/30{color:rgb(24 24 27 / 0.62)}
+[data-theme="light"] .text-white\/35{color:rgb(24 24 27 / 0.62)}
+[data-theme="light"] .text-white\/40{color:rgb(24 24 27 / 0.62)}
+[data-theme="light"] .text-white\/45{color:rgb(24 24 27 / 0.64)}
+[data-theme="light"] .text-white\/50{color:rgb(24 24 27 / 0.66)}
+[data-theme="light"] .text-white\/55{color:rgb(24 24 27 / 0.68)}
+[data-theme="light"] .text-white\/60{color:rgb(24 24 27 / 0.72)}
+[data-theme="light"] .text-white\/65{color:rgb(24 24 27 / 0.74)}
+[data-theme="light"] .text-white\/70{color:rgb(24 24 27 / 0.78)}
+[data-theme="light"] .text-white\/75{color:rgb(24 24 27 / 0.80)}
+[data-theme="light"] .text-white\/80{color:rgb(24 24 27 / 0.85)}
+[data-theme="light"] .text-white\/85{color:rgb(24 24 27 / 0.88)}
+[data-theme="light"] .text-white\/90{color:rgb(24 24 27 / 0.92)}
+
+/* The inverted-emphasis pill: white bg + black text in dark mode. Once
+   --color-white flips, its background is dark, so its label has to flip too.
+   Scoped to the PAIRING so amber buttons (also text-black) are untouched. */
+[data-theme="light"] .bg-white.text-black { color: #ffffff; }
+
+/* Amber on white is ~1.9:1 — fine as a button FILL with dark text, unreadable
+   as text. Darken amber only where it's used as a foreground colour. */
+[data-theme="light"] .text-amber-300,
+[data-theme="light"] .text-amber-400 { color: #92400e; }
+[data-theme="light"] .text-amber-200\/90 { color: #92400e; }
+
+/* Inputs need a real surface in light mode; a translucent white-on-white
+   field is invisible. */
+[data-theme="light"] input,
+[data-theme="light"] textarea,
+[data-theme="light"] select {
+  background-color: #ffffff;
+  border-color: rgb(24 24 27 / 0.18);
+  color: #18181b;
+}
+
+/* Honour the OS setting for people who never touch the toggle and whose
+   system is light. Only applies when no explicit choice is stored. */
+@media (prefers-color-scheme: light) {
+  :root[data-theme="system"] { color-scheme: light; }
+}
+
+/* --------------------------------------------------------------------------
+   Arbitrary values Tailwind inlines verbatim.
+   These can't be reached by the generated overrides above, because `bg-[...]`
+   compiles to the literal value with no variable to swap. Each one below is a
+   hardcoded black that has to become its light counterpart, and they were found
+   by scanning for `bg-[` containing black/rgba(0,0,0) rather than by eye.
+   -------------------------------------------------------------------------- */
+
+/* Readability scrims over the interest mosaic. In dark mode these fade the
+   artwork to black so white text reads; in light mode they must fade to WHITE
+   or they sit ON TOP of the now-dark text and grey it out. This is what made
+   the landing headline look washed while its colour was already correct. */
+[data-theme="light"] .bg-\[linear-gradient\(to_bottom\,transparent_0\%\,rgba\(0\,0\,0\,0\.55\)_30\%\,\#000_55\%\)\] {
+  background-image: linear-gradient(to bottom, transparent 0%, rgba(255,255,255,0.70) 30%, #ffffff 55%);
+}
+[data-theme="light"] .bg-\[linear-gradient\(to_bottom\,transparent_0px\,rgba\(0\,0\,0\,0\.5\)_120px\,\#000_260px\)\] {
+  background-image: linear-gradient(to bottom, transparent 0px, rgba(255,255,255,0.65) 120px, #ffffff 260px);
+}
+
+/* Solid near-black panels. */
+[data-theme="light"] .bg-\[\#0a0a0d\] { background-color: #f7f7f8; }
+[data-theme="light"] .bg-\[\#0A0A0B\]\/95 { background-color: rgb(255 255 255 / 0.95); }
+
+/* The amber glow behind the hero reads as dirty haze on white. Keep it, much
+   fainter, so the composition survives without muddying the text. */
+[data-theme="light"] .bg-\[radial-gradient\(60\%_70\%_at_50\%_-10\%\,rgba\(245\,158\,11\,0\.16\)\,transparent_70\%\)\] {
+  background-image: radial-gradient(60% 70% at 50% -10%, rgba(245,158,11,0.10), transparent 70%);
+}

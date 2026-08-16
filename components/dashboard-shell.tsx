@@ -12,6 +12,7 @@ import { FeedbackPrompt } from "@/components/feedback-prompt";
 import { HelpButton } from "@/components/help-button";
 import { WalkthroughTour } from "@/components/walkthrough-tour";
 import { InstallPrompt } from "@/components/install-prompt";
+import { ThemeToggle } from "@/components/theme-toggle";
 import {
   IconGrid,
   IconHome,
@@ -179,6 +180,13 @@ export function DashboardShell({
         {/* "Send feedback" pinned DIRECTLY ABOVE the account chip (Daniel's note:
             the old landing feedback link was too hard to find). Reachable both on
             the desktop rail and in the mobile More drawer. */}
+        {/* Theme toggle sits with the other persistent account-level controls,
+            directly above feedback. Parents reported they couldn't read the dark
+            UI, so this needs to be somewhere they'll actually come across it,
+            not buried in a settings page. */}
+        <div className="mb-1">
+          <ThemeToggle className="w-full justify-center" />
+        </div>
         <div className="mb-1">
           <FeedbackWidget variant={mobile ? "drawer" : "sidebar"} />
         </div>
