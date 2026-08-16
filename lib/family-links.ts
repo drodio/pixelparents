@@ -54,11 +54,33 @@ export function linkNotFoundMessage(): string {
 // Everyone who moves when a request is approved. The requester's ENTIRE family
 // moves into the target's family, so the approval UI can name them all — a
 // co-parent should never be relocated invisibly.
+// Full name for anywhere a person is named to SOMEONE ELSE.
+//
+// A first name alone is not an identity. Approving a family link merges profile
+// and child information, and a parent review (Aug 2026) hit exactly this: the
+// request read "Ava wants to join your family" when the family knows more than
+// one Ava. You cannot make an informed decision about "Ava"; you can about
+// "Ava Yu". Falls back to whichever part exists so a half-filled profile still
+// shows something rather than "Someone".
+export function displayName(
+  p: { firstName?: string | null; lastName?: string | null } | null | undefined,
+): string | null {
+  const first = (p?.firstName ?? "").trim();
+  const last = (p?.lastName ?? "").trim();
+  const full = [first, last].filter(Boolean).join(" ");
+  return full.length > 0 ? full : null;
+}
+
 export function membersMovedByLink(
-  fromFamilyMembers: { id: string; firstName: string | null; isStudent: boolean }[],
+  fromFamilyMembers: {
+    id: string;
+    firstName: string | null;
+    lastName?: string | null;
+    isStudent: boolean;
+  }[],
 ): { count: number; names: string[]; hasOtherAdults: boolean } {
   const names = fromFamilyMembers
-    .map((m) => (m.firstName ?? "").trim())
+    .map((m) => displayName(m) ?? "")
     .filter((n) => n.length > 0);
   return {
     count: fromFamilyMembers.length,

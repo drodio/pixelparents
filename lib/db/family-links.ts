@@ -10,6 +10,7 @@ import {
   membersMovedByLink,
   type LinkCheck,
 } from "@/lib/family-links";
+import { displayName } from "@/lib/family-links";
 import { logEvent } from "@/lib/db/app-logs";
 import { notifyFamilyLinkRequest } from "@/lib/email";
 import { getBaseUrl } from "@/lib/url";
@@ -162,7 +163,9 @@ export async function createFamilyLinkRequest(
   // Tell them by email too. Without this the request only ever shows in-app, so
   // a parent who doesn't visit never learns a student is blocked on them.
   // after() so a slow/failing mail provider can't delay or fail the request.
-  const meName = (me.firstName ?? "").trim();
+  // Full name, not just the first: the recipient is deciding whether to merge
+  // families with this person and needs to know which one they are.
+  const meName = displayName(me) ?? "";
   const meIsStudent = isStudentAccount({ extra: me.extra as Record<string, unknown> | null });
   const toEmail = target!.email;
   after(async () => {
@@ -219,20 +222,26 @@ export async function listIncomingLinkRequests(
   for (const r of rows) {
     // Everyone who would move, so the approver sees exactly what they're accepting.
     const members = await getDb()
-      .select({ id: signups.id, firstName: signups.firstName, extra: signups.extra })
+      .select({
+        id: signups.id,
+        firstName: signups.firstName,
+        lastName: signups.lastName,
+        extra: signups.extra,
+      })
       .from(signups)
       .where(eq(signups.familyId, r.fromFamilyId));
     const moved = membersMovedByLink(
       members.map((m) => ({
         id: m.id,
         firstName: m.firstName,
+        lastName: m.lastName,
         isStudent: isStudentAccount({ extra: m.extra as Record<string, unknown> | null }),
       })),
     );
     const from = members.find((m) => m.id === r.fromSignupId);
     out.push({
       ...r,
-      fromName: from?.firstName ?? null,
+      fromName: displayName(from),
       fromIsStudent: from
         ? isStudentAccount({ extra: from.extra as Record<string, unknown> | null })
         : false,
