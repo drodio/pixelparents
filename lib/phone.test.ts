@@ -79,8 +79,15 @@ describe("formatPhone", () => {
     expect(formatPhone("+1 202 555 0147")).toBe("+1 (202) 555-0147");
   });
 
-  it("does not impose US grouping on a number from elsewhere", () => {
-    expect(formatPhone("+86 13800138000")).toBe("+86 13800138000");
+  it("groups Chinese mobiles 3-4-4 (V2 feedback: format, don't caption)", () => {
+    expect(formatPhone("+86 13800138000")).toBe("+86 138 0013 8000");
+    expect(formatPhone("+8613812345678")).toBe("+86 138 1234 5678");
+  });
+
+  it("does not impose a guessed grouping on other countries", () => {
+    expect(formatPhone("+44 20 7946 0958")).toBe("+44 2079460958");
+    // A +86 number that isn't a standard 11-digit mobile keeps dial + digits.
+    expect(formatPhone("+86 1234567")).toBe("+86 1234567");
   });
 
   it("passes through anything it does not understand", () => {
