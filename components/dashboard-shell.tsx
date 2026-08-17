@@ -159,13 +159,15 @@ export function DashboardShell({
         title={label}
         onClick={onClick}
         aria-current={active ? "page" : undefined}
-        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
+        className={`flex items-center gap-3 rounded-lg px-3 py-2.5 text-[15px] font-medium transition-colors ${
           active
             ? "bg-amber-400/15 text-amber-300"
             : "text-white/60 hover:bg-white/5 hover:text-white"
         }`}
       >
-        <Icon className="h-5 w-5 shrink-0" />
+        {/* One notch bigger than before (was text-sm + h-5 icons) — parent
+            feedback: sidebar text/icons were hard to see. */}
+        <Icon className="h-6 w-6 shrink-0" />
         {/* In the drawer (onClick set) labels always show; on the desktop rail
             they appear only at md+. */}
         <span className={onClick ? "inline" : "hidden md:inline"}>{label}</span>
@@ -180,13 +182,6 @@ export function DashboardShell({
         {/* "Send feedback" pinned DIRECTLY ABOVE the account chip (Daniel's note:
             the old landing feedback link was too hard to find). Reachable both on
             the desktop rail and in the mobile More drawer. */}
-        {/* Theme toggle sits with the other persistent account-level controls,
-            directly above feedback. Parents reported they couldn't read the dark
-            UI, so this needs to be somewhere they'll actually come across it,
-            not buried in a settings page. */}
-        <div className="mb-1">
-          <ThemeToggle className="w-full justify-center" />
-        </div>
         <div className="mb-1">
           <FeedbackWidget variant={mobile ? "drawer" : "sidebar"} />
         </div>
@@ -204,26 +199,34 @@ export function DashboardShell({
             </div>
           </>
         )}
-        <Link
-          href="/account"
-          title="Account settings"
-          data-tour="account"
-          onClick={mobile ? () => setDrawerOpen(false) : undefined}
-          className="flex items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-white/5"
-        >
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-amber-400/20 text-sm font-semibold text-amber-300">
-            {initial}
-          </span>
-          <span className={`${mobile ? "block" : "hidden md:block"} min-w-0 flex-1`}>
-            <span className="block truncate font-medium text-white">
-              {firstName ?? "Account"}
+        {/* Account row + the theme toggle tucked beside it (V2 round 2: the old
+            full-width "☀️ Light" pill was too in-your-face — now an icon-only
+            control in the account row; a full UI revamp is planned anyway). The
+            toggle is a SIBLING of the /account link, not a child — a button
+            can't legally nest inside a Link. */}
+        <div className="flex items-center gap-1">
+          <Link
+            href="/account"
+            title="Account settings"
+            data-tour="account"
+            onClick={mobile ? () => setDrawerOpen(false) : undefined}
+            className="flex min-w-0 flex-1 items-center gap-3 rounded-lg px-2 py-2 text-sm transition-colors hover:bg-white/5"
+          >
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-amber-400/20 text-sm font-semibold text-amber-300">
+              {initial}
             </span>
-            <span className="block truncate text-xs text-white/55">{email ?? "Settings"}</span>
-          </span>
-          <IconSettings
-            className={`${mobile ? "block" : "hidden md:block"} h-4 w-4 shrink-0 text-white/40`}
-          />
-        </Link>
+            <span className={`${mobile ? "block" : "hidden md:block"} min-w-0 flex-1`}>
+              <span className="block truncate font-medium text-white">
+                {firstName ?? "Account"}
+              </span>
+              <span className="block truncate text-xs text-white/55">{email ?? "Settings"}</span>
+            </span>
+            <IconSettings
+              className={`${mobile ? "block" : "hidden md:block"} h-4 w-4 shrink-0 text-white/40`}
+            />
+          </Link>
+          <ThemeToggle variant="icon" className={mobile ? "" : "hidden md:grid"} />
+        </div>
       </>
     ) : (
       // Signed-out: a prominent Sign in CTA plus a secondary Create account link.
