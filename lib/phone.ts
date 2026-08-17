@@ -96,9 +96,11 @@ export function toE164(input: string, country?: Country | null): string {
   return raw; // unknown shape: keep exactly what they typed
 }
 
-// Readable version. Only US/Canada gets real grouping, because that's the
-// format everyone here recognises on sight; for the rest, a dial code plus the
-// digits is honest and doesn't impose a grouping that may be wrong.
+// Readable version. Countries whose grouping we know for sure get it (US 3-3-4,
+// China mobile 3-4-4 — the two the community actually asked for, Aug 2026 V2
+// feedback doc: the field should FORMAT per country rather than announce
+// "Detected China"); for the rest, a dial code plus the digits is honest and
+// doesn't impose a grouping that may be wrong.
 export function formatPhone(input: string): string {
   const raw = (input ?? "").trim();
   if (!raw) return "";
@@ -109,6 +111,12 @@ export function formatPhone(input: string): string {
     const local = d.length === 11 && d.startsWith("1") ? d.slice(1) : d;
     if (local.length === 10) {
       return `+1 (${local.slice(0, 3)}) ${local.slice(3, 6)}-${local.slice(6)}`;
+    }
+  }
+  if (c?.iso === "CN") {
+    const local = d.startsWith("86") ? d.slice(2) : d;
+    if (local.length === 11) {
+      return `+86 ${local.slice(0, 3)} ${local.slice(3, 7)} ${local.slice(7)}`;
     }
   }
   if (raw.startsWith("+") && c) {

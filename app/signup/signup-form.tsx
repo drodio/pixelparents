@@ -7,7 +7,7 @@ import { affiliationForRole } from "@/lib/options";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import { IconWarning } from "@/components/icons";
-import { countryHint } from "@/lib/phone";
+import { countryHint, formatPhone } from "@/lib/phone";
 import {
   createDraftSignup,
   createCoParentDraft,
@@ -452,19 +452,12 @@ export default function SignupForm({
           </Section>
         )}
 
-        {/* This section always collects the SIGNING-UP person's own details, but
-            it used to be hard-titled "First parent's info" for every role — so a
-            student or alum read it as "enter a parent before yourself" and got
-            stuck (parent feedback, Jul 2026). The title now follows the role; the
-            fields underneath are unchanged. */}
-        <Section
-          title={
-            !joinToken && (v.accountType === "student" || v.accountType === "alum")
-              ? "Your info"
-              : "First parent's info"
-          }
-          description="The basics so other OHS families can recognize and reach you."
-        >
+        {/* This section always collects the SIGNING-UP person's own details.
+            "First parent's info" (and before that, a role-blind version of it)
+            read as "enter a parent before yourself" to students and made parents
+            wonder who the "first" parent was — V2 feedback settled on the same
+            "Your info" for every role, with no subtitle. */}
+        <Section title="Your info">
         <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <label className={labelCls} htmlFor="firstName">
@@ -520,26 +513,24 @@ export default function SignupForm({
               type="tel"
               value={v.phone}
               onChange={(e) => set("phone", e.target.value)}
+              onBlur={() => {
+                const f = formatPhone(v.phone);
+                if (f !== v.phone) set("phone", f);
+              }}
               className={inputCls}
               autoComplete="tel"
               placeholder="+86 138 0013 8000"
             />
-            {/* Country hint, not country validation. OHS families are worldwide,
-                so the field accepts any plausible number; this just confirms it
-                read the number the way the member meant. Nothing is shown when
-                we can't tell, because a wrong flag is worse than no flag. */}
-            {(() => {
-              const hint = countryHint(v.phone);
-              return hint ? (
-                <p className="mt-1 text-xs text-white/50">
-                  <span aria-hidden="true">{hint.flag}</span> Detected {hint.label}
-                </p>
-              ) : (
-                <p className="mt-1 text-xs text-white/40">
-                  Outside the US? Include your country code, e.g. +86.
-                </p>
-              );
-            })()}
+            {/* The number formats itself into its country's shape on blur (V2
+                feedback: format, don't announce "Detected <country>"). Format on
+                blur, not per keystroke — rewriting the value mid-typing fights
+                the cursor. The helper shows only while we can't tell the
+                country; once we can, the formatted number says it. */}
+            {!countryHint(v.phone) && (
+              <p className="mt-1 text-xs text-white/40">
+                Outside the US? Include your country code, e.g. +86.
+              </p>
+            )}
             <FieldError msg={errors.phone} />
           </div>
           {/* LinkedIn, WeChat, personal website, the enrichment opt-in and the
