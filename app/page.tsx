@@ -104,9 +104,8 @@ export default async function Home() {
           Stanford OHS community
         </h1>
         <h2 className="max-w-prose text-pretty text-base font-medium text-white/70 sm:text-xl">
-          Where OHS <span className="font-semibold text-white/85">parents</span>,{" "}
-          <span className="font-semibold text-white/85">students</span>, and{" "}
-          <span className="font-semibold text-white/85">alumni</span> connect around{" "}
+          Where OHS <span className="font-semibold text-white/85">parents</span> and{" "}
+          <span className="font-semibold text-white/85">students</span> connect around{" "}
           <span className="font-semibold text-amber-400">
             {interestsCount.toLocaleString()}
           </span>{" "}

@@ -422,30 +422,15 @@ export default function SignupForm({
                   />
                   <span>A current OHS student</span>
                 </label>
-                <label className="flex items-start gap-2 text-sm text-white/80">
-                  <input
-                    type="radio"
-                    name="accountType"
-                    checked={v.accountType === "alum"}
-                    onChange={() => setAccountType("alum")}
-                    className="mt-1 h-4 w-4 accent-amber-500"
-                  />
-                  <span>An OHS alum (I graduated from OHS)</span>
-                </label>
+                {/* Alumni signup is PAUSED (V2 direction, Aug 2026): the option is
+                    removed rather than hidden behind a flag. The "alum" account
+                    type still exists in lib/options + display code because legacy
+                    rows may carry it; only the entry point is gone. */}
               </div>
               {v.accountType === "student" && (
                 <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-white/75">
                   Next, you&apos;ll add (invite) your parent or guardian so they can
                   join your family.
-                </p>
-              )}
-              {/* Alums have no parent-link step at all, so this note no longer
-                  raises one (parent feedback, Jul 2026: mentioning parent
-                  profiles here implied a step alums don't have). */}
-              {v.accountType === "alum" && (
-                <p className="mt-3 rounded-lg border border-amber-400/30 bg-amber-400/10 px-3 py-2 text-sm text-white/75">
-                  Welcome back! You&apos;ll just complete your own profile. Add OHS
-                  children only if you have them.
                 </p>
               )}
             </fieldset>
@@ -596,9 +581,7 @@ export default function SignupForm({
               ? "…"
               : !joinToken && v.accountType === "student"
                 ? "Add Your Parent →"
-                : !joinToken && v.accountType === "alum"
-                  ? "Continue →"
-                  : "Add Your Child(ren) →"}
+                : "Add Your Child(ren) →"}
           </button>
           {/* On save failure, retry is the ONLY way forward — the button above is
               disabled until the save succeeds. Show WHY alongside the retry: a

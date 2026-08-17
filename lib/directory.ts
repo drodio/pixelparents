@@ -198,6 +198,9 @@ export function isDirectoryVisible(row: SignupRow): boolean {
     // Kids/students are NOT standalone cards — a student account appears only as a
     // (full) name on their linked parent's card, never as its own directory entry.
     !isStudentAccount(row) &&
+    // Alumni access is paused (V2 direction, Aug 2026) — no alum cards while
+    // paused. The client's Alumni tab hides itself once this bucket is empty.
+    !isAlumAccount(row) &&
     isFamilyVerified(row) &&
     canViewProfile(coerceShareVisibility(row.shareVisibility), {
       isOwner: false,
