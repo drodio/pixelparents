@@ -1,0 +1,126 @@
+"use client";
+
+import { useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import type { OnboardingStep } from "./onboarding-steps";
+import { stepIndexFor } from "./onboarding-steps";
+
+// Paged shell for the post-signup onboarding (V2 feedback, Aug 2026): each part
+// of finishing your account is its own page with Continue / Skip, instead of one
+// continuous webpage.
+//
+// Composition contract: the server page renders one child per step, in the same
+// order as `steps`. ALL children stay mounted — hidden steps use the `hidden`
+// attribute — so the forms inside keep their state and autosave behaviour when
+// the member moves back and forth. Only the visible one is interactive.
+//
+// The current step lives in ?step=<key> (replace, not push, so Back leaves the
+// signup funnel rather than walking the wizard) which makes refresh resume on
+// the same page and lets other surfaces deep-link a specific step.
+export function OnboardingWizard({
+  steps,
+  finishHref,
+  children,
+}: {
+  steps: OnboardingStep[];
+  // Where "Finish" lands — the status-aware welcome screen, same destination the
+  // single-page flow's Finish button used.
+  finishHref: string;
+  children: React.ReactNode[];
+}) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
+  const [index, setIndex] = useState(() => stepIndexFor(steps, searchParams.get("step")));
+
+  function go(next: number) {
+    const clamped = Math.max(0, Math.min(steps.length - 1, next));
+    setIndex(clamped);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("step", steps[clamped]!.key);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: true });
+  }
+
+  const step = steps[index]!;
+  const last = index === steps.length - 1;
+
+  return (
+    <div>
+      {/* Progress: dots + "Step n of N". Buttons, so a member can skip ahead to
+          any step directly (V2: "provide an option to skip ahead … each"). */}
+      <nav aria-label="Onboarding progress" className="mb-8 flex items-center gap-3">
+        <ol className="flex items-center gap-2">
+          {steps.map((s, i) => (
+            <li key={s.key}>
+              <button
+                type="button"
+                aria-label={`Step ${i + 1}: ${s.title}`}
+                aria-current={i === index ? "step" : undefined}
+                onClick={() => go(i)}
+                className={`h-2.5 rounded-full transition-all ${
+                  i === index
+                    ? "w-6 bg-amber-400"
+                    : "w-2.5 bg-white/20 hover:bg-white/40"
+                }`}
+              />
+            </li>
+          ))}
+        </ol>
+        <span className="text-xs text-white/50">
+          Step {index + 1} of {steps.length}
+        </span>
+      </nav>
+
+      <header className="mb-6">
+        <h2 className="text-xl font-semibold text-white/90 sm:text-2xl">{step.title}</h2>
+        <p className="mt-1 text-sm text-white/55">{step.blurb}</p>
+      </header>
+
+      {children.map((node, i) => (
+        <div key={steps[i]?.key ?? i} hidden={i !== index}>
+          {node}
+        </div>
+      ))}
+
+      <div className="mt-10 flex flex-wrap items-center gap-3 border-t border-white/10 pt-6">
+        {index > 0 && (
+          <button
+            type="button"
+            onClick={() => go(index - 1)}
+            className="rounded-full border border-white/20 px-5 py-2 text-sm text-white/75 transition hover:bg-white/10"
+          >
+            ← Back
+          </button>
+        )}
+        {!last ? (
+          <>
+            <button
+              type="button"
+              onClick={() => go(index + 1)}
+              className="rounded-full bg-amber-400 px-6 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
+            >
+              Continue →
+            </button>
+            {step.skippable && (
+              <button
+                type="button"
+                onClick={() => go(index + 1)}
+                className="text-sm text-white/50 underline underline-offset-2 transition hover:text-white/80"
+              >
+                Skip for now
+              </button>
+            )}
+          </>
+        ) : (
+          <a
+            href={finishHref}
+            className="rounded-full bg-amber-400 px-6 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
+          >
+            Finish →
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
