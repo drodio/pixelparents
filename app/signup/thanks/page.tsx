@@ -17,6 +17,8 @@ import { getStudentParentLinkStatus } from "./actions";
 import { listOutgoingLinkRequests } from "@/lib/db/family-links";
 import { StudentVerify } from "@/components/student-verify";
 import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
+import { OnboardingWizard } from "./onboarding-wizard";
+import { buildOnboardingSteps } from "./onboarding-steps";
 
 export const metadata: Metadata = {
   title: "Welcome — GoPixel",
@@ -144,8 +146,18 @@ export default async function ThanksPage({
   const greeting = firstName
     ? hasExistingData
       ? `${firstName}, edit your info here:`
-      : `${firstName}, nice to meet you.`
-    : "Nice to meet you.";
+      : `Welcome to GoPixel${firstName ? `, ${firstName}` : ""}!`
+    : "Welcome to GoPixel!";
+
+  // Fresh signups get the paged wizard (V2 feedback: one step per page, each
+  // skippable, verification first). Returning editors keep the single-page
+  // layout — a wizard is an onboarding shape, not an editing shape.
+  const isStudentFlow = isStudent && Boolean(studentLinkStatus);
+  const wizardSteps = buildOnboardingSteps({
+    isStudent: isStudentFlow,
+    hasReferral: Boolean(familyReferralUrl),
+    hasVerify: Boolean(verifyState),
+  });
 
   const sharePanel = (
     <ShareSettings
@@ -203,31 +215,24 @@ export default async function ThanksPage({
         ) : null}
         <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">{greeting}</h1>
 
-        {hasExistingData ? (
-          <>
-            <div className="mt-6">{sharePanel}</div>
-            <div className="mt-8">{subheading}</div>
-          </>
-        ) : (
-          <div className="mt-2">{subheading}</div>
-        )}
-
-        <div className="mt-10">
-          {isStudent && studentLinkStatus ? (
-            // STUDENT path: the required step-2 action is "invite your parent /
-            // guardian" (reusing the co-parent invite mechanism). Students do
-            // NOT add children.
+        {(() => {
+          const roleForm = isStudentFlow ? (
+            // STUDENT path: the role step is "invite your parent / guardian"
+            // (reusing the co-parent invite mechanism). Students do NOT add
+            // children.
             <StudentParentForm
               signupId={validId}
-              initialStatus={studentLinkStatus}
+              initialStatus={studentLinkStatus!}
               outgoingLinks={outgoingLinks.map((r) => ({ id: r.id, toEmail: r.toEmail }))}
             />
           ) : (
-            // PARENT path: unchanged — add children + the existing UI.
+            // PARENT path: add children + the existing profile UI. showFinish
+            // only in the single-page editing layout — the wizard supplies its
+            // own Finish.
             <FamilyForm
               signupId={validId}
               suggestedInterests={interestPool}
-              showFinish
+              showFinish={hasExistingData}
               existingChildren={kids.map((k) => ({
                 id: k.id,
                 firstName: k.firstName,
@@ -241,29 +246,70 @@ export default async function ThanksPage({
                 photoPreviews: childPreviewsById[k.id] ?? {},
               }))}
             />
-          )}
-        </div>
+          );
 
-        {verifyState && (
-          <div className="mt-10">
-            <StudentVerify signupId={validId} initial={verifyState} />
-            {verifyState.status !== "approved" && (
-              <p className="mt-3 text-center text-sm text-white/45">
-                <Link href="/dashboard" className="hover:text-white/80">
-                  I&apos;ll verify later — go to my dashboard →
-                </Link>
-              </p>
-            )}
-          </div>
-        )}
+          if (!hasExistingData) {
+            // FRESH ONBOARDING: the paged wizard. Steps and nodes must stay in
+            // the same order — buildOnboardingSteps is the single source of the
+            // order, and this map renders a node per step key.
+            return (
+              <div className="mt-2">
+                <p className="mb-8 text-white/60">
+                  Now let&apos;s complete your account. Every step is skippable —
+                  you can come back to any of it later.
+                </p>
+                <OnboardingWizard
+                  steps={wizardSteps}
+                  finishHref={`/signup/welcome?id=${encodeURIComponent(validId)}`}
+                >
+                  {wizardSteps.map((s) => {
+                    switch (s.key) {
+                      case "verify":
+                        return (
+                          <StudentVerify key={s.key} signupId={validId} initial={verifyState!} />
+                        );
+                      case "children":
+                      case "parent-link":
+                        return <div key={s.key}>{roleForm}</div>;
+                      case "share":
+                        return <div key={s.key}>{sharePanel}</div>;
+                      case "invite":
+                        return (
+                          <ThanksInviteCta key={s.key} referralUrl={familyReferralUrl!} />
+                        );
+                    }
+                  })}
+                </OnboardingWizard>
+              </div>
+            );
+          }
 
-        {!hasExistingData && <div className="mt-12">{sharePanel}</div>}
-
-        {familyReferralUrl && (
-          <div className="mt-12">
-            <ThanksInviteCta referralUrl={familyReferralUrl} />
-          </div>
-        )}
+          // EDITING: the pre-wizard single-page layout, unchanged.
+          return (
+            <>
+              <div className="mt-6">{sharePanel}</div>
+              <div className="mt-8">{subheading}</div>
+              <div className="mt-10">{roleForm}</div>
+              {verifyState && (
+                <div className="mt-10">
+                  <StudentVerify signupId={validId} initial={verifyState} />
+                  {verifyState.status !== "approved" && (
+                    <p className="mt-3 text-center text-sm text-white/45">
+                      <Link href="/dashboard" className="hover:text-white/80">
+                        I&apos;ll verify later — go to my dashboard →
+                      </Link>
+                    </p>
+                  )}
+                </div>
+              )}
+              {familyReferralUrl && (
+                <div className="mt-12">
+                  <ThanksInviteCta referralUrl={familyReferralUrl} />
+                </div>
+              )}
+            </>
+          );
+        })()}
       </div>
     </main>
   );
