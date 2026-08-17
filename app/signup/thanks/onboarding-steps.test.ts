@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { buildOnboardingSteps, stepIndexFor } from "./onboarding-steps";
+import { buildOnboardingSteps, clampForward, stepIndexFor } from "./onboarding-steps";
 
 // The step ORDER is the product spec (V2 doc): verification first, then the
 // role step, then sharing, then the invite. These tests pin it.
@@ -48,10 +48,34 @@ describe("buildOnboardingSteps", () => {
     expect(keys).toEqual(["children", "share", "invite"]);
   });
 
-  it("marks every step skippable (V2: each step individually skippable)", () => {
-    for (const s of buildOnboardingSteps({ isStudent: true, hasReferral: true, hasVerify: true })) {
-      expect(s.skippable).toBe(true);
+  it("verification is NOT skippable; every other step is (V2 round 2)", () => {
+    for (const role of [true, false]) {
+      for (const s of buildOnboardingSteps({ isStudent: role, hasReferral: true, hasVerify: true })) {
+        expect(s.skippable).toBe(s.key !== "verify");
+      }
     }
+  });
+});
+
+describe("clampForward", () => {
+  const steps = buildOnboardingSteps({ isStudent: false, hasReferral: true, hasVerify: true });
+  // steps: verify(0) children(1) share(2) invite(3)
+
+  it("does not clamp when nothing is blocked", () => {
+    expect(clampForward(steps, new Set(), 0, 3)).toBe(3);
+  });
+
+  it("pins the member on a blocked CURRENT step", () => {
+    expect(clampForward(steps, new Set(["verify"]), 0, 1)).toBe(0);
+    expect(clampForward(steps, new Set(["verify"]), 0, 3)).toBe(0);
+  });
+
+  it("lets a jump ENTER a blocked step ahead but never pass it", () => {
+    expect(clampForward(steps, new Set(["share"]), 0, 3)).toBe(2);
+  });
+
+  it("does not care about blocked steps behind the member", () => {
+    expect(clampForward(steps, new Set(["verify"]), 1, 3)).toBe(3);
   });
 });
 

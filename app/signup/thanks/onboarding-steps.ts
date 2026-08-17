@@ -33,7 +33,11 @@ export function buildOnboardingSteps(opts: {
       blurb: opts.isStudent
         ? "We'll email a code to your OHS student email."
         : "Enter your child's OHS student email and we'll send it a code — that's how we keep GoPixel to real OHS families. You'll need the code from their inbox.",
-      skippable: true,
+      // NOT skippable (V2 round 2: "DO NOT let parents or students skip the
+      // verification part — that's why it is the first thing they ask"). The
+      // step itself decides when the member may advance: a verified code, or
+      // choosing the WhatsApp manual path (which proceeds as unverified).
+      skippable: false,
     },
     opts.isStudent
       ? {
@@ -72,4 +76,21 @@ export function stepIndexFor(steps: OnboardingStep[], key: string | null | undef
   if (!key) return 0;
   const i = steps.findIndex((s) => s.key === key);
   return i >= 0 ? i : 0;
+}
+
+// Furthest index a forward move from `from` toward `to` may actually reach,
+// given the set of currently-blocked step keys. The rule: a blocked step may be
+// ENTERED but never PASSED — so a jump lands on the first blocked step in the
+// way, and a blocked CURRENT step pins you where you are. Backward moves are
+// never clamped (call sites only use this when to > from).
+export function clampForward(
+  steps: OnboardingStep[],
+  blockedKeys: ReadonlySet<string>,
+  from: number,
+  to: number,
+): number {
+  for (let i = from; i < to && i < steps.length; i++) {
+    if (blockedKeys.has(steps[i]!.key)) return i;
+  }
+  return to;
 }

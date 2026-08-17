@@ -1,15 +1,16 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 import { requestStudentCode, confirmStudentCode, type VerifyState } from "@/app/signup/thanks/verify-actions";
 import { IconCircleCheck, IconGradCap } from "@/components/icons";
 import { formatNameList } from "@/lib/verify-copy";
+import { useOnboardingGate } from "@/app/signup/thanks/onboarding-gate";
 
 // Optional WhatsApp fallback: a wa.me link (set NEXT_PUBLIC_DRODIO_WHATSAPP_URL
 // in env — no phone number is committed to this public repo). Hidden when unset.
 const WHATSAPP_URL = process.env.NEXT_PUBLIC_DRODIO_WHATSAPP_URL;
 
-type Step = "email" | "code" | "approved";
+type Step = "method" | "email" | "code" | "approved" | "manual";
 
 // Self-serve "this is a real OHS family" check: the parent enters their OHS
 // student's stanford.edu email, we mail a 6-digit code, and confirming it marks
@@ -21,6 +22,8 @@ export function StudentVerify({
   compact = false,
   allowAddMore = false,
   studentNames = [],
+  methodChoice = false,
+  selfVerify = false,
 }: {
   signupId: string;
   initial: VerifyState;
@@ -34,11 +37,35 @@ export function StudentVerify({
   // email…") so it's unambiguous whose email we mean. Empty (the default) keeps
   // the generic "your student" wording, so existing call sites are unaffected.
   studentNames?: readonly string[];
+  // Onboarding-wizard mode (V2 round 2): open on a method chooser — email a
+  // code (unlocks only on a verified code) vs. message Daniel on WhatsApp
+  // (advance immediately, but as unverified, dashboard locked until his manual
+  // approval). Off by default so /account and the editing layout are unchanged.
+  methodChoice?: boolean;
+  // The signing-up member IS the student (student flow) — the code goes to
+  // their own OHS email, and the copy says so. Parents (default) are told to
+  // enter their child's OHS email.
+  selfVerify?: boolean;
 }) {
-  // Resume mid-flow: approved → done; an outstanding code → code step; else email.
+  // Resume mid-flow: approved → done; an outstanding code → code step; else the
+  // method chooser (wizard mode) or the email step directly.
   const [step, setStep] = useState<Step>(
-    initial.status === "approved" ? "approved" : initial.hasPendingCode ? "code" : "email",
+    initial.status === "approved"
+      ? "approved"
+      : initial.hasPendingCode
+        ? "code"
+        : methodChoice && WHATSAPP_URL
+          ? "method"
+          : "email",
   );
+
+  // Report to the wizard (no-op elsewhere): the member may advance only once
+  // verified, or once they've taken the manual WhatsApp path.
+  const gate = useOnboardingGate();
+  useEffect(() => {
+    if (!methodChoice) return;
+    gate?.setBlocked("verify", !(step === "approved" || step === "manual"));
+  }, [gate, methodChoice, step]);
   const [email, setEmail] = useState(initial.email ?? "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -137,24 +164,81 @@ export function StudentVerify({
       <div className="flex items-center gap-2">
         <IconGradCap className="h-5 w-5 text-amber-300" />
         <h3 className="font-semibold text-white">
-          {hasNames ? `Verify via ${nameList}` : "Verify your OHS student"}
+          {hasNames
+            ? `Verify via ${nameList}`
+            : selfVerify
+              ? "Verify your OHS email"
+              : "Verify your OHS student"}
         </h3>
       </div>
+      {/* One short instruction line. The old "Every GoPixel family is paired
+          with an OHS student…" blurb was removed on request (V2 round 2). */}
       <p className="mt-1.5 text-sm text-white/65">
         {hasNames ? (
-          <>
-            Have {nameList} check their Stanford email and enter the code.
-            Pop in the stanford.edu address and we&apos;ll send a 6-digit code to
-            confirm — this unlocks the OHS family directory for you.
-          </>
+          <>Have {nameList} check their Stanford email and enter the code below.</>
+        ) : selfVerify ? (
+          <>We&apos;ll email a 6-digit code to your OHS Stanford address.</>
         ) : (
-          <>
-            Every GoPixel family is paired with an OHS student. Enter your
-            student&apos;s Stanford email and we&apos;ll send a code to confirm —
-            this unlocks the OHS family directory for you.
-          </>
+          <>We&apos;ll email a 6-digit code to your child&apos;s OHS Stanford address.</>
         )}
       </p>
+
+      {step === "method" && (
+        <div className="mt-4 flex flex-col gap-2">
+          <button
+            type="button"
+            onClick={() => setStep("email")}
+            className="rounded-xl border border-amber-400/40 bg-black/30 p-3 text-left transition hover:border-amber-400/70"
+          >
+            <span className="block text-sm font-semibold text-white">Email a code</span>
+            <span className="mt-0.5 block text-xs text-white/55">
+              {selfVerify
+                ? "We send a 6-digit code to your OHS email — verified on the spot."
+                : "We send a 6-digit code to your child's OHS email — verified on the spot."}
+            </span>
+          </button>
+          {WHATSAPP_URL && (
+            <button
+              type="button"
+              onClick={() => setStep("manual")}
+              className="rounded-xl border border-white/15 bg-black/30 p-3 text-left transition hover:border-white/35"
+            >
+              <span className="block text-sm font-semibold text-white">
+                Message Daniel on WhatsApp
+              </span>
+              <span className="mt-0.5 block text-xs text-white/55">
+                Manual approval — you can keep going, but your dashboard stays
+                locked until he approves your family.
+              </span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {step === "manual" && WHATSAPP_URL && (
+        <div className="mt-4 flex flex-col gap-3">
+          <a
+            href={WHATSAPP_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="self-start rounded-lg bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
+          >
+            Open WhatsApp →
+          </a>
+          <p className="text-sm text-white/65">
+            Send Daniel a message and he&apos;ll approve your family manually. You
+            can continue setting up now — until he does, you&apos;re{" "}
+            <strong>unverified</strong> and your dashboard stays locked.
+          </p>
+          <button
+            type="button"
+            onClick={() => setStep("email")}
+            className="self-start text-xs text-white/50 underline-offset-2 hover:text-white/80 hover:underline"
+          >
+            Use the email code instead
+          </button>
+        </div>
+      )}
 
       {step === "email" && (
         <div className="mt-4 flex flex-col gap-2 sm:flex-row">
@@ -221,17 +305,31 @@ export function StudentVerify({
       {notice && <p className="mt-3 text-sm text-emerald-300/90">{notice}</p>}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
-      {WHATSAPP_URL && (
+      {WHATSAPP_URL && step !== "method" && step !== "manual" && (
         <p className="mt-4 border-t border-white/10 pt-3 text-xs text-white/45">
-          Don&apos;t have your student&apos;s Stanford email handy?{" "}
-          <a
-            href={WHATSAPP_URL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-amber-300 underline-offset-2 hover:underline"
-          >
-            Message Daniel on WhatsApp
-          </a>{" "}
+          {selfVerify
+            ? "Can't get to your Stanford inbox right now?"
+            : "Don't have your student's Stanford email handy?"}{" "}
+          {methodChoice ? (
+            // In the wizard, switching method must go through the manual STEP —
+            // that's what tells the gate the member may advance as unverified.
+            <button
+              type="button"
+              onClick={() => setStep("manual")}
+              className="text-amber-300 underline-offset-2 hover:underline"
+            >
+              Message Daniel on WhatsApp
+            </button>
+          ) : (
+            <a
+              href={WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-amber-300 underline-offset-2 hover:underline"
+            >
+              Message Daniel on WhatsApp
+            </a>
+          )}{" "}
           to get verified another way.
         </p>
       )}
