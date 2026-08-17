@@ -19,6 +19,10 @@ import { StudentVerify } from "@/components/student-verify";
 import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
 import { OnboardingWizard } from "./onboarding-wizard";
 import { buildOnboardingSteps } from "./onboarding-steps";
+import { StepCityState, StepInterests, StepPhotos } from "./profile-steps";
+import { StepSocialLinks } from "./social-links-step";
+import { ShareSequence } from "./share-sequence";
+import { instagramHandleOf, xHandleOf } from "@/lib/social-handles";
 
 export const metadata: Metadata = {
   title: "Welcome — GoPixel",
@@ -131,6 +135,28 @@ export default async function ThanksPage({
       childPreviewsById[k.id] = m;
     }),
   );
+
+  // Previews for the member's OWN photos — the wizard's Photos step edits them.
+  const signupPhotoPreviews: Record<string, string> = {};
+  if (initialPhotos.length > 0) {
+    const urls = await signedPhotoUrls(initialPhotos.map((p) => p.pathname));
+    initialPhotos.forEach((p, i) => {
+      if (urls[i]) signupPhotoPreviews[p.pathname] = urls[i]!;
+    });
+  }
+
+  // Socials step seed values. linkedinUrl is stored as a full URL; the step
+  // edits the bare handle, so unwrap it here.
+  const extraBlob = (signup.extra ?? {}) as Record<string, unknown>;
+  const linkedinHandle =
+    (signup.linkedinUrl ?? "").split("/in/")[1]?.replace(/\/+$/, "") ?? "";
+  const initialSocials = {
+    linkedin: linkedinHandle,
+    github: signup.githubUsername ?? "",
+    wechat: signup.wechatId ?? "",
+    instagram: instagramHandleOf(extraBlob) ?? "",
+    x: xHandleOf(extraBlob) ?? "",
+  };
 
   // "Editing" = the parent has already saved something. In that mode we drop the
   // marketing banner/intro, greet them as a returning editor, and surface the
@@ -288,8 +314,43 @@ export default async function ThanksPage({
                       case "children":
                       case "parent-link":
                         return <div key={s.key}>{roleForm}</div>;
+                      case "city":
+                        return (
+                          <StepCityState
+                            key={s.key}
+                            signupId={validId}
+                            initialCity={signup.city ?? ""}
+                            initialState={signup.state ?? ""}
+                            initialCountry={signup.country ?? "United States"}
+                          />
+                        );
+                      case "socials":
+                        return (
+                          <StepSocialLinks key={s.key} signupId={validId} initial={initialSocials} />
+                        );
+                      case "interests":
+                        return (
+                          <StepInterests
+                            key={s.key}
+                            signupId={validId}
+                            initialInterests={signup.parentInterests ?? []}
+                            suggestedInterests={interestPool}
+                            isStudent={isStudentFlow}
+                          />
+                        );
+                      case "photos":
+                        return (
+                          <StepPhotos
+                            key={s.key}
+                            signupId={validId}
+                            initialPhotos={initialPhotos}
+                            initialPreviews={signupPhotoPreviews}
+                          />
+                        );
                       case "share":
-                        return <div key={s.key}>{sharePanel}</div>;
+                        // The sequence fetches fresh filled-state when started,
+                        // so info added in the earlier steps is always seen.
+                        return <ShareSequence key={s.key} signupId={validId} />;
                       case "invite":
                         return (
                           <ThanksInviteCta key={s.key} referralUrl={familyReferralUrl!} />

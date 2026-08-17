@@ -17,6 +17,7 @@ import {
   ACCOUNT_TYPE,
 } from "@/lib/options";
 import { signupSchema, linkedinUrlFromHandle } from "@/lib/validation";
+import { normalizeSocialHandle } from "@/lib/social-handles";
 import { TERMS_VERSION } from "@/lib/terms";
 import { generateShareToken } from "@/lib/share";
 import {
@@ -182,6 +183,10 @@ export type SignupPatch = Partial<{
   // Opt-in: build my profile automatically from public data. DEFAULT OFF; stored
   // in extra.enrichmentOptIn. Enrichment only runs when this is true.
   enrichmentOptIn: boolean;
+  // Instagram / X handles (V2 round 2 onboarding socials). Stored in extra
+  // jsonb as bare handles; the profile builds the URLs at render time.
+  instagramHandle: string;
+  xHandle: string;
 }>;
 
 // Translate a (trusted-but-untyped) SignupPatch into a sanitized Drizzle `set`
@@ -254,6 +259,14 @@ export async function sanitizeSignupPatch(
   // Enrichment opt-in — only `true` opts in; anything else clears the key (OFF).
   if ("enrichmentOptIn" in patch) {
     extraPatch.enrichmentOptIn = patch.enrichmentOptIn === true ? true : undefined;
+  }
+  // Instagram / X — normalized to bare handles (accepts @name or a pasted
+  // profile URL); empty/unusable clears the key.
+  if ("instagramHandle" in patch) {
+    extraPatch.instagramHandle = normalizeSocialHandle(patch.instagramHandle) ?? undefined;
+  }
+  if ("xHandle" in patch) {
+    extraPatch.xHandle = normalizeSocialHandle(patch.xHandle) ?? undefined;
   }
   // Account type: only "student" is persisted. A "parent" account (or any
   // unrecognized value) clears the key entirely, so parent rows carry NO

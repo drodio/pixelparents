@@ -5,13 +5,22 @@ import { buildOnboardingSteps, clampForward, stepIndexFor } from "./onboarding-s
 // role step, then sharing, then the invite. These tests pin it.
 
 describe("buildOnboardingSteps", () => {
-  it("puts verification FIRST for a parent, then children, sharing, invite", () => {
+  it("orders a parent: verify, children, own info pages, sharing LAST, invite", () => {
     const keys = buildOnboardingSteps({
       isStudent: false,
       hasReferral: true,
       hasVerify: true,
     }).map((s) => s.key);
-    expect(keys).toEqual(["verify", "children", "share", "invite"]);
+    expect(keys).toEqual([
+      "verify",
+      "children",
+      "city",
+      "socials",
+      "interests",
+      "photos",
+      "share",
+      "invite",
+    ]);
   });
 
   it("gives a student the parent-link step instead of children", () => {
@@ -20,7 +29,28 @@ describe("buildOnboardingSteps", () => {
       hasReferral: true,
       hasVerify: true,
     }).map((s) => s.key);
-    expect(keys).toEqual(["verify", "parent-link", "share", "invite"]);
+    expect(keys).toEqual([
+      "verify",
+      "parent-link",
+      "city",
+      "socials",
+      "interests",
+      "photos",
+      "share",
+      "invite",
+    ]);
+  });
+
+  it("keeps every self-info page BEFORE the sharing step (fill first, share second)", () => {
+    const keys = buildOnboardingSteps({
+      isStudent: false,
+      hasReferral: true,
+      hasVerify: true,
+    }).map((s) => s.key);
+    const shareAt = keys.indexOf("share");
+    for (const k of ["city", "socials", "interests", "photos"] as const) {
+      expect(keys.indexOf(k)).toBeLessThan(shareAt);
+    }
   });
 
   it("words the verify step for the role", () => {
@@ -36,7 +66,8 @@ describe("buildOnboardingSteps", () => {
       hasReferral: false,
       hasVerify: true,
     }).map((s) => s.key);
-    expect(keys).toEqual(["verify", "children", "share"]);
+    expect(keys).not.toContain("invite");
+    expect(keys[0]).toBe("verify");
   });
 
   it("drops the verify step when no verify state is available", () => {
@@ -45,7 +76,8 @@ describe("buildOnboardingSteps", () => {
       hasReferral: true,
       hasVerify: false,
     }).map((s) => s.key);
-    expect(keys).toEqual(["children", "share", "invite"]);
+    expect(keys).not.toContain("verify");
+    expect(keys[0]).toBe("children");
   });
 
   it("verification is NOT skippable; every other step is (V2 round 2)", () => {
@@ -59,23 +91,24 @@ describe("buildOnboardingSteps", () => {
 
 describe("clampForward", () => {
   const steps = buildOnboardingSteps({ isStudent: false, hasReferral: true, hasVerify: true });
-  // steps: verify(0) children(1) share(2) invite(3)
+  const last = steps.length - 1;
+  const shareAt = steps.findIndex((s) => s.key === "share");
 
   it("does not clamp when nothing is blocked", () => {
-    expect(clampForward(steps, new Set(), 0, 3)).toBe(3);
+    expect(clampForward(steps, new Set(), 0, last)).toBe(last);
   });
 
   it("pins the member on a blocked CURRENT step", () => {
     expect(clampForward(steps, new Set(["verify"]), 0, 1)).toBe(0);
-    expect(clampForward(steps, new Set(["verify"]), 0, 3)).toBe(0);
+    expect(clampForward(steps, new Set(["verify"]), 0, last)).toBe(0);
   });
 
   it("lets a jump ENTER a blocked step ahead but never pass it", () => {
-    expect(clampForward(steps, new Set(["share"]), 0, 3)).toBe(2);
+    expect(clampForward(steps, new Set(["share"]), 0, last)).toBe(shareAt);
   });
 
   it("does not care about blocked steps behind the member", () => {
-    expect(clampForward(steps, new Set(["verify"]), 1, 3)).toBe(3);
+    expect(clampForward(steps, new Set(["verify"]), 1, last)).toBe(last);
   });
 });
 
@@ -83,7 +116,8 @@ describe("stepIndexFor", () => {
   const steps = buildOnboardingSteps({ isStudent: false, hasReferral: true, hasVerify: true });
 
   it("resolves a known key to its index", () => {
-    expect(stepIndexFor(steps, "share")).toBe(2);
+    expect(stepIndexFor(steps, "share")).toBe(steps.findIndex((s) => s.key === "share"));
+    expect(stepIndexFor(steps, "socials")).toBe(3);
   });
 
   it("falls back to the first step for unknown or missing keys", () => {

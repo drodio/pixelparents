@@ -6,7 +6,16 @@
 // unit-tested: verification comes FIRST (confirm the family is part of OHS via
 // the student's OHS email), then the role step, then sharing, then the invite.
 
-export type OnboardingStepKey = "verify" | "children" | "parent-link" | "share" | "invite";
+export type OnboardingStepKey =
+  | "verify"
+  | "children"
+  | "parent-link"
+  | "city"
+  | "socials"
+  | "interests"
+  | "photos"
+  | "share"
+  | "invite";
 
 export type OnboardingStep = {
   key: OnboardingStepKey;
@@ -52,10 +61,38 @@ export function buildOnboardingSteps(opts: {
           blurb: "Optional — you can add or edit them any time from your Family page.",
           skippable: true,
         },
+    // The member's OWN info, one page each (V2 round 2: "you did not ask them
+    // to fill in the information regarding themselves") — and all of it BEFORE
+    // the sharing questions, because "how can they share information they did
+    // not yet fill out."
+    {
+      key: "city",
+      title: "Where are you?",
+      blurb: "City & state help nearby OHS families find each other.",
+      skippable: true,
+    },
+    {
+      key: "socials",
+      title: "Your links",
+      blurb: "LinkedIn, GitHub, WeChat, Instagram, X — add the ones you use.",
+      skippable: true,
+    },
+    {
+      key: "interests",
+      title: "Your interests",
+      blurb: "Shared interests are how the directory connects families.",
+      skippable: true,
+    },
+    {
+      key: "photos",
+      title: "Add a photo or two",
+      blurb: "Optional, and it doesn't have to be of you.",
+      skippable: true,
+    },
     {
       key: "share",
       title: "Choose what you share",
-      blurb: "Nothing is shared until you say so, and every field is opt-in.",
+      blurb: "Asked one piece at a time, only about info you actually added.",
       skippable: true,
     },
     {

@@ -6,6 +6,14 @@ import { getDb } from "@/lib/db";
 import { signups, children, type Photo } from "@/lib/db/schema/signups";
 import { canonicalizeAgainstPool } from "@/lib/interests";
 import { isStudentAccount } from "@/lib/family-display";
+import {
+  coerceShareVisibility,
+  shareFieldsOrDefault,
+  type ShareFieldKey,
+  type ShareVisibility,
+} from "@/lib/share";
+import { shareUrlFor } from "@/lib/url";
+import { instagramHandleOf, xHandleOf } from "@/lib/social-handles";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -221,4 +229,62 @@ export async function removeChild(childId: string, signupId: string): Promise<{ 
     console.error("removeChild failed:", err);
     return { ok: false };
   }
+}
+
+// --- Share-sequence setup (the wizard's sharing step) ------------------------
+
+export type ShareSetupQuestion = { keys: ShareFieldKey[]; label: string };
+export type ShareSetupState = {
+  // Questions in the doc's fixed entry order, filtered to information that
+  // actually EXISTS on the row — "how can they share information they did not
+  // yet fill out" (V2 round 2).
+  questions: ShareSetupQuestion[];
+  visibility: ShareVisibility;
+  fields: ShareFieldKey[];
+  shareUrl: string | null;
+};
+
+// Fetched when the member STARTS the sharing questions, not at page load — the
+// wizard's earlier steps fill these very fields, so a load-time snapshot would
+// wrongly skip questions about anything filled in during the session.
+export async function getShareSetupState(signupId: string): Promise<ShareSetupState | null> {
+  if (!UUID_RE.test(signupId)) return null;
+  const [row] = await getDb().select().from(signups).where(eq(signups.id, signupId)).limit(1);
+  if (!row) return null;
+  const kids = await getDb()
+    .select({ id: children.id })
+    .from(children)
+    .where(eq(children.familyId, row.familyId));
+  const extra = (row.extra ?? {}) as Record<string, unknown>;
+  const isStudent = isStudentAccount({ extra: row.extra });
+  const hasSocials = Boolean(
+    row.linkedinUrl ||
+      row.githubUsername ||
+      row.wechatId ||
+      instagramHandleOf(extra) ||
+      xHandleOf(extra),
+  );
+
+  const questions: ShareSetupQuestion[] = [];
+  if (row.city || row.state) questions.push({ keys: ["location"], label: "your city & state" });
+  if (row.phone) questions.push({ keys: ["phone"], label: "your phone number" });
+  if (row.email) questions.push({ keys: ["email"], label: "your email address" });
+  // The doc groups every social under one ask; wechat has its own share key, so
+  // this question flips links + wechat together.
+  if (hasSocials) questions.push({ keys: ["links", "wechat"], label: "your social links" });
+  if ((row.parentInterests?.length ?? 0) > 0)
+    questions.push({ keys: ["interests"], label: "your interests" });
+  if ((row.photos?.length ?? 0) > 0) questions.push({ keys: ["photos"], label: "your photos" });
+  // Parents end on "who your children are". (The doc's student equivalent —
+  // "which parent profile you're connected to" — has no share key yet; the
+  // student card doesn't render family links, so there's nothing to gate.)
+  if (!isStudent && kids.length > 0)
+    questions.push({ keys: ["children"], label: "who your children are" });
+
+  return {
+    questions,
+    visibility: coerceShareVisibility(row.shareVisibility),
+    fields: shareFieldsOrDefault(row.shareFields),
+    shareUrl: row.shareToken ? shareUrlFor(row.shareToken) : null,
+  };
 }
