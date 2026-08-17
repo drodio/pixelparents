@@ -1,6 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
+import { IconMoon, IconSun } from "@/components/icons";
 
 // Light / dark toggle.
 //
@@ -51,9 +52,41 @@ const getSnapshot = (): Theme =>
 // has already corrected the real DOM by then.
 const getServerSnapshot = (): Theme => "dark";
 
-export function ThemeToggle({ className = "" }: { className?: string }) {
+export function ThemeToggle({
+  className = "",
+  variant = "pill",
+}: {
+  className?: string;
+  // "pill": bordered button with a label (public landing). "icon": compact
+  // icon-only button — V2 round 2 asked for the sidebar control to be tucked
+  // into the account row rather than a full-width pill, and for an icon rather
+  // than an emoji. Both render the same SVG glyphs.
+  variant?: "pill" | "icon";
+}) {
   const theme = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const next: Theme = theme === "light" ? "dark" : "light";
+  // aria-hidden on the glyph: the button already has an accessible label, and a
+  // screen reader announcing "sun" adds nothing.
+  const glyph =
+    theme === "light" ? (
+      <IconMoon aria-hidden className="h-4 w-4" />
+    ) : (
+      <IconSun aria-hidden className="h-4 w-4" />
+    );
+
+  if (variant === "icon") {
+    return (
+      <button
+        type="button"
+        onClick={() => applyTheme(next)}
+        aria-label={`Switch to ${next} mode`}
+        title={`Switch to ${next} mode`}
+        className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg text-white/50 transition hover:bg-white/10 hover:text-white ${className}`}
+      >
+        {glyph}
+      </button>
+    );
+  }
 
   return (
     <button
@@ -63,9 +96,7 @@ export function ThemeToggle({ className = "" }: { className?: string }) {
       title={`Switch to ${next} mode`}
       className={`inline-flex items-center gap-2 rounded-lg border border-white/15 px-3 py-2 text-sm text-white/80 transition hover:bg-white/10 ${className}`}
     >
-      {/* aria-hidden on the glyph: the button already has an accessible label,
-          and a screen reader announcing "sun" adds nothing. */}
-      <span aria-hidden="true">{theme === "light" ? "🌙" : "☀️"}</span>
+      {glyph}
       <span>{theme === "light" ? "Dark" : "Light"}</span>
     </button>
   );
