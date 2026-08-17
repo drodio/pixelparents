@@ -8,6 +8,7 @@ import { primaryEmail } from "@/lib/clerk";
 import { isAdminEmail } from "@/lib/admin";
 import { getFamilyForEmail } from "@/lib/db/signups";
 import { verifiedEmailsOf } from "@/lib/verify";
+import { isAlumAccount } from "@/lib/family-display";
 import { PostHogIdentify } from "@/components/posthog-identify";
 
 // ClerkProvider is scoped to this route group (mirrors founder-festival) so the
@@ -66,10 +67,42 @@ async function enforceVerificationGate(): Promise<void> {
   }
 }
 
+// Alumni access is PAUSED (V2 direction, Aug 2026): only parents/guardians and
+// current students for now. Always on — no env flag — because the signup option
+// is also removed; this gate covers accounts that already exist. A signed-in
+// alum lands on /alumni-paused (a PUBLIC page outside this route group, so the
+// redirect cannot loop). Admins exempt. Best-effort like the verification gate:
+// a lookup failure falls through to rendering rather than locking people out.
+async function enforceAlumniPause(): Promise<void> {
+  try {
+    const viewer = await currentUser();
+    const email = primaryEmail(viewer);
+    if (!email) return; // signed out → nothing to gate
+
+    if (await isAdminEmail(email)) return;
+
+    const family = await getFamilyForEmail(email);
+    if (!family) return;
+
+    // The caller's OWN row (not just any family member): only an alum's own
+    // account is paused — a parent whose family contains an alum row is fine.
+    const mine = family.members.find(
+      (m) => (m.email ?? "").trim().toLowerCase() === email.trim().toLowerCase(),
+    );
+    if (mine && isAlumAccount(mine)) redirect("/alumni-paused");
+  } catch (err) {
+    if (err && typeof err === "object" && "digest" in err && typeof (err as { digest: unknown }).digest === "string" && (err as { digest: string }).digest.startsWith("NEXT_REDIRECT")) {
+      throw err;
+    }
+    console.error("enforceAlumniPause failed:", err);
+  }
+}
+
 export default async function AuthedLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   await enforceVerificationGate();
+  await enforceAlumniPause();
 
   // Multi-domain (Clerk): this ONE deployment serves the Clerk PRIMARY
   // (gopixel.org) and the SATELLITE (pixelparents.org). On the satellite host we run
