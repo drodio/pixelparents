@@ -255,8 +255,9 @@ export default async function ThanksPage({
             return (
               <div className="mt-2">
                 <p className="mb-8 text-white/60">
-                  Now let&apos;s complete your account. Every step is skippable —
-                  you can come back to any of it later.
+                  Now let&apos;s complete your account. Verification comes first —
+                  after that, every step is skippable and you can come back any
+                  time.
                 </p>
                 <OnboardingWizard
                   steps={wizardSteps}
@@ -266,7 +267,13 @@ export default async function ThanksPage({
                     switch (s.key) {
                       case "verify":
                         return (
-                          <StudentVerify key={s.key} signupId={validId} initial={verifyState!} />
+                          <StudentVerify
+                            key={s.key}
+                            signupId={validId}
+                            initial={verifyState!}
+                            methodChoice
+                            selfVerify={isStudentFlow}
+                          />
                         );
                       case "children":
                       case "parent-link":
