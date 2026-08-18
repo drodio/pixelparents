@@ -30,9 +30,9 @@ const UUID_RE =
 export default async function ThanksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; admin?: string }>;
+  searchParams: Promise<{ id?: string; admin?: string; step?: string }>;
 }) {
-  const { id, admin } = await searchParams;
+  const { id, admin, step } = await searchParams;
   const validId = id && UUID_RE.test(id) ? id : null;
 
   // No usable signup id → don't fall through to a broken, no-op child form
@@ -143,8 +143,18 @@ export default async function ThanksPage({
       (signup.parentInterests?.length ?? 0) > 0,
   );
 
+  // THE WIZARD MUST NOT EVAPORATE MID-SESSION (Aug 17 walkthrough bug): the
+  // thanks-flow server actions revalidate this path, so the page re-renders
+  // after every autosave — and hasExistingData flips true on the FIRST saved
+  // field, which used to silently swap the whole page to the editing layout
+  // between two wizard steps. A present ?step= means "I'm inside the wizard";
+  // honor it no matter what data exists. Fresh visits (no step, no data) also
+  // start in the wizard; returning editors (no step, has data) get the editing
+  // layout as before.
+  const inWizard = Boolean(step) || !hasExistingData;
+
   const greeting = firstName
-    ? hasExistingData
+    ? !inWizard
       ? `${firstName}, edit your info here:`
       : `Welcome to GoPixel${firstName ? `, ${firstName}` : ""}!`
     : "Welcome to GoPixel!";
@@ -181,7 +191,7 @@ export default async function ThanksPage({
 
   return (
     <main className="min-h-dvh bg-black text-white">
-      {!hasExistingData && (
+      {inWizard && (
         /* Community photo from a real Pixel event. KEPT — the warmth is the
            point of this page, and a wall of form fields would read as cold. But
            it is capped rather than full-bleed: at aspect-[13/5] it consumed most
@@ -232,7 +242,7 @@ export default async function ThanksPage({
             <FamilyForm
               signupId={validId}
               suggestedInterests={interestPool}
-              showFinish={hasExistingData}
+              showFinish={!inWizard}
               existingChildren={kids.map((k) => ({
                 id: k.id,
                 firstName: k.firstName,
@@ -248,7 +258,7 @@ export default async function ThanksPage({
             />
           );
 
-          if (!hasExistingData) {
+          if (inWizard) {
             // FRESH ONBOARDING: the paged wizard. Steps and nodes must stay in
             // the same order — buildOnboardingSteps is the single source of the
             // order, and this map renders a node per step key.

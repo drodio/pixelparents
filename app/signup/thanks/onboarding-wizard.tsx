@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import type { OnboardingStep } from "./onboarding-steps";
 import { clampForward, stepIndexFor } from "./onboarding-steps";
@@ -34,6 +34,18 @@ export function OnboardingWizard({
   const searchParams = useSearchParams();
 
   const [index, setIndex] = useState(() => stepIndexFor(steps, searchParams.get("step")));
+
+  // Stamp ?step= into the URL immediately on mount. The page uses a present
+  // ?step= as "I'm inside the wizard" — without this, an autosave on the FIRST
+  // step (before any navigation) could re-render the page into the editing
+  // layout mid-flow (the Aug 17 walkthrough bug, first-step variant).
+  useEffect(() => {
+    if (searchParams.get("step")) return;
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("step", steps[index]?.key ?? steps[0]!.key);
+    router.replace(`${pathname}?${params.toString()}`, { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Steps whose content reports "not done yet" (today: verification). A blocked
   // step can be entered but not passed — see clampForward.
