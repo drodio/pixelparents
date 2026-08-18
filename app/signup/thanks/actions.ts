@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { getDb } from "@/lib/db";
 import { signups, children, type Photo } from "@/lib/db/schema/signups";
 import { canonicalizeAgainstPool } from "@/lib/interests";
@@ -15,6 +15,7 @@ import {
 import { shareUrlFor, getBaseUrl } from "@/lib/url";
 import { instagramHandleOf, xHandleOf } from "@/lib/social-handles";
 import { notifyStudentInvite } from "@/lib/email";
+import { decideStudentInvite, looksLikeOhsEmail } from "@/lib/student-invite";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -234,15 +235,6 @@ export async function removeChild(childId: string, signupId: string): Promise<{ 
 
 // --- Student invites (end-of-onboarding "Add your student", round 3) ---------
 
-// OHS addresses only (Ava's ruling, Aug 17): the invite email doubles as the
-// address the student will verify with during their own onboarding.
-function looksLikeOhsEmail(raw: string): boolean {
-  const e = raw.trim().toLowerCase();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
-  const domain = e.split("@")[1] ?? "";
-  return domain === "stanford.edu" || domain.endsWith(".stanford.edu");
-}
-
 export type InvitedStudent = { id: string; firstName: string; email: string };
 
 // Students already in this parent's family (student-typed signup rows), so the
@@ -287,17 +279,34 @@ export async function inviteStudent(
     .limit(1);
   if (!parent) return { ok: false, message: "We couldn't find your signup." };
 
-  // One row per student email per family — re-inviting resends, not duplicates
-  // (duplicate accounts are exactly the walkthrough bug class we're avoiding).
-  const existing = await getDb()
-    .select({ id: signups.id, firstName: signups.firstName, email: signups.email })
+  // Who already owns this email — across EVERY family, case-insensitively.
+  //
+  // Both of those matter. Scoping this to the parent's own family missed an
+  // account that already existed elsewhere, and since signups.email has no
+  // unique index and getSignupByEmail is most-recent-wins, the second row we
+  // then inserted would SHADOW the student's real account: their next sign-in
+  // resolves to the new empty row, in the inviting parent's family, with their
+  // real profile orphaned. And comparing with eq() against an already-lowercased
+  // input missed rows stored in the case the member originally typed (the signup
+  // form does not normalize), so even a same-family re-invite could duplicate.
+  // Every other email lookup in this codebase uses lower(); this one now does too.
+  const [existing] = await getDb()
+    .select({ id: signups.id, familyId: signups.familyId, firstName: signups.firstName })
     .from(signups)
-    .where(and(eq(signups.familyId, parent.familyId), eq(signups.email, email)))
+    .where(sql`lower(${signups.email}) = ${email}`)
     .limit(1);
 
+  const decision = decideStudentInvite({
+    parentFamilyId: parent.familyId,
+    existing: existing ? { id: existing.id, familyId: existing.familyId } : null,
+  });
+  if (decision.kind === "blocked") {
+    return { ok: false, message: decision.reason };
+  }
+
   let student: InvitedStudent;
-  if (existing.length > 0) {
-    student = { id: existing[0]!.id, firstName: existing[0]!.firstName ?? firstName, email };
+  if (decision.kind === "resend") {
+    student = { id: decision.signupId, firstName: existing!.firstName ?? firstName, email };
   } else {
     const [row] = await getDb()
       .insert(signups)
