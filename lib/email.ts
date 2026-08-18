@@ -213,6 +213,37 @@ export async function notifyApplicantWelcome(n: {
 // join link is tied to the family's invite token; opening it lets them create
 // their own parent row attached to the same family + shared children.
 // Returns whether the send succeeded (the caller tallies how many went out).
+// Parent invited their OHS student at the end of onboarding (round 3, Aug
+// 2026): the parent enters only name + OHS email; the STUDENT completes their
+// own profile through their own onboarding, already linked to the family.
+export async function notifyStudentInvite(n: {
+  to: string;
+  parentName: string;
+  setupUrl: string;
+}): Promise<boolean> {
+  const who = n.parentName || "Your parent";
+  const text = [
+    `Hi,`,
+    ``,
+    `${who} added you to their family on GoPixel — the community platform for`,
+    `Stanford OHS families.`,
+    ``,
+    `Your account is already linked to theirs. Use your private link below to`,
+    `set up your own profile — your info, your interests, and what you share`,
+    `are all yours to decide:`,
+    ``,
+    `\u{1F449} ${n.setupUrl}`,
+    ``,
+    `You'll verify with this OHS email address along the way, and the link is`,
+    `yours to come back to anytime.`,
+  ].join("\n");
+  return sendEmail({
+    to: n.to,
+    subject: `${who} added you to GoPixel — set up your profile`,
+    text,
+  });
+}
+
 export async function notifyCoParentInvite(n: {
   to: string;
   inviterName: string;

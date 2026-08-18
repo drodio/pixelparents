@@ -5,7 +5,9 @@ import { buildOnboardingSteps, clampForward, stepIndexFor } from "./onboarding-s
 // role step, then sharing, then the invite. These tests pin it.
 
 describe("buildOnboardingSteps", () => {
-  it("orders a parent: verify, children, own info pages, sharing LAST, invite", () => {
+  it("orders a parent: verify, OWN info pages, sharing, then Add-your-student LAST", () => {
+    // Round 3: parents never fill out children mid-flow — the optional student
+    // invite sits at the END, after the parent has fully onboarded themselves.
     const keys = buildOnboardingSteps({
       isStudent: false,
       hasReferral: true,
@@ -13,17 +15,17 @@ describe("buildOnboardingSteps", () => {
     }).map((s) => s.key);
     expect(keys).toEqual([
       "verify",
-      "children",
       "city",
       "socials",
       "interests",
       "photos",
       "share",
+      "students",
       "invite",
     ]);
   });
 
-  it("gives a student the parent-link step instead of children", () => {
+  it("gives a self-signup student the parent-link step right after verify", () => {
     const keys = buildOnboardingSteps({
       isStudent: true,
       hasReferral: true,
@@ -39,6 +41,18 @@ describe("buildOnboardingSteps", () => {
       "share",
       "invite",
     ]);
+  });
+
+  it("drops parent-link for an INVITED student (already linked) and never offers students to students", () => {
+    const keys = buildOnboardingSteps({
+      isStudent: true,
+      hasReferral: true,
+      hasVerify: true,
+      alreadyLinked: true,
+    }).map((s) => s.key);
+    expect(keys).not.toContain("parent-link");
+    expect(keys).not.toContain("students");
+    expect(keys[0]).toBe("verify");
   });
 
   it("keeps every self-info page BEFORE the sharing step (fill first, share second)", () => {
@@ -77,7 +91,7 @@ describe("buildOnboardingSteps", () => {
       hasVerify: false,
     }).map((s) => s.key);
     expect(keys).not.toContain("verify");
-    expect(keys[0]).toBe("children");
+    expect(keys[0]).toBe("city");
   });
 
   it("verification is NOT skippable; every other step is (V2 round 2)", () => {
@@ -117,7 +131,7 @@ describe("stepIndexFor", () => {
 
   it("resolves a known key to its index", () => {
     expect(stepIndexFor(steps, "share")).toBe(steps.findIndex((s) => s.key === "share"));
-    expect(stepIndexFor(steps, "socials")).toBe(3);
+    expect(stepIndexFor(steps, "socials")).toBe(2);
   });
 
   it("falls back to the first step for unknown or missing keys", () => {

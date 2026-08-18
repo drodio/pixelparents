@@ -13,7 +13,12 @@ import StudentParentForm from "./student-parent-form";
 import { ShareSettings } from "./share-settings";
 import { ThanksInviteCta } from "./thanks-invite-cta";
 import { getVerifyState } from "./verify-actions";
-import { getStudentParentLinkStatus } from "./actions";
+import {
+  getStudentParentLinkStatus,
+  listInvitedStudents,
+  inviterNameFor,
+} from "./actions";
+import { StudentInviteStep } from "./student-invite-step";
 import { listOutgoingLinkRequests } from "@/lib/db/family-links";
 import { StudentVerify } from "@/components/student-verify";
 import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
@@ -189,10 +194,19 @@ export default async function ThanksPage({
   // skippable, verification first). Returning editors keep the single-page
   // layout — a wizard is an onboarding shape, not an editing shape.
   const isStudentFlow = isStudent && Boolean(studentLinkStatus);
+  // Invited students arrive already linked (their row was created inside the
+  // parent's family) — the parent-link step drops, and the welcome line names
+  // who invited them.
+  const alreadyLinked = isStudentFlow && Boolean(studentLinkStatus?.hasLinkedParent);
+  const inviterName = isStudentFlow ? await inviterNameFor(validId) : null;
+  // Parents: students already invited (student-typed rows in this family), so
+  // the end-of-flow invite step shows who's in flight.
+  const invitedStudents = !isStudentFlow ? await listInvitedStudents(validId) : [];
   const wizardSteps = buildOnboardingSteps({
     isStudent: isStudentFlow,
     hasReferral: Boolean(familyReferralUrl),
     hasVerify: Boolean(verifyState),
+    alreadyLinked,
   });
 
   const sharePanel = (
@@ -290,6 +304,13 @@ export default async function ThanksPage({
             // order, and this map renders a node per step key.
             return (
               <div className="mt-2">
+                {inviterName && (
+                  <p className="mb-2 text-white/75">
+                    You were invited by{" "}
+                    <span className="font-semibold text-white">{inviterName}</span> —
+                    your accounts are already linked.
+                  </p>
+                )}
                 <p className="mb-8 text-white/60">
                   Now let&apos;s complete your account. Verification comes first —
                   after that, every step is skippable and you can come back any
@@ -311,9 +332,16 @@ export default async function ThanksPage({
                             selfVerify={isStudentFlow}
                           />
                         );
-                      case "children":
                       case "parent-link":
                         return <div key={s.key}>{roleForm}</div>;
+                      case "students":
+                        return (
+                          <StudentInviteStep
+                            key={s.key}
+                            signupId={validId}
+                            initialInvited={invitedStudents}
+                          />
+                        );
                       case "city":
                         return (
                           <StepCityState
