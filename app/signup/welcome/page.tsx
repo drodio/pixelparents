@@ -3,6 +3,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { getSignupForEdit } from "@/lib/db/signups";
 import { readApprovalStatus } from "@/lib/approval";
+import { sendWelcomeAfterOnboarding } from "@/app/signup/actions";
 
 export const metadata: Metadata = {
   title: "You're all set — GoPixel",
@@ -26,6 +27,10 @@ export default async function WelcomePage({
 }) {
   const { id } = await searchParams;
   const validId = id && UUID_RE.test(id) ? id : null;
+
+  // Reaching this screen IS completing onboarding — the welcome email goes out
+  // here (once; guarded server-side), not at signup (Aug 18 ruling).
+  if (validId) await sendWelcomeAfterOnboarding(validId);
 
   let approved = false;
   if (validId) {

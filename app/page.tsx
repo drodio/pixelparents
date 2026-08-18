@@ -11,6 +11,7 @@ import {
   getSignupCount,
   getBuilderCounts,
   getStudentBuilderCount,
+  getCommunitySplit,
 } from "@/lib/db/signups";
 import { getInterestPool } from "@/lib/interests";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -27,8 +28,9 @@ export default async function Home() {
   let interests: string[] = [];
   let builders = { technical: 0, curious: 0 };
   let studentBuilders = 0;
+  let split = { parents: 0, students: 0 };
   try {
-    [count, interests, builders, studentBuilders] =
+    [count, interests, builders, studentBuilders, split] =
       await Promise.all([
         getSignupCount(),
         // Completed-only so the "N shared interests" headline (and the mosaic it
@@ -36,12 +38,14 @@ export default async function Home() {
         getInterestPool({ completedOnly: true }),
         getBuilderCounts(),
         getStudentBuilderCount(),
+        getCommunitySplit(),
       ]);
   } catch {
     count = 0;
     interests = [];
     builders = { technical: 0, curious: 0 };
     studentBuilders = 0;
+    split = { parents: 0, students: 0 };
   }
   // Headline count derives from the SAME distinct pool that feeds the animated
   // mosaic (InterestTiles), so the number a visitor reads can never be smaller
@@ -98,14 +102,22 @@ export default async function Home() {
 
       <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-5">
         <PixelMascot widthClass="w-48 max-w-[80vw] sm:w-64" />
+        {/* "Join 33" read as ambiguous — 33 what? (Aug 18 walkthrough). Say
+            what the number counts, and break it down underneath. */}
         <h1 className="max-w-3xl text-balance text-3xl font-bold tracking-tight text-white sm:text-6xl">
           Join{" "}
-          <span className="text-amber-400">{count.toLocaleString()}</span> in the
-          Stanford OHS community
+          <span className="text-amber-400">{count.toLocaleString()}</span> other
+          community members in the Stanford OHS community
         </h1>
         <h2 className="max-w-prose text-pretty text-base font-medium text-white/70 sm:text-xl">
-          Where OHS <span className="font-semibold text-white/85">parents</span> and{" "}
-          <span className="font-semibold text-white/85">students</span> connect around{" "}
+          <span className="font-semibold text-white/85">
+            {split.parents.toLocaleString()} {split.parents === 1 ? "parent" : "parents"}
+          </span>{" "}
+          and{" "}
+          <span className="font-semibold text-white/85">
+            {split.students.toLocaleString()} {split.students === 1 ? "student" : "students"}
+          </span>
+          , connecting around{" "}
           <span className="font-semibold text-amber-400">
             {interestsCount.toLocaleString()}
           </span>{" "}

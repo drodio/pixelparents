@@ -73,6 +73,13 @@ export function OnboardingWizard({
   const step = steps[index]!;
   const last = index === steps.length - 1;
   const currentBlocked = blockedKeys.has(step.key);
+
+  // Which step key a blocked Continue click happened on. The error renders only
+  // while (a) that same step is current and (b) it is still blocked — so it
+  // self-clears on verify or step change with no effect needed (the repo lints
+  // against setState-in-effect, and rightly).
+  const [errorOnKey, setErrorOnKey] = useState<string | null>(null);
+  const blockedError = currentBlocked && errorOnKey === step.key;
   // Furthest dot a forward jump can land on right now (for disabling the rest).
   const maxReachable = clampForward(steps, blockedKeys, index, steps.length - 1);
 
@@ -111,7 +118,7 @@ export function OnboardingWizard({
 
       <header className="mb-6">
         <h2 className="text-xl font-semibold text-white/90 sm:text-2xl">{step.title}</h2>
-        <p className="mt-1 text-sm text-white/55">{step.blurb}</p>
+        {step.blurb && <p className="mt-1 text-sm text-white/55">{step.blurb}</p>}
       </header>
 
       <OnboardingGateContext.Provider value={gate}>
@@ -134,11 +141,20 @@ export function OnboardingWizard({
         )}
         {!last ? (
           <>
+            {/* Continue looks normal even while the step is unfinished; a click
+                then shows a red error instead of a silently-dead button (Aug 18
+                walkthrough — and the repo's own rule: never gate submission on
+                something invisible). */}
             <button
               type="button"
-              onClick={() => go(index + 1)}
-              disabled={currentBlocked}
-              className="rounded-full bg-amber-400 px-6 py-2 text-sm font-semibold text-black transition hover:bg-amber-300 disabled:cursor-not-allowed disabled:opacity-40"
+              onClick={() => {
+                if (currentBlocked) {
+                  setErrorOnKey(step.key);
+                  return;
+                }
+                go(index + 1);
+              }}
+              className="rounded-full bg-amber-400 px-6 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
             >
               Continue →
             </button>
@@ -151,8 +167,8 @@ export function OnboardingWizard({
                 Skip for now
               </button>
             )}
-            {currentBlocked && (
-              <span className="text-sm text-white/50">
+            {currentBlocked && blockedError && (
+              <span className="text-sm font-medium text-red-400" aria-live="polite">
                 Complete this step to continue.
               </span>
             )}

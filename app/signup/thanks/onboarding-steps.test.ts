@@ -67,11 +67,11 @@ describe("buildOnboardingSteps", () => {
     }
   });
 
-  it("words the verify step for the role", () => {
+  it("keeps the verify step blurb EMPTY for both roles (Aug 18: title + cards only)", () => {
     const parent = buildOnboardingSteps({ isStudent: false, hasReferral: true, hasVerify: true });
     const student = buildOnboardingSteps({ isStudent: true, hasReferral: true, hasVerify: true });
-    expect(parent[0]!.blurb).toContain("your child's OHS student email");
-    expect(student[0]!.blurb).toContain("your OHS student email");
+    expect(parent[0]!.blurb).toBe("");
+    expect(student[0]!.blurb).toBe("");
   });
 
   it("drops the invite step when there is no referral link", () => {

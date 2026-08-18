@@ -406,12 +406,10 @@ export async function completeSignup(id: string): Promise<SignupState> {
     } catch (err) {
       console.error("notifyNewSignup failed:", err);
     }
-    // Welcome the applicant + point them at step 2.
-    try {
-      await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: row.id });
-    } catch (err) {
-      console.error("notifyApplicantWelcome failed:", err);
-    }
+    // The applicant welcome email is NOT sent here anymore — it goes out when
+    // onboarding COMPLETES (sendWelcomeAfterOnboarding, triggered by the
+    // welcome screen). Aug 18 walkthrough: getting "thanks for signing up"
+    // mid-flow while waiting on a verification code read as the wrong email.
     // Email every admin to verify this profile's OHS-directory access. The first
     // admin to act resolves it for everyone (see lib/approval).
     try {
@@ -536,10 +534,35 @@ export async function submitSignup(
     timeCommitment: data.timeCommitment || null,
   });
 
-  // Welcome the applicant + point them at step 2 (best-effort, never blocks).
-  await notifyApplicantWelcome({ to: data.email, firstName: data.firstName, id });
+  // Welcome email intentionally NOT sent here — see sendWelcomeAfterOnboarding.
 
   redirect(`/signup/thanks?id=${id}`);
+}
+
+// Send the welcome email exactly once, AFTER onboarding completes (the member
+// reached the welcome screen). Guarded by extra.welcomeSentAt so refreshes and
+// revisits never resend. Best-effort: a mail failure logs and leaves the guard
+// unset so the next visit retries.
+export async function sendWelcomeAfterOnboarding(signupId: string): Promise<void> {
+  if (!UUID_RE.test(signupId)) return;
+  try {
+    const [row] = await getDb()
+      .select({ email: signups.email, firstName: signups.firstName, extra: signups.extra })
+      .from(signups)
+      .where(eq(signups.id, signupId))
+      .limit(1);
+    if (!row?.email || !row.firstName) return;
+    const extra = (row.extra ?? {}) as Record<string, unknown>;
+    if (extra.welcomeSentAt) return;
+    await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: signupId });
+    await getSql()`
+      UPDATE signups
+      SET extra = jsonb_set(COALESCE(extra, '{}'::jsonb), '{welcomeSentAt}', ${JSON.stringify(new Date().toISOString())}::jsonb, true)
+      WHERE id = ${signupId}
+    `;
+  } catch (err) {
+    console.error("sendWelcomeAfterOnboarding failed:", err);
+  }
 }
 
 // --- Co-parent invites --------------------------------------------------------

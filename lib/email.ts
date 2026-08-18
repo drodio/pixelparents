@@ -1,5 +1,6 @@
 import { Resend } from "resend";
 import { getBaseUrl } from "@/lib/url";
+import { logEvent } from "@/lib/db/app-logs";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
@@ -46,18 +47,53 @@ async function sendEmail(msg: {
     return false;
   }
   try {
-    await resend.emails.send({
+    const res = await resend.emails.send({
       from: msg.from ?? FROM,
       to: msg.to,
       cc: msg.cc,
       subject: msg.subject,
       text: appendSignature(msg.text, SIGNATURE),
     });
+    // The Resend SDK does NOT throw on API failures — it RESOLVES with an
+    // `error` object. Ignoring it made a rejected send indistinguishable from a
+    // delivered one (Aug 18 walkthrough: "we sent a code" while no code ever
+    // went out). Check it, log both outcomes with the Resend message id so a
+    // specific send can be traced in the Resend dashboard. Recipient DOMAIN
+    // only in logs — no addresses.
+    if (res.error) {
+      console.error("Resend API error:", msg.subject, res.error);
+      void logEvent({
+        level: "error",
+        event: "email.send_failed",
+        message: `Resend API error: ${msg.subject}`,
+        context: { error: res.error, toDomain: recipientDomain(msg.to) },
+      });
+      return false;
+    }
+    void logEvent({
+      event: "email.sent",
+      message: msg.subject,
+      context: { resendId: res.data?.id ?? null, toDomain: recipientDomain(msg.to) },
+    });
     return true;
   } catch (err) {
     console.error("Resend send failed:", msg.subject, err);
+    void logEvent({
+      level: "error",
+      event: "email.send_failed",
+      message: `Resend threw: ${msg.subject}`,
+      error: err,
+      context: { toDomain: recipientDomain(msg.to) },
+    });
     return false;
   }
+}
+
+// The domain of the first recipient — enough to tell "went to a stanford.edu
+// inbox" from "went to gmail" in logs without recording anyone's address.
+function recipientDomain(to: string | string[]): string {
+  const first = Array.isArray(to) ? to[0] : to;
+  return (first ?? "").split("@")[1] ?? "unknown";
 }
 
 // From address for the admin "verify this profile" email. Env-overridable but
@@ -179,16 +215,20 @@ export async function notifyApplicantWelcome(n: {
 }): Promise<void> {
   const base = getBaseUrl();
   const exampleUrl = process.env.NEXT_PUBLIC_DRODIO_SUBMISSION_URL;
+  // Sent AFTER onboarding completes, not at signup (Aug 18 walkthrough ruling:
+  // "should NOT have been sent until AFTER I complete the profile") — so the
+  // copy welcomes a finished profile rather than pointing at a step they are
+  // already inside of.
   const text = [
     `Hi ${n.firstName},`,
     ``,
-    `Thanks for signing up for GoPixel — I've got your submission, and I'm glad you're here. Looking forward to connecting with you more over WhatsApp.`,
+    `Welcome to GoPixel — your profile is set up, and I'm glad you're here. Looking forward to connecting with you more over WhatsApp.`,
     ``,
-    `There's one more (optional) step whenever you have a few minutes: if you're willing to tell us a bit about your interests and your child(ren) at OHS, it helps us build a small seed data set before we bring other parents in:`,
+    `Here's your private link — come back to it anytime to view or update your info:`,
     ``,
     `\u{1F449} ${base}/signup/thanks?id=${n.id}`,
     ``,
-    `That link is yours — you can come back to it anytime, and as a parent you keep full control over your data. Only you + Pixel Parent admins (like our builder group) will have access to your answers.`,
+    `As a parent you keep full control over your data. Only you + Pixel Parent admins (like our builder group) will have access to your answers.`,
     ``,
     `You will also be able to create a "secret link" to share your answers. You can restrict who can open it to only OHS parents (others who've signed up in our system), or keep it private to just you.`,
     ...(exampleUrl
@@ -204,7 +244,7 @@ export async function notifyApplicantWelcome(n: {
   ].join("\n");
   await sendEmail({
     to: n.to,
-    subject: "Thanks for signing up for GoPixel — one more step",
+    subject: "Welcome to GoPixel — you're all set",
     text,
   });
 }
