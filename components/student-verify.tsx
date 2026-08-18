@@ -142,9 +142,11 @@ export function StudentVerify({
               : "Your OHS student is verified"}
           </h3>
         </div>
+        {/* "Your family is approved for the OHS directory" read as jargon in
+            the Aug 17 walkthrough — say the thing that matters: keep going. */}
         <p className="mt-1.5 text-sm text-white/65">
           {verifiedEmail ? `Verified with ${verifiedEmail}. ` : ""}
-          Your family is approved for the OHS family directory.
+          You&apos;re all set — keep going.
         </p>
         {allowAddMore && (
           <button
@@ -305,8 +307,10 @@ export function StudentVerify({
       {notice && <p className="mt-3 text-sm text-emerald-300/90">{notice}</p>}
       {error && <p className="mt-3 text-sm text-red-400">{error}</p>}
 
+      {/* Not tiny footnote text (Aug 17 walkthrough): the alternative has to be
+          findable and OBVIOUSLY a link. */}
       {WHATSAPP_URL && step !== "method" && step !== "manual" && (
-        <p className="mt-4 border-t border-white/10 pt-3 text-xs text-white/45">
+        <p className="mt-4 border-t border-white/10 pt-3 text-sm text-white/60">
           {selfVerify
             ? "Can't get to your Stanford inbox right now?"
             : "Don't have your student's Stanford email handy?"}{" "}
@@ -316,7 +320,7 @@ export function StudentVerify({
             <button
               type="button"
               onClick={() => setStep("manual")}
-              className="text-amber-300 underline-offset-2 hover:underline"
+              className="font-medium text-amber-300 underline decoration-amber-300/60 underline-offset-2 hover:text-amber-200"
             >
               Message Daniel on WhatsApp
             </button>
@@ -325,7 +329,7 @@ export function StudentVerify({
               href={WHATSAPP_URL}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-amber-300 underline-offset-2 hover:underline"
+              className="font-medium text-amber-300 underline decoration-amber-300/60 underline-offset-2 hover:text-amber-200"
             >
               Message Daniel on WhatsApp
             </a>

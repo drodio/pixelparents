@@ -292,6 +292,23 @@ samp {
 [data-theme="light"] .border-white\/8{border-color:rgb(24 24 27 / 0.03)}
 [data-theme="light"] .divide-white\/10 > * + *{border-color:rgb(24 24 27 / 0.12)}
 [data-theme="light"] .placeholder-white\/30::placeholder{color:rgb(24 24 27 / 0.45)}
+/* Tailwind's MODIFIER syntax (placeholder:text-white/30) compiles to a
+   different selector than the plain placeholder-white/30 utility above — the
+   verify panel's inputs use the modifier form and were invisible on white
+   (Aug 17 walkthrough). */
+[data-theme="light"] .placeholder\:text-white\/30::placeholder{color:rgb(24 24 27 / 0.45)}
+/* Success/notice text tuned for the dark base ("We sent a 6-digit code…") —
+   unreadably faint on white. Darken to emerald-700-range in light mode. */
+[data-theme="light"] .text-emerald-300\/90{color:#047857}
+[data-theme="light"] .text-emerald-300{color:#047857}
+[data-theme="light"] .text-emerald-200{color:#065f46}
+/* Landing interest-tile mosaic: icons/labels sat at white/70, which maps too
+   pale on white — parents asked for darker (Aug 17). Scoped to the mosaic so
+   the global white/70 mapping is untouched. */
+[data-theme="light"] .pp-tiles .text-white\/70{color:rgb(24 24 27 / 0.62)}
+/* …and lift the whole mosaic layer's opacity a notch on white, where 0.42 over
+   a light ground washes out. */
+[data-theme="light"] .pp-tiles .pp-tiles-layer{opacity:0.6}
 [data-theme="light"] .ring-white\/10{--tw-ring-color:rgb(24 24 27 / 0.12)}
 [data-theme="light"] .ring-white\/40{--tw-ring-color:rgb(24 24 27 / 0.32)}
 [data-theme="light"] .shadow-black\/40{--tw-shadow-color:rgb(24 24 27 / 0.12)}

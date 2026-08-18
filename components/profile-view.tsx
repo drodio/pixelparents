@@ -15,7 +15,13 @@ import {
   curatedEnrichmentOf,
   type StoredEnrichment,
 } from "@/lib/enrichment/profile";
-import { IconGlobe } from "@/components/icons";
+import { IconGlobe, IconInstagram, IconX } from "@/components/icons";
+import {
+  instagramHandleOf,
+  instagramUrlFor,
+  xHandleOf,
+  xUrlFor,
+} from "@/lib/social-handles";
 import {
   IconPhone,
   IconMail,
@@ -187,6 +193,11 @@ export async function ProfileView({
       : null;
   const extra = (signup.extra ?? {}) as Record<string, unknown>;
   const websiteUrl = showLinks ? websiteUrlOf(extra) : null;
+  // Instagram / X (V2 round 2) ride the same "links" opt-in as LinkedIn/GitHub.
+  const igHandle = showLinks ? instagramHandleOf(extra) : null;
+  const instagramUrl = igHandle ? instagramUrlFor(igHandle) : null;
+  const xHandle = showLinks ? xHandleOf(extra) : null;
+  const xProfileUrl = xHandle ? xUrlFor(xHandle) : null;
 
   // Curated auto-built profile (bio / expertise / how-they-can-help) — behind the
   // NEW, default-OFF "profile_enrichment" share field. ONLY the curated info is
@@ -339,7 +350,7 @@ export async function ProfileView({
         </div>
       )}
 
-      {(linkedinUrl || githubUrl || websiteUrl) && (
+      {(linkedinUrl || githubUrl || websiteUrl || instagramUrl || xProfileUrl) && (
         <div className="mt-4 flex flex-wrap gap-2">
           {websiteUrl && (
             <a
@@ -372,6 +383,27 @@ export async function ProfileView({
             >
               <IconGithub className="h-4 w-4" />
               GitHub
+            </a>
+          )}
+          {instagramUrl && (
+            <a
+              href={instagramUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-sm text-white/85 transition-colors hover:border-amber-400/40 hover:text-white"
+            >
+              <IconInstagram className="h-4 w-4" />
+              Instagram
+            </a>
+          )}
+          {xProfileUrl && (
+            <a
+              href={xProfileUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-sm text-white/85 transition-colors hover:border-amber-400/40 hover:text-white"
+            >
+              <IconX className="h-4 w-4" />X
             </a>
           )}
         </div>

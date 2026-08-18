@@ -41,6 +41,17 @@ export function IconX(props: IconProps) {
   );
 }
 
+// Rounded square + lens — Instagram profile link.
+export function IconInstagram(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <rect x="4" y="4" width="16" height="16" rx="4.5" />
+      <circle cx="12" cy="12" r="3.6" />
+      <path d="M16.6 7.4h.01" />
+    </Icon>
+  );
+}
+
 export function IconCheck(props: IconProps) {
   return (
     <Icon {...props}>

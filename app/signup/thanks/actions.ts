@@ -6,6 +6,15 @@ import { getDb } from "@/lib/db";
 import { signups, children, type Photo } from "@/lib/db/schema/signups";
 import { canonicalizeAgainstPool } from "@/lib/interests";
 import { isStudentAccount } from "@/lib/family-display";
+import {
+  coerceShareVisibility,
+  shareFieldsOrDefault,
+  type ShareFieldKey,
+  type ShareVisibility,
+} from "@/lib/share";
+import { shareUrlFor, getBaseUrl } from "@/lib/url";
+import { instagramHandleOf, xHandleOf } from "@/lib/social-handles";
+import { notifyStudentInvite } from "@/lib/email";
 
 const UUID_RE =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -221,4 +230,182 @@ export async function removeChild(childId: string, signupId: string): Promise<{ 
     console.error("removeChild failed:", err);
     return { ok: false };
   }
+}
+
+// --- Student invites (end-of-onboarding "Add your student", round 3) ---------
+
+// OHS addresses only (Ava's ruling, Aug 17): the invite email doubles as the
+// address the student will verify with during their own onboarding.
+function looksLikeOhsEmail(raw: string): boolean {
+  const e = raw.trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return false;
+  const domain = e.split("@")[1] ?? "";
+  return domain === "stanford.edu" || domain.endsWith(".stanford.edu");
+}
+
+export type InvitedStudent = { id: string; firstName: string; email: string };
+
+// Students already in this parent's family (student-typed signup rows), so the
+// step can show who's been invited without a separate table.
+export async function listInvitedStudents(parentSignupId: string): Promise<InvitedStudent[]> {
+  if (!UUID_RE.test(parentSignupId)) return [];
+  const familyId = await familyIdForSignup(parentSignupId);
+  if (!familyId) return [];
+  const rows = await getDb()
+    .select({ id: signups.id, firstName: signups.firstName, email: signups.email, extra: signups.extra })
+    .from(signups)
+    .where(eq(signups.familyId, familyId));
+  return rows
+    .filter((r) => isStudentAccount({ extra: r.extra }))
+    .map((r) => ({ id: r.id, firstName: r.firstName ?? "", email: r.email ?? "" }));
+}
+
+// Create the student's signup row IN the parent's family (auto-linked by
+// construction — same familyId) and email them their private setup link. The
+// parent provides ONLY name + OHS email (+ optional phone); everything else is
+// the student's own to complete ("adding a child should not be the parent's
+// responsibility to fill in" — Aug 17 walkthrough).
+export async function inviteStudent(
+  parentSignupId: string,
+  input: { firstName: string; lastName: string; email: string; phone?: string },
+): Promise<{ ok: boolean; message: string; student?: InvitedStudent }> {
+  if (!UUID_RE.test(parentSignupId)) return { ok: false, message: "We couldn't find your signup." };
+
+  const firstName = (input.firstName ?? "").trim().slice(0, 100);
+  const lastName = (input.lastName ?? "").trim().slice(0, 100);
+  const email = (input.email ?? "").trim().toLowerCase().slice(0, 200);
+  const phone = (input.phone ?? "").trim().slice(0, 40);
+  if (!firstName || !lastName) return { ok: false, message: "Please enter their first and last name." };
+  if (!looksLikeOhsEmail(email)) {
+    return { ok: false, message: "Please use their OHS Stanford email (…@ohs.stanford.edu)." };
+  }
+
+  const [parent] = await getDb()
+    .select({ familyId: signups.familyId, firstName: signups.firstName, lastName: signups.lastName })
+    .from(signups)
+    .where(eq(signups.id, parentSignupId))
+    .limit(1);
+  if (!parent) return { ok: false, message: "We couldn't find your signup." };
+
+  // One row per student email per family — re-inviting resends, not duplicates
+  // (duplicate accounts are exactly the walkthrough bug class we're avoiding).
+  const existing = await getDb()
+    .select({ id: signups.id, firstName: signups.firstName, email: signups.email })
+    .from(signups)
+    .where(and(eq(signups.familyId, parent.familyId), eq(signups.email, email)))
+    .limit(1);
+
+  let student: InvitedStudent;
+  if (existing.length > 0) {
+    student = { id: existing[0]!.id, firstName: existing[0]!.firstName ?? firstName, email };
+  } else {
+    const [row] = await getDb()
+      .insert(signups)
+      .values({
+        familyId: parent.familyId,
+        firstName,
+        lastName,
+        email,
+        phone,
+        githubUsername: "",
+        extra: { accountType: "student", invitedBySignupId: parentSignupId },
+      })
+      .returning({ id: signups.id });
+    student = { id: row!.id, firstName, email };
+  }
+
+  const parentName = [parent.firstName, parent.lastName].filter(Boolean).join(" ").trim();
+  const setupUrl = `${getBaseUrl()}/signup/thanks?id=${student.id}`;
+  try {
+    await notifyStudentInvite({ to: email, parentName, setupUrl });
+  } catch (err) {
+    console.error("notifyStudentInvite failed:", err);
+    return {
+      ok: true,
+      message: "Added — but the invite email failed to send. They can still use the link from your family page.",
+      student,
+    };
+  }
+
+  revalidatePath("/signup/thanks");
+  return { ok: true, message: `Invite sent to ${email}.`, student };
+}
+
+// First name of whoever invited this signup (extra.invitedBySignupId), for the
+// "You were invited by …" line on the student's own onboarding.
+export async function inviterNameFor(signupId: string): Promise<string | null> {
+  if (!UUID_RE.test(signupId)) return null;
+  const [row] = await getDb()
+    .select({ extra: signups.extra })
+    .from(signups)
+    .where(eq(signups.id, signupId))
+    .limit(1);
+  const inviterId = ((row?.extra ?? {}) as Record<string, unknown>).invitedBySignupId;
+  if (typeof inviterId !== "string" || !UUID_RE.test(inviterId)) return null;
+  const [inviter] = await getDb()
+    .select({ firstName: signups.firstName, lastName: signups.lastName })
+    .from(signups)
+    .where(eq(signups.id, inviterId))
+    .limit(1);
+  if (!inviter) return null;
+  const name = [inviter.firstName, inviter.lastName].filter(Boolean).join(" ").trim();
+  return name || null;
+}
+
+// --- Share-sequence setup (the wizard's sharing step) ------------------------
+
+export type ShareSetupQuestion = { keys: ShareFieldKey[]; label: string };
+export type ShareSetupState = {
+  // Questions in the doc's fixed entry order, filtered to information that
+  // actually EXISTS on the row — "how can they share information they did not
+  // yet fill out" (V2 round 2).
+  questions: ShareSetupQuestion[];
+  visibility: ShareVisibility;
+  fields: ShareFieldKey[];
+  shareUrl: string | null;
+};
+
+// Fetched when the member STARTS the sharing questions, not at page load — the
+// wizard's earlier steps fill these very fields, so a load-time snapshot would
+// wrongly skip questions about anything filled in during the session.
+export async function getShareSetupState(signupId: string): Promise<ShareSetupState | null> {
+  if (!UUID_RE.test(signupId)) return null;
+  const [row] = await getDb().select().from(signups).where(eq(signups.id, signupId)).limit(1);
+  if (!row) return null;
+  const kids = await getDb()
+    .select({ id: children.id })
+    .from(children)
+    .where(eq(children.familyId, row.familyId));
+  const extra = (row.extra ?? {}) as Record<string, unknown>;
+  const isStudent = isStudentAccount({ extra: row.extra });
+  const hasSocials = Boolean(
+    row.linkedinUrl ||
+      row.githubUsername ||
+      row.wechatId ||
+      instagramHandleOf(extra) ||
+      xHandleOf(extra),
+  );
+
+  const questions: ShareSetupQuestion[] = [];
+  if (row.city || row.state) questions.push({ keys: ["location"], label: "your city & state" });
+  if (row.phone) questions.push({ keys: ["phone"], label: "your phone number" });
+  if (row.email) questions.push({ keys: ["email"], label: "your email address" });
+  // The doc groups every social under one ask; wechat has its own share key, so
+  // this question flips links + wechat together.
+  if (hasSocials) questions.push({ keys: ["links", "wechat"], label: "your social links" });
+  if ((row.parentInterests?.length ?? 0) > 0)
+    questions.push({ keys: ["interests"], label: "your interests" });
+  if ((row.photos?.length ?? 0) > 0) questions.push({ keys: ["photos"], label: "your photos" });
+  // Parents end on "who your children are". (The doc's student equivalent —
+  // "which parent profile you're connected to" — has no share key yet; the
+  // student card doesn't render family links, so there's nothing to gate.)
+  if (!isStudent && kids.length > 0)
+    questions.push({ keys: ["children"], label: "who your children are" });
+
+  return {
+    questions,
+    visibility: coerceShareVisibility(row.shareVisibility),
+    fields: shareFieldsOrDefault(row.shareFields),
+    shareUrl: row.shareToken ? shareUrlFor(row.shareToken) : null,
+  };
 }

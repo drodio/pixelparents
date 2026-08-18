@@ -13,12 +13,21 @@ import StudentParentForm from "./student-parent-form";
 import { ShareSettings } from "./share-settings";
 import { ThanksInviteCta } from "./thanks-invite-cta";
 import { getVerifyState } from "./verify-actions";
-import { getStudentParentLinkStatus } from "./actions";
+import {
+  getStudentParentLinkStatus,
+  listInvitedStudents,
+  inviterNameFor,
+} from "./actions";
+import { StudentInviteStep } from "./student-invite-step";
 import { listOutgoingLinkRequests } from "@/lib/db/family-links";
 import { StudentVerify } from "@/components/student-verify";
 import { isStudentAccount, isAlumAccount } from "@/lib/family-display";
 import { OnboardingWizard } from "./onboarding-wizard";
 import { buildOnboardingSteps } from "./onboarding-steps";
+import { StepCityState, StepInterests, StepPhotos } from "./profile-steps";
+import { StepSocialLinks } from "./social-links-step";
+import { ShareSequence } from "./share-sequence";
+import { instagramHandleOf, xHandleOf } from "@/lib/social-handles";
 
 export const metadata: Metadata = {
   title: "Welcome — GoPixel",
@@ -30,9 +39,9 @@ const UUID_RE =
 export default async function ThanksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ id?: string; admin?: string }>;
+  searchParams: Promise<{ id?: string; admin?: string; step?: string }>;
 }) {
-  const { id, admin } = await searchParams;
+  const { id, admin, step } = await searchParams;
   const validId = id && UUID_RE.test(id) ? id : null;
 
   // No usable signup id → don't fall through to a broken, no-op child form
@@ -132,6 +141,28 @@ export default async function ThanksPage({
     }),
   );
 
+  // Previews for the member's OWN photos — the wizard's Photos step edits them.
+  const signupPhotoPreviews: Record<string, string> = {};
+  if (initialPhotos.length > 0) {
+    const urls = await signedPhotoUrls(initialPhotos.map((p) => p.pathname));
+    initialPhotos.forEach((p, i) => {
+      if (urls[i]) signupPhotoPreviews[p.pathname] = urls[i]!;
+    });
+  }
+
+  // Socials step seed values. linkedinUrl is stored as a full URL; the step
+  // edits the bare handle, so unwrap it here.
+  const extraBlob = (signup.extra ?? {}) as Record<string, unknown>;
+  const linkedinHandle =
+    (signup.linkedinUrl ?? "").split("/in/")[1]?.replace(/\/+$/, "") ?? "";
+  const initialSocials = {
+    linkedin: linkedinHandle,
+    github: signup.githubUsername ?? "",
+    wechat: signup.wechatId ?? "",
+    instagram: instagramHandleOf(extraBlob) ?? "",
+    x: xHandleOf(extraBlob) ?? "",
+  };
+
   // "Editing" = the parent has already saved something. In that mode we drop the
   // marketing banner/intro, greet them as a returning editor, and surface the
   // share link up top.
@@ -143,8 +174,18 @@ export default async function ThanksPage({
       (signup.parentInterests?.length ?? 0) > 0,
   );
 
+  // THE WIZARD MUST NOT EVAPORATE MID-SESSION (Aug 17 walkthrough bug): the
+  // thanks-flow server actions revalidate this path, so the page re-renders
+  // after every autosave — and hasExistingData flips true on the FIRST saved
+  // field, which used to silently swap the whole page to the editing layout
+  // between two wizard steps. A present ?step= means "I'm inside the wizard";
+  // honor it no matter what data exists. Fresh visits (no step, no data) also
+  // start in the wizard; returning editors (no step, has data) get the editing
+  // layout as before.
+  const inWizard = Boolean(step) || !hasExistingData;
+
   const greeting = firstName
-    ? hasExistingData
+    ? !inWizard
       ? `${firstName}, edit your info here:`
       : `Welcome to GoPixel${firstName ? `, ${firstName}` : ""}!`
     : "Welcome to GoPixel!";
@@ -153,10 +194,19 @@ export default async function ThanksPage({
   // skippable, verification first). Returning editors keep the single-page
   // layout — a wizard is an onboarding shape, not an editing shape.
   const isStudentFlow = isStudent && Boolean(studentLinkStatus);
+  // Invited students arrive already linked (their row was created inside the
+  // parent's family) — the parent-link step drops, and the welcome line names
+  // who invited them.
+  const alreadyLinked = isStudentFlow && Boolean(studentLinkStatus?.hasLinkedParent);
+  const inviterName = isStudentFlow ? await inviterNameFor(validId) : null;
+  // Parents: students already invited (student-typed rows in this family), so
+  // the end-of-flow invite step shows who's in flight.
+  const invitedStudents = !isStudentFlow ? await listInvitedStudents(validId) : [];
   const wizardSteps = buildOnboardingSteps({
     isStudent: isStudentFlow,
     hasReferral: Boolean(familyReferralUrl),
     hasVerify: Boolean(verifyState),
+    alreadyLinked,
   });
 
   const sharePanel = (
@@ -181,7 +231,7 @@ export default async function ThanksPage({
 
   return (
     <main className="min-h-dvh bg-black text-white">
-      {!hasExistingData && (
+      {inWizard && (
         /* Community photo from a real Pixel event. KEPT — the warmth is the
            point of this page, and a wall of form fields would read as cold. But
            it is capped rather than full-bleed: at aspect-[13/5] it consumed most
@@ -232,7 +282,7 @@ export default async function ThanksPage({
             <FamilyForm
               signupId={validId}
               suggestedInterests={interestPool}
-              showFinish={hasExistingData}
+              showFinish={!inWizard}
               existingChildren={kids.map((k) => ({
                 id: k.id,
                 firstName: k.firstName,
@@ -248,12 +298,19 @@ export default async function ThanksPage({
             />
           );
 
-          if (!hasExistingData) {
+          if (inWizard) {
             // FRESH ONBOARDING: the paged wizard. Steps and nodes must stay in
             // the same order — buildOnboardingSteps is the single source of the
             // order, and this map renders a node per step key.
             return (
               <div className="mt-2">
+                {inviterName && (
+                  <p className="mb-2 text-white/75">
+                    You were invited by{" "}
+                    <span className="font-semibold text-white">{inviterName}</span> —
+                    your accounts are already linked.
+                  </p>
+                )}
                 <p className="mb-8 text-white/60">
                   Now let&apos;s complete your account. Verification comes first —
                   after that, every step is skippable and you can come back any
@@ -275,11 +332,53 @@ export default async function ThanksPage({
                             selfVerify={isStudentFlow}
                           />
                         );
-                      case "children":
                       case "parent-link":
                         return <div key={s.key}>{roleForm}</div>;
+                      case "students":
+                        return (
+                          <StudentInviteStep
+                            key={s.key}
+                            signupId={validId}
+                            initialInvited={invitedStudents}
+                          />
+                        );
+                      case "city":
+                        return (
+                          <StepCityState
+                            key={s.key}
+                            signupId={validId}
+                            initialCity={signup.city ?? ""}
+                            initialState={signup.state ?? ""}
+                            initialCountry={signup.country ?? "United States"}
+                          />
+                        );
+                      case "socials":
+                        return (
+                          <StepSocialLinks key={s.key} signupId={validId} initial={initialSocials} />
+                        );
+                      case "interests":
+                        return (
+                          <StepInterests
+                            key={s.key}
+                            signupId={validId}
+                            initialInterests={signup.parentInterests ?? []}
+                            suggestedInterests={interestPool}
+                            isStudent={isStudentFlow}
+                          />
+                        );
+                      case "photos":
+                        return (
+                          <StepPhotos
+                            key={s.key}
+                            signupId={validId}
+                            initialPhotos={initialPhotos}
+                            initialPreviews={signupPhotoPreviews}
+                          />
+                        );
                       case "share":
-                        return <div key={s.key}>{sharePanel}</div>;
+                        // The sequence fetches fresh filled-state when started,
+                        // so info added in the earlier steps is always seen.
+                        return <ShareSequence key={s.key} signupId={validId} />;
                       case "invite":
                         return (
                           <ThanksInviteCta key={s.key} referralUrl={familyReferralUrl!} />

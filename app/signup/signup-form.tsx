@@ -577,11 +577,10 @@ export default function SignupForm({
             }
             className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {submitting
-              ? "…"
-              : !joinToken && v.accountType === "student"
-                ? "Add Your Parent →"
-                : "Add Your Child(ren) →"}
+            {/* Verification comes next for every role now (round 3) — the old
+                "Add Your Child(ren)" / "Add Your Parent" labels promised steps
+                that no longer follow immediately. */}
+            {submitting ? "…" : "Continue →"}
           </button>
           {/* On save failure, retry is the ONLY way forward — the button above is
               disabled until the save succeeds. Show WHY alongside the retry: a

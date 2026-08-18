@@ -118,7 +118,7 @@ export default function InterestTiles({
         : "";
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 z-0 overflow-hidden">
+    <div aria-hidden className="pp-tiles pointer-events-none absolute inset-0 z-0 overflow-hidden">
       <style>{`
         @keyframes snapIn {
           0%   { opacity: 0; transform: scale(1.3) rotate(6deg); }
@@ -129,7 +129,7 @@ export default function InterestTiles({
       `}</style>
 
       <div
-        className="absolute left-1/2 top-0 -translate-x-1/2 opacity-[0.42] grayscale"
+        className="pp-tiles-layer absolute left-1/2 top-0 -translate-x-1/2 opacity-[0.42] grayscale"
         style={{ width: W, height: H }}
       >
         {/* Polygon tiles: filled (checkerboard) with grout lines, zero gaps. */}
