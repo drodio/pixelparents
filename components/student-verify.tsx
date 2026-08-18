@@ -79,6 +79,17 @@ export function StudentVerify({
   );
   const [pending, startTransition] = useTransition();
 
+  // Resend countdown (Aug 18 walkthrough): after a send, "Resend code" unlocks
+  // in 15s — matching lib/verify's RESEND_COOLDOWN_MS so the button never
+  // unlocks into a server "please wait" error. Starts hot when we resume onto
+  // an already-pending code (we can't know how long ago that send was).
+  const [cooldown, setCooldown] = useState(initial.hasPendingCode ? 15 : 0);
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setInterval(() => setCooldown((s) => Math.max(0, s - 1)), 1000);
+    return () => clearInterval(t);
+  }, [cooldown]);
+
   // Personalized references to the family's OHS student(s), e.g. "Maya" or
   // "Maya or Ravi". Empty string when we have no names → fall back to generic
   // "your student" copy. `nameList` uses "or" (the family verifies any one of
@@ -96,6 +107,7 @@ export function StudentVerify({
         return;
       }
       setStep("code");
+      setCooldown(15);
       setNotice(`We sent a 6-digit code to ${r.sentTo ?? email}. It expires in 10 minutes.`);
     });
   }
@@ -163,27 +175,33 @@ export function StudentVerify({
 
   return (
     <div className={box}>
-      <div className="flex items-center gap-2">
-        <IconGradCap className="h-5 w-5 text-amber-300" />
-        <h3 className="font-semibold text-white">
-          {hasNames
-            ? `Verify via ${nameList}`
-            : selfVerify
-              ? "Verify your OHS email"
-              : "Verify your OHS student"}
-        </h3>
-      </div>
-      {/* One short instruction line. The old "Every GoPixel family is paired
-          with an OHS student…" blurb was removed on request (V2 round 2). */}
-      <p className="mt-1.5 text-sm text-white/65">
-        {hasNames ? (
-          <>Have {nameList} check their Stanford email and enter the code below.</>
-        ) : selfVerify ? (
-          <>We&apos;ll email a 6-digit code to your OHS Stanford address.</>
-        ) : (
-          <>We&apos;ll email a 6-digit code to your child&apos;s OHS Stanford address.</>
-        )}
-      </p>
+      {/* In the wizard's method-chooser view the step title already frames the
+          screen, and every extra line was called out as clutter (Aug 18
+          walkthrough: "only have these two boxes") — so the panel heading and
+          instruction line render only outside that view. */}
+      {!(methodChoice && step === "method") && (
+        <>
+          <div className="flex items-center gap-2">
+            <IconGradCap className="h-5 w-5 text-amber-300" />
+            <h3 className="font-semibold text-white">
+              {hasNames
+                ? `Verify via ${nameList}`
+                : selfVerify
+                  ? "Verify your OHS email"
+                  : "Verify your OHS student"}
+            </h3>
+          </div>
+          <p className="mt-1.5 text-sm text-white/65">
+            {hasNames ? (
+              <>Have {nameList} check their Stanford email and enter the code below.</>
+            ) : selfVerify ? (
+              <>We&apos;ll email a 6-digit code to your OHS Stanford address.</>
+            ) : (
+              <>We&apos;ll email a 6-digit code to your child&apos;s OHS Stanford address.</>
+            )}
+          </p>
+        </>
+      )}
 
       {step === "method" && (
         <div className="mt-4 flex flex-col gap-2">
@@ -195,8 +213,8 @@ export function StudentVerify({
             <span className="block text-sm font-semibold text-white">Email a code</span>
             <span className="mt-0.5 block text-xs text-white/55">
               {selfVerify
-                ? "We send a 6-digit code to your OHS email — verified on the spot."
-                : "We send a 6-digit code to your child's OHS email — verified on the spot."}
+                ? "We'll send a 6-digit code to your OHS email."
+                : "We'll send a 6-digit code to your child's OHS email."}
             </span>
           </button>
           {WHATSAPP_URL && (
@@ -288,19 +306,36 @@ export function StudentVerify({
               {pending ? "Checking…" : "Verify"}
             </button>
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              setStep("email");
-              setCode("");
-              setError(null);
-              setNotice(null);
-            }}
-            disabled={pending}
-            className="self-start text-xs text-white/50 underline-offset-2 hover:text-white/80 hover:underline"
-          >
-            Use a different email
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setStep("email");
+                setCode("");
+                setError(null);
+                setNotice(null);
+              }}
+              disabled={pending}
+              className="text-xs text-white/50 underline-offset-2 hover:text-white/80 hover:underline"
+            >
+              Use a different email
+            </button>
+            {/* Didn't arrive? Resend, gated by the 15s countdown. */}
+            {cooldown > 0 ? (
+              <span className="text-xs text-white/45">
+                Didn&apos;t get it? Check spam — you can resend in {cooldown}s.
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={sendCode}
+                disabled={pending || !email.trim()}
+                className="text-xs font-medium text-amber-300 underline decoration-amber-300/60 underline-offset-2 hover:text-amber-200 disabled:opacity-50"
+              >
+                {pending ? "Resending…" : "Resend code"}
+              </button>
+            )}
+          </div>
         </div>
       )}
 

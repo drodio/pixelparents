@@ -163,6 +163,22 @@ export async function getSignupCount(): Promise<number> {
   return row?.c ?? 0;
 }
 
+// Completed signups split into parents vs students, for the landing headline —
+// the bare total read as ambiguous ("what does the 33 number mean?", Aug 18
+// walkthrough). Same completed-only predicate as getSignupCount so the split
+// always sums to the headline number.
+export async function getCommunitySplit(): Promise<{ parents: number; students: number }> {
+  const [row] = await getDb()
+    .select({
+      students: sql<number>`count(*) FILTER (WHERE ${signups.extra}->>'accountType' = 'student')::int`,
+      total: sql<number>`count(*)::int`,
+    })
+    .from(signups)
+    .where(COMPLETED_SIGNUP_SQL);
+  const students = row?.students ?? 0;
+  return { parents: (row?.total ?? 0) - students, students };
+}
+
 // Total number of kids (children) registered across COMPLETED signups. Used on
 // /signup ("Helping connect N OHS kids IRL"). A child belongs to a family, so
 // count only children whose family has at least one completed parent — drafts

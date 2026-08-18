@@ -30,7 +30,9 @@ export function hashCode(code: string): string {
 
 export const CODE_TTL_MS = 10 * 60 * 1000; // codes expire after 10 minutes
 export const MAX_ATTEMPTS = 5; // wrong-code guesses before the code is burned
-export const RESEND_COOLDOWN_MS = 30 * 1000; // min gap between sends
+// 15s (was 30): matches the visible resend-countdown in the verify panel — the
+// server floor and the UI timer must agree or the button unlocks into an error.
+export const RESEND_COOLDOWN_MS = 15 * 1000; // min gap between sends
 
 // Shape persisted in signups.extra.studentVerify while a code is outstanding.
 export type PendingVerify = {

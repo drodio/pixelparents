@@ -43,9 +43,9 @@ export function buildOnboardingSteps(opts: {
     {
       key: "verify",
       title: opts.isStudent ? "Confirm you're an OHS student" : "Confirm you're part of OHS",
-      blurb: opts.isStudent
-        ? "We'll email a code to your OHS student email."
-        : "Enter your child's OHS student email and we'll send it a code — that's how we keep GoPixel to real OHS families. You'll need the code from their inbox.",
+      // No blurb (Aug 18 walkthrough): the title + the two method cards say it
+      // all — every extra explainer on this screen was called out as clutter.
+      blurb: "",
       // NOT skippable (V2 round 2: "DO NOT let parents or students skip the
       // verification part — that's why it is the first thing they ask"). The
       // step itself decides when the member may advance: a verified code, or
