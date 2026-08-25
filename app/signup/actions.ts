@@ -553,6 +553,18 @@ export async function sendWelcomeAfterOnboarding(signupId: string): Promise<void
       .limit(1);
     if (!row?.email || !row.firstName) return;
     const extra = (row.extra ?? {}) as Record<string, unknown>;
+    // Stamp onboarding completion FIRST and unconditionally — this is the
+    // page's wizard-vs-editing marker (round 5: data-presence heuristics kept
+    // misfiring, e.g. an invited student inheriting a family with children got
+    // the editing layout on their first ever visit). The stamp must not depend
+    // on the email below succeeding.
+    if (!extra.onboardedAt) {
+      await getSql()`
+        UPDATE signups
+        SET extra = jsonb_set(COALESCE(extra, '{}'::jsonb), '{onboardedAt}', ${JSON.stringify(new Date().toISOString())}::jsonb, true)
+        WHERE id = ${signupId}
+      `;
+    }
     if (extra.welcomeSentAt) return;
     await notifyApplicantWelcome({ to: row.email, firstName: row.firstName, id: signupId });
     await getSql()`

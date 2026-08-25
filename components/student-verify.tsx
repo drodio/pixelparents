@@ -24,6 +24,7 @@ export function StudentVerify({
   studentNames = [],
   methodChoice = false,
   selfVerify = false,
+  defaultEmail,
 }: {
   signupId: string;
   initial: VerifyState;
@@ -46,6 +47,10 @@ export function StudentVerify({
   // their own OHS email, and the copy says so. Parents (default) are told to
   // enter their child's OHS email.
   selfVerify?: boolean;
+  // Pre-fill for the email field when the address is already known — an
+  // INVITED student's OHS address is on file from the invite, so they should
+  // never have to retype it (round 5 spec).
+  defaultEmail?: string;
 }) {
   // Resume mid-flow: approved → done; an outstanding code → code step; else the
   // method chooser (wizard mode) or the email step directly.
@@ -66,7 +71,7 @@ export function StudentVerify({
     if (!methodChoice) return;
     gate?.setBlocked("verify", !(step === "approved" || step === "manual"));
   }, [gate, methodChoice, step]);
-  const [email, setEmail] = useState(initial.email ?? "");
+  const [email, setEmail] = useState(initial.email ?? defaultEmail ?? "");
   const [code, setCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   // The most-recently verified email this session, for an accurate success line

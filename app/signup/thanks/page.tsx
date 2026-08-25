@@ -182,7 +182,15 @@ export default async function ThanksPage({
   // honor it no matter what data exists. Fresh visits (no step, no data) also
   // start in the wizard; returning editors (no step, has data) get the editing
   // layout as before.
-  const inWizard = Boolean(step) || !hasExistingData;
+  // Round 5: the AUTHORITATIVE signal is extra.onboardedAt (stamped when the
+  // member reaches the welcome screen). Data-presence remains only as the
+  // legacy fallback for accounts that finished before the marker existed —
+  // it misfires exactly when a fresh account inherits family data, e.g. an
+  // invited student whose family already has children (their first visit
+  // showed the EDITING layout; Aug 24 walkthrough, picture 3).
+  const onboarded = Boolean(extraBlob.onboardedAt);
+  const invitedPending = Boolean(extraBlob.invitedBySignupId) && !onboarded;
+  const inWizard = Boolean(step) || invitedPending || (!onboarded && !hasExistingData);
 
   const greeting = firstName
     ? !inWizard
@@ -208,6 +216,41 @@ export default async function ThanksPage({
     hasVerify: Boolean(verifyState),
     alreadyLinked,
   });
+
+  // INVITED student, first visit (round 5 spec): a dedicated welcome screen
+  // BEFORE any form — who invited them, one button, nothing else. The button
+  // carries ?step=, which both enters the wizard and pins wizard mode.
+  if (invitedPending && !step) {
+    return (
+      <main className="grid min-h-dvh place-items-center bg-black px-6 text-white">
+        <div className="w-full max-w-md text-center">
+          <h1 className="text-3xl font-semibold tracking-tight sm:text-4xl">
+            Welcome{firstName ? `, ${firstName}` : ""}!
+          </h1>
+          <p className="mt-4 text-white/70">
+            {inviterName ? (
+              <>
+                <span className="font-semibold text-white">{inviterName}</span> invited
+                you to join GoPixel — the community platform for Stanford OHS
+                families. Your account is already linked to theirs.
+              </>
+            ) : (
+              <>
+                You&apos;ve been added to a GoPixel family — your account is
+                already linked. Now make your profile yours.
+              </>
+            )}
+          </p>
+          <Link
+            href={`/signup/thanks?id=${encodeURIComponent(validId)}&step=${wizardSteps[0]?.key ?? "verify"}`}
+            className="mt-8 inline-block rounded-full bg-amber-400 px-7 py-3 text-base font-semibold text-black transition hover:bg-amber-300"
+          >
+            Set up my profile →
+          </Link>
+        </div>
+      </main>
+    );
+  }
 
   const sharePanel = (
     <ShareSettings
@@ -330,6 +373,11 @@ export default async function ThanksPage({
                             initial={verifyState!}
                             methodChoice
                             selfVerify={isStudentFlow}
+                            defaultEmail={
+                              extraBlob.invitedBySignupId
+                                ? (signup.email ?? undefined)
+                                : undefined
+                            }
                           />
                         );
                       case "parent-link":
