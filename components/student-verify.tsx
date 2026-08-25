@@ -151,19 +151,23 @@ export function StudentVerify({
         <div className="flex items-center gap-2">
           <IconCircleCheck className="h-5 w-5 text-emerald-400" />
           <h3 className="font-semibold text-white">
-            {/* Personalize the success line only for a single student — with
-                several names "Maya or Ravi is verified" would wrongly imply all
-                were verified in one go (the family verifies one at a time). */}
-            {studentNames.length === 1
-              ? `${studentNames[0]} is verified`
-              : "Your OHS student is verified"}
+            {/* Wizard (round 5): plain "Your account has been verified" — the
+                member just verified THEIR account, whatever the mechanism.
+                Elsewhere (/account), personalize for a single student; several
+                names would wrongly imply all were verified in one go. */}
+            {methodChoice
+              ? "Your account has been verified"
+              : studentNames.length === 1
+                ? `${studentNames[0]} is verified`
+                : "Your OHS student is verified"}
           </h3>
         </div>
-        {/* "Your family is approved for the OHS directory" read as jargon in
-            the Aug 17 walkthrough — say the thing that matters: keep going. */}
         <p className="mt-1.5 text-sm text-white/65">
-          {verifiedEmail ? `Verified with ${verifiedEmail}. ` : ""}
-          You&apos;re all set — keep going.
+          {verifiedEmail
+            ? `Verified with ${verifiedEmail}.`
+            : methodChoice
+              ? "You can continue."
+              : "You're all set."}
         </p>
         {allowAddMore && (
           <button

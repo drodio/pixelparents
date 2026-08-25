@@ -22,7 +22,9 @@ import {
   refreshBuilderStatus,
   setBuilderManual,
   setFamilyMemberVisibility,
+  disconnectStudentFromFamily,
 } from "./actions";
+import { isStudentAccount } from "@/lib/family-display";
 import { EnrichmentPanel } from "./enrichment-panel";
 import { countryHint, formatPhone } from "@/lib/phone";
 import {
@@ -30,6 +32,63 @@ import {
   enrichmentOptInOf,
   type StoredEnrichment,
 } from "@/lib/enrichment/profile";
+
+// Two-click disconnect for a STUDENT member (round 5): first click arms a
+// confirm, second calls the action. The student's account survives on its own
+// new family — only the tie to THIS family is cut — so it's guarded without
+// being modal-heavy. Success leaves the note visible until the revalidated
+// page removes the card.
+function DisconnectStudent({ memberId, name }: { memberId: string; name: string }) {
+  const [armed, setArmed] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2">
+      {armed ? (
+        <>
+          <span className="text-xs text-white/60">
+            Disconnect {name}? Their account keeps existing on its own.
+          </span>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={async () => {
+              setBusy(true);
+              const r = await disconnectStudentFromFamily(memberId);
+              setBusy(false);
+              setNote(r.message);
+              if (!r.ok) setArmed(false);
+            }}
+            className="rounded-full border border-red-400/40 px-3 py-1 text-xs font-semibold text-red-300 transition hover:bg-red-400/10 disabled:opacity-50"
+          >
+            {busy ? "Disconnecting…" : "Yes, disconnect"}
+          </button>
+          <button
+            type="button"
+            disabled={busy}
+            onClick={() => setArmed(false)}
+            className="text-xs text-white/50 underline underline-offset-2 hover:text-white/80"
+          >
+            Cancel
+          </button>
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setArmed(true)}
+          className="text-xs text-white/45 underline underline-offset-2 transition hover:text-red-300"
+        >
+          Disconnect from family
+        </button>
+      )}
+      {note && (
+        <span className="text-xs text-white/55" aria-live="polite">
+          {note}
+        </span>
+      )}
+    </div>
+  );
+}
 
 // Per-member visibility control. UNLIKE components/visibility-control.tsx (which
 // routes through the owner-only setShareVisibility paths), this calls the
@@ -359,6 +418,16 @@ export function MemberCard({
 
       {/* Per-member visibility — any family member can change any member's. */}
       <FamilyVisibilityControl memberId={member.id} initial={initialVisibility} />
+
+      {/* Round 5: a parent can disconnect a student's profile from the family.
+          Students only (the action enforces it too), never your own card. */}
+      {!isSelf &&
+        isStudentAccount({ extra: member.extra as Record<string, unknown> | null }) && (
+          <DisconnectStudent
+            memberId={member.id}
+            name={member.firstName?.trim() || "this student"}
+          />
+        )}
 
       {/* Student profile fields — grade + interests carried over from the matched
           child row when this student account was deduped against it. Read-only

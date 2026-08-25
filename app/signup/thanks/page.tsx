@@ -28,6 +28,7 @@ import { StepCityState, StepInterests, StepPhotos } from "./profile-steps";
 import { StepSocialLinks } from "./social-links-step";
 import { ShareSequence } from "./share-sequence";
 import { instagramHandleOf, xHandleOf } from "@/lib/social-handles";
+import { websiteUrlOf } from "@/lib/enrichment/profile";
 
 export const metadata: Metadata = {
   title: "Welcome — GoPixel",
@@ -161,6 +162,7 @@ export default async function ThanksPage({
     wechat: signup.wechatId ?? "",
     instagram: instagramHandleOf(extraBlob) ?? "",
     x: xHandleOf(extraBlob) ?? "",
+    website: websiteUrlOf(extraBlob) ?? "",
   };
 
   // "Editing" = the parent has already saved something. In that mode we drop the

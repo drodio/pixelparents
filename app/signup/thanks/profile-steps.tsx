@@ -77,29 +77,9 @@ export function StepCityState({
           onSelect={pickCity}
         />
       </div>
+      {/* State LEFT, country RIGHT (Aug 24 walkthrough) — most members are US,
+          so the field they actually change comes first. */}
       <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className={labelCls} htmlFor="onb-country">
-            Country
-          </label>
-          <select
-            id="onb-country"
-            value={v.country}
-            onChange={(e) => {
-              const country = e.target.value;
-              const clearState = country !== "United States" && v.state !== "";
-              setV((prev) => ({ ...prev, country, ...(clearState ? { state: "" } : {}) }));
-              queue({ country, ...(clearState ? { state: "" } : {}) }, true);
-            }}
-            className={inputCls}
-          >
-            {COUNTRIES.map((c) => (
-              <option key={c} value={c}>
-                {c}
-              </option>
-            ))}
-          </select>
-        </div>
         {v.country === "United States" && (
           <div>
             <label className={labelCls} htmlFor="onb-state">
@@ -123,6 +103,28 @@ export function StepCityState({
             </select>
           </div>
         )}
+        <div>
+          <label className={labelCls} htmlFor="onb-country">
+            Country
+          </label>
+          <select
+            id="onb-country"
+            value={v.country}
+            onChange={(e) => {
+              const country = e.target.value;
+              const clearState = country !== "United States" && v.state !== "";
+              setV((prev) => ({ ...prev, country, ...(clearState ? { state: "" } : {}) }));
+              queue({ country, ...(clearState ? { state: "" } : {}) }, true);
+            }}
+            className={inputCls}
+          >
+            {COUNTRIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
       </div>
       <SaveStatus status={status} />
     </div>
