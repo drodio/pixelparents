@@ -15,7 +15,12 @@ export const signupSchema = z.object({
   firstName: z.string().trim().min(1, "First name is required").max(100),
   lastName: z.string().trim().min(1, "Last name is required").max(100),
   email: z.string().trim().min(1, "Email is required").email("Enter a valid email"),
-  phone: z.string().trim().min(1, "Phone is required").max(40),
+  // No min here: phone is required for PARENTS only (students may skip it —
+  // round 5). The role isn't known to this role-blind schema, so the
+  // requirement lives in completeSignup's role-aware checks. Keep BOTH sides in
+  // mind when touching this — the repo has been bitten by the two validators
+  // disagreeing before.
+  phone: z.string().trim().max(40),
   // Optional — empty allowed; if provided, must be a valid GitHub handle.
   githubUsername: z
     .string()
