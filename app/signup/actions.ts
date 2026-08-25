@@ -354,6 +354,11 @@ export async function completeSignup(id: string): Promise<SignupState> {
   }
 
   const extra = (row.extra ?? {}) as Record<string, unknown>;
+  // Phone is required for parents, optional for students (round 5). The schema
+  // is role-blind, so the requirement lives here where the role is known.
+  if (extra.accountType !== "student" && !String(row.phone ?? "").trim()) {
+    if (!errors.phone) errors.phone = "Phone is required.";
+  }
   // builderInterest is NO LONGER required here. Creating an account stopped
   // asking it (Aug 2026) when signup was cut back to the basics — and leaving
   // this check in place made every new signup fail with "Please fix the
@@ -479,13 +484,21 @@ export async function submitSignup(
   };
 
   const parsed = signupSchema.safeParse(raw);
+  const noJsErrors: Record<string, string> = {};
   if (!parsed.success) {
-    const errors: Record<string, string> = {};
     for (const issue of parsed.error.issues) {
       const key = String(issue.path[0] ?? "form");
-      if (!errors[key]) errors[key] = issue.message;
+      if (!noJsErrors[key]) noJsErrors[key] = issue.message;
     }
-    return { ok: false, errors };
+  }
+  // This legacy no-JS path is parent-shaped (it has no role field), so phone
+  // stays required here now that the shared schema no longer enforces it
+  // (students-optional lives in the role-aware completeSignup checks).
+  if (!String(raw.phone ?? "").trim() && !noJsErrors.phone) {
+    noJsErrors.phone = "Phone is required.";
+  }
+  if (!parsed.success || Object.keys(noJsErrors).length > 0) {
+    return { ok: false, errors: noJsErrors };
   }
 
   const data = parsed.data;

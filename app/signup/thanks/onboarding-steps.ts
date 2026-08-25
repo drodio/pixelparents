@@ -54,18 +54,8 @@ export function buildOnboardingSteps(opts: {
     },
     // Round 3 (Aug 17): parents no longer fill out children here at all — they
     // onboard THEMSELVES first, and the optional "Add your student" invite step
-    // sits at the END (see "students" below). Students still add their parent
-    // right after verification, unless they were invited (already linked).
-    ...(opts.isStudent && !opts.alreadyLinked
-      ? [
-          {
-            key: "parent-link",
-            title: "Add your parent / guardian",
-            blurb: "Invite them, or link to a parent who already has an account.",
-            skippable: true,
-          } satisfies OnboardingStep,
-        ]
-      : []),
+    // sits at the END. Round 5 (Aug 24): a student's parent-link moved to the
+    // END too (see below) — students complete their own profile first.
     // The member's OWN info, one page each (V2 round 2: "you did not ask them
     // to fill in the information regarding themselves") — and all of it BEFORE
     // the sharing questions, because "how can they share information they did
@@ -100,6 +90,20 @@ export function buildOnboardingSteps(opts: {
       blurb: "Asked one piece at a time, only about info you actually added.",
       skippable: true,
     },
+    // Students only, the VERY LAST step (round 5): link or invite your parent /
+    // guardian — after the student's own profile is complete. Invited students
+    // (alreadyLinked) never see it.
+    ...(opts.isStudent && !opts.alreadyLinked
+      ? [
+          {
+            key: "parent-link",
+            title: "Add your parent / guardian",
+            blurb:
+              "Last step — link to a parent who already has an account, or invite them. This updates by itself the moment they approve.",
+            skippable: true,
+          } satisfies OnboardingStep,
+        ]
+      : []),
     // Parents only, LAST before the invite: add your student(s) by name + OHS
     // email — the student finishes their own profile ("adding a child should
     // not be the parent's responsibility to fill in").
@@ -123,7 +127,10 @@ export function buildOnboardingSteps(opts: {
   ];
   return steps.filter(
     (s) =>
-      (s.key !== "invite" || opts.hasReferral) && (s.key !== "verify" || opts.hasVerify),
+      // The refer-a-family step is parents-only now (round 5): a student's flow
+      // ends on linking their parent, not on recruiting.
+      (s.key !== "invite" || (opts.hasReferral && !opts.isStudent)) &&
+      (s.key !== "verify" || opts.hasVerify),
   );
 }
 

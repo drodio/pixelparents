@@ -491,7 +491,14 @@ export default function SignupForm({
           </div>
           <div>
             <label className={labelCls} htmlFor="phone">
-              Phone <span className="text-red-400">*</span>
+              {/* Optional for students (round 5) — required for parents, whose
+                  phone is how other families actually reach them. */}
+              Phone{" "}
+              {v.accountType === "student" ? (
+                <span className="font-normal text-white/40">(optional)</span>
+              ) : (
+                <span className="text-red-400">*</span>
+              )}
             </label>
             <input
               id="phone"

@@ -25,7 +25,7 @@ describe("buildOnboardingSteps", () => {
     ]);
   });
 
-  it("gives a self-signup student the parent-link step right after verify", () => {
+  it("ends a self-signup student on parent-link, with no refer-a-family step (round 5)", () => {
     const keys = buildOnboardingSteps({
       isStudent: true,
       hasReferral: true,
@@ -33,26 +33,23 @@ describe("buildOnboardingSteps", () => {
     }).map((s) => s.key);
     expect(keys).toEqual([
       "verify",
-      "parent-link",
       "city",
       "socials",
       "interests",
       "photos",
       "share",
-      "invite",
+      "parent-link",
     ]);
   });
 
-  it("drops parent-link for an INVITED student (already linked) and never offers students to students", () => {
+  it("drops parent-link for an INVITED student and never offers students/invite to students", () => {
     const keys = buildOnboardingSteps({
       isStudent: true,
       hasReferral: true,
       hasVerify: true,
       alreadyLinked: true,
     }).map((s) => s.key);
-    expect(keys).not.toContain("parent-link");
-    expect(keys).not.toContain("students");
-    expect(keys[0]).toBe("verify");
+    expect(keys).toEqual(["verify", "city", "socials", "interests", "photos", "share"]);
   });
 
   it("keeps every self-info page BEFORE the sharing step (fill first, share second)", () => {

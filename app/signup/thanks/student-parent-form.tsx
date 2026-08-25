@@ -1,12 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { IconGradCap, IconCircleCheck, IconClock, IconWarning } from "@/components/icons";
 import { parseInviteEmails } from "@/lib/invite";
 import { LinkAccounts } from "@/app/(authed)/family/link-accounts";
 import { sendCoParentInvites } from "../actions";
-import type { StudentParentLinkStatus } from "./actions";
+import { getStudentParentLinkStatus, type StudentParentLinkStatus } from "./actions";
 
 const labelCls = "block text-sm font-medium text-white/80";
 const inputCls =
@@ -40,6 +40,24 @@ export default function StudentParentForm({
   const [hasParent, setHasParent] = useState(
     initialStatus.hasLinkedParent || initialStatus.hasPendingInvite,
   );
+  // Live link status (round 5: "it should update in real time"). While no
+  // parent is linked, poll every 5s so the panel flips the moment the parent
+  // approves or joins — no refresh needed.
+  const [status, setStatus] = useState(initialStatus);
+  useEffect(() => {
+    if (status.hasLinkedParent) return;
+    const t = setInterval(async () => {
+      try {
+        const s = await getStudentParentLinkStatus(signupId);
+        if (!s.isStudent) return; // defensive: never downgrade on a bad read
+        setStatus(s);
+        if (s.hasLinkedParent || s.hasPendingInvite) setHasParent(true);
+      } catch {
+        /* transient poll failure — next tick retries */
+      }
+    }, 5000);
+    return () => clearInterval(t);
+  }, [signupId, status.hasLinkedParent]);
   // Default to "they already have an account" — that is the case this step was
   // missing, and inviting someone who is already a member creates a duplicate.
   const [mode, setMode] = useState<"link" | "invite">("link");
@@ -192,19 +210,20 @@ export default function StudentParentForm({
       {/* Family status: tells the student where their parent link stands. */}
       <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-4">
         <h4 className="text-sm font-semibold text-white/80">Your family</h4>
-        {initialStatus.hasLinkedParent ? (
+        {status.hasLinkedParent ? (
           <p className="mt-1 flex items-center gap-2 text-sm text-emerald-300">
             <IconCircleCheck className="h-4 w-4 shrink-0" />
-            {initialStatus.linkedParentNames.length > 0
-              ? `${initialStatus.linkedParentNames.join(", ")} ${
-                  initialStatus.linkedParentNames.length === 1 ? "is" : "are"
+            {status.linkedParentNames.length > 0
+              ? `${status.linkedParentNames.join(", ")} ${
+                  status.linkedParentNames.length === 1 ? "is" : "are"
                 } linked to your family.`
               : "A parent / guardian is linked to your family."}
           </p>
         ) : hasParent ? (
           <p className="mt-1 flex items-center gap-2 text-sm text-amber-300">
             <IconClock className="h-4 w-4 shrink-0" />
-            Invite sent — waiting for your parent / guardian to join.
+            Invite sent — waiting for your parent / guardian to join. This
+            updates by itself the moment they do.
           </p>
         ) : (
           <p className="mt-1 flex items-center gap-2 text-sm text-white/55">
