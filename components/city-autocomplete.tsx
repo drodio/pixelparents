@@ -46,7 +46,15 @@ function normalizeUsState(raw: string): string | undefined {
 async function fetchCities(q: string, signal: AbortSignal): Promise<City[]> {
   const url =
     "https://photon.komoot.io/api/?" +
-    new URLSearchParams({ q, lang: "en", limit: "12", layer: "city" }).toString();
+    (() => {
+      const p = new URLSearchParams({ q, lang: "en", limit: "12" });
+      // Not just layer=city: Photon files smaller places under other layers —
+      // Chappaqua, NY (a hamlet) is in "locality" and was invisible while the
+      // only matches shown were fuzzy far-away ones (Aug 24 walkthrough).
+      // District catches boroughs/neighborhood-level places people call home.
+      for (const layer of ["city", "locality", "district"]) p.append("layer", layer);
+      return p.toString();
+    })();
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`photon ${res.status}`);
   const data = (await res.json()) as {

@@ -62,13 +62,13 @@ export function buildOnboardingSteps(opts: {
     // not yet fill out."
     {
       key: "city",
-      title: "Where are you?",
+      title: "Where are you located?",
       blurb: "City & state help nearby OHS families find each other.",
       skippable: true,
     },
     {
       key: "socials",
-      title: "Your links",
+      title: "Connect your profiles",
       blurb: "LinkedIn, GitHub, WeChat, Instagram, X — add the ones you use.",
       skippable: true,
     },

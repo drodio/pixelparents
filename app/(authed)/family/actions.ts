@@ -9,6 +9,8 @@ import { signups } from "@/lib/db/schema/signups";
 import { notifyInterestMatches } from "@/lib/db/interest-notify";
 import { primaryEmail } from "@/lib/clerk";
 import { familyIdForEmail } from "@/lib/db/signups";
+import { createFamily } from "@/lib/family";
+import { isStudentAccount } from "@/lib/family-display";
 import {
   createFamilyLinkRequest,
   approveFamilyLinkRequest,
@@ -539,4 +541,51 @@ export async function cancelFamilyLinkAction(
   const res = await cancelFamilyLinkRequest(requestId, me);
   revalidatePath("/family");
   return res;
+}
+
+// Disconnect a STUDENT member from the caller's family (round 5, Aug 24: "add
+// a way for people with a parent account to remove their children's profile
+// (disconnect) from their own"). The student's account and data survive intact
+// — only the family tie is cut: their signup moves to a fresh family of its
+// own. Students only (a co-parent can't be evicted through this), never
+// yourself, and family membership IS the authorization, same as every action
+// in this file.
+export async function disconnectStudentFromFamily(
+  targetSignupId: string,
+): Promise<{ ok: boolean; message: string }> {
+  if (!UUID_RE.test(targetSignupId)) return { ok: false, message: "Something went wrong." };
+  const user = await currentUser();
+  const email = user ? primaryEmail(user) : null;
+  if (!email) return { ok: false, message: "Please sign in first." };
+  const callerFamilyId = await familyIdForEmail(email);
+  if (!callerFamilyId) return { ok: false, message: "We couldn't find your family." };
+  try {
+    const [target] = await getDb()
+      .select({
+        id: signups.id,
+        familyId: signups.familyId,
+        email: signups.email,
+        extra: signups.extra,
+      })
+      .from(signups)
+      .where(and(eq(signups.id, targetSignupId), eq(signups.familyId, callerFamilyId)))
+      .limit(1);
+    if (!target) return { ok: false, message: "That member isn't in your family." };
+    if (!isStudentAccount({ extra: target.extra as Record<string, unknown> | null })) {
+      return { ok: false, message: "Only student accounts can be disconnected." };
+    }
+    if ((target.email ?? "").trim().toLowerCase() === email.trim().toLowerCase()) {
+      return { ok: false, message: "You can't disconnect your own account." };
+    }
+    const fresh = await createFamily();
+    await getDb()
+      .update(signups)
+      .set({ familyId: fresh.id })
+      .where(eq(signups.id, targetSignupId));
+    revalidatePath("/family");
+    return { ok: true, message: "Disconnected — they now have their own separate profile." };
+  } catch (err) {
+    console.error("disconnectStudentFromFamily failed:", err);
+    return { ok: false, message: "We couldn't disconnect right now — please try again." };
+  }
 }

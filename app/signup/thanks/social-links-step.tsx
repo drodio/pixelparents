@@ -19,20 +19,25 @@ import { IconPlus, IconX } from "@/components/icons";
 //   x         → xHandle          (extra jsonb — NEW)
 // Removing a row clears the field (empty string → the sanitizer nulls it).
 
-type PlatformKey = "linkedin" | "github" | "wechat" | "instagram" | "x";
+type PlatformKey = "linkedin" | "github" | "wechat" | "instagram" | "x" | "website";
 
 const PLATFORMS: {
   key: PlatformKey;
   label: string;
   prefix: string;
   placeholder: string;
-  patchKey: keyof SignupPatch & ("linkedinHandle" | "githubUsername" | "wechatId" | "instagramHandle" | "xHandle");
+  patchKey: keyof SignupPatch &
+    ("linkedinHandle" | "githubUsername" | "wechatId" | "instagramHandle" | "xHandle" | "websiteUrl");
 }[] = [
   { key: "linkedin", label: "LinkedIn", prefix: "linkedin.com/in/", placeholder: "your-handle", patchKey: "linkedinHandle" },
   { key: "github", label: "GitHub", prefix: "github.com/", placeholder: "username", patchKey: "githubUsername" },
   { key: "wechat", label: "WeChat", prefix: "ID:", placeholder: "your-wechat-id", patchKey: "wechatId" },
   { key: "instagram", label: "Instagram", prefix: "instagram.com/", placeholder: "username", patchKey: "instagramHandle" },
   { key: "x", label: "X", prefix: "x.com/", placeholder: "username", patchKey: "xHandle" },
+  // Round 5: personal website joins the adder. The full URL, not a handle —
+  // the sanitizer normalizes it (extra.websiteUrl, already rendered on
+  // profiles behind the same "links" share opt-in).
+  { key: "website", label: "Personal Website", prefix: "", placeholder: "https://yourname.com", patchKey: "websiteUrl" },
 ];
 
 const selectCls =
