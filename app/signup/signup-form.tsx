@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth, useSignUp } from "@clerk/nextjs";
 import { BotIdClient } from "botid/client";
 import { affiliationForRole } from "@/lib/options";
 import { useAutoSave } from "@/lib/use-auto-save";
@@ -115,6 +116,23 @@ export default function SignupForm({
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [message, setMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Clerk account creation (round 6: "add a place for them to also set up
+  // their password" — at the START of signup, so finishing the profile never
+  // leaves someone without a way to sign back in). The password lives ONLY in
+  // this state and goes ONLY to Clerk: it is never part of `v`, so the
+  // localStorage draft and the signups row never see it.
+  const { isSignedIn } = useAuth();
+  const { signUp } = useSignUp();
+  const [password, setPassword] = useState("");
+  // "verify" = the Clerk instance wants the email confirmed before the account
+  // exists; we show an inline code panel instead of the form.
+  const [clerkStage, setClerkStage] = useState<"form" | "verify">("form");
+  const [code, setCode] = useState("");
+  const [clerkError, setClerkError] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState(false);
+  // The completed signup row to land on after (or instead of) verification.
+  const pendingIdRef = useRef<string | null>(null);
 
   // Local-draft persistence: keep the typed answers (and the draft row id) in
   // localStorage so a page refresh — even after a failed server save — restores
@@ -258,6 +276,103 @@ export default function SignupForm({
     queue({ accountType: choice, ohsAffiliation: derived }, true);
   }
 
+  // Create the Clerk account (email + password) once the profile row is
+  // complete, then land on onboarding. Outcomes:
+  //   - complete            → session activated, straight to /signup/thanks
+  //   - missing_requirements → the instance wants the email verified: send a
+  //     code and swap the form for the inline code panel
+  //   - bad password        → the ONE blocking error (it's fixable in place)
+  //   - anything else       → log and continue to onboarding without an
+  //     account (e.g. the password strategy still disabled in the Clerk
+  //     dashboard, the email already having an account, a network blip).
+  //     Account creation must never cost us a completed signup.
+  async function createClerkAccount(id: string) {
+    const proceed = () => router.push(`/signup/thanks?id=${id}`);
+    if (isSignedIn || !signUp) {
+      proceed();
+      return;
+    }
+    try {
+      const { error } = await signUp.password({ emailAddress: v.email.trim(), password });
+      if (error) {
+        // A bad password (weak / breached / too short) is the one blocking
+        // case — it's fixable right here on the field.
+        if (error.code.startsWith("form_password")) {
+          setErrors({ password: error.longMessage ?? error.message });
+          setMessage("Please choose a different password.");
+          if (typeof document !== "undefined") {
+            document.getElementById("password")?.scrollIntoView({ block: "center" });
+          }
+          setSubmitting(false);
+          return;
+        }
+        console.error("clerk sign-up failed:", error.code);
+        proceed();
+        return;
+      }
+      if (signUp.status === "complete") {
+        const { error: finErr } = await signUp.finalize();
+        if (finErr) console.error("clerk finalize failed:", finErr.code);
+        proceed();
+        return;
+      }
+      // "missing_requirements" — the instance wants the email verified. Send a
+      // code and swap to the inline panel.
+      const { error: sendErr } = await signUp.verifications.sendEmailCode();
+      if (sendErr) {
+        console.error("clerk sendEmailCode failed:", sendErr.code);
+        proceed();
+        return;
+      }
+      pendingIdRef.current = id;
+      setClerkStage("verify");
+      setMessage(null);
+      setSubmitting(false);
+    } catch (err) {
+      console.error("clerk sign-up threw:", err);
+      proceed();
+    }
+  }
+
+  async function onVerifyCode() {
+    if (!signUp || verifying) return;
+    setVerifying(true);
+    setClerkError(null);
+    try {
+      const { error } = await signUp.verifications.verifyEmailCode({ code: code.trim() });
+      if (error) {
+        setClerkError(error.longMessage ?? "That code didn't work. Check the digits and try again.");
+        setVerifying(false);
+        return;
+      }
+      if (signUp.status === "complete") {
+        const { error: finErr } = await signUp.finalize();
+        if (finErr) console.error("clerk finalize failed:", finErr.code);
+      }
+      router.push(`/signup/thanks?id=${pendingIdRef.current}`);
+      return;
+    } catch (err) {
+      console.error("clerk verifyEmailCode threw:", err);
+      setClerkError("Something went wrong. Please try again.");
+    }
+    setVerifying(false);
+  }
+
+  async function onResendCode() {
+    if (!signUp) return;
+    setClerkError(null);
+    try {
+      const { error } = await signUp.verifications.sendEmailCode();
+      setClerkError(
+        error
+          ? "Couldn't resend right now. Please try again in a minute."
+          : "Sent — check your inbox for a fresh code.",
+      );
+    } catch {
+      setClerkError("Couldn't resend right now. Please try again in a minute.");
+    }
+  }
+
   async function onContinue() {
     // Terms are enforced HERE rather than by disabling the button.
     //
@@ -272,6 +387,17 @@ export default function SignupForm({
       // Bring the checkbox into view — on a phone it sits below the fold.
       if (typeof document !== "undefined") {
         document.getElementById("termsAccepted")?.scrollIntoView({ block: "center" });
+      }
+      return;
+    }
+    // Same fail-visible shape as the terms check: the password is validated on
+    // click, never by disabling the button. Skipped entirely for a signed-in
+    // member (they already have an account; the field isn't rendered).
+    if (!isSignedIn && password.length < 8) {
+      setErrors({ password: "Please choose a password of at least 8 characters." });
+      setMessage("Please choose a password of at least 8 characters.");
+      if (typeof document !== "undefined") {
+        document.getElementById("password")?.scrollIntoView({ block: "center" });
       }
       return;
     }
@@ -337,7 +463,11 @@ export default function SignupForm({
           /* non-fatal */
         }
       }
-      router.push(`/signup/thanks?id=${id}`);
+      // The community profile is saved; now mint the CLERK account with the
+      // password chosen above. The profile is the product and the account is
+      // the bonus, so with one exception (a fixable bad password) nothing on
+      // this path is allowed to block the member from reaching onboarding.
+      await createClerkAccount(id);
     } else {
       const errs = res.errors ?? {};
       setErrors(errs);
@@ -379,6 +509,60 @@ export default function SignupForm({
       setMessage("Something went wrong finishing your signup. Please try again.");
       setSubmitting(false);
     }
+  }
+
+  // Inline email-code panel: shown when Clerk requires the address verified
+  // before the account exists. The profile row is already complete, so the
+  // skip link is a first-class exit — never a trap.
+  if (clerkStage === "verify") {
+    return (
+      <div className="flex flex-col gap-6">
+        <Section
+          title="Check your email"
+          description={`We sent a 6-digit code to ${v.email.trim()} to finish creating your account.`}
+        >
+          <div>
+            <label className={labelCls} htmlFor="clerkCode">
+              Verification code
+            </label>
+            <input
+              id="clerkCode"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              className={`${inputCls} max-w-[12rem] tracking-widest`}
+              placeholder="123456"
+            />
+            {clerkError && <p className="mt-2 text-sm text-red-400">{clerkError}</p>}
+          </div>
+          <div className="flex flex-wrap items-center gap-4">
+            <button
+              type="button"
+              onClick={() => void onVerifyCode()}
+              disabled={verifying}
+              className="rounded-lg bg-amber-400 px-6 py-3 font-semibold text-black transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {verifying ? "…" : "Verify & continue →"}
+            </button>
+            <button
+              type="button"
+              onClick={() => void onResendCode()}
+              className="text-sm text-white/60 underline underline-offset-2 hover:text-white/90"
+            >
+              Resend code
+            </button>
+            <button
+              type="button"
+              onClick={() => router.push(`/signup/thanks?id=${pendingIdRef.current}`)}
+              className="text-sm text-white/50 underline underline-offset-2 hover:text-white/80"
+            >
+              Skip for now — finish my profile first
+            </button>
+          </div>
+        </Section>
+      </div>
+    );
   }
 
   return (
@@ -525,6 +709,32 @@ export default function SignupForm({
             )}
             <FieldError msg={errors.phone} />
           </div>
+          {/* Round 6: the password is chosen up front, with the basics, so a
+              member who finishes (or abandons) onboarding can always sign back
+              in. Signed-in members already have an account — no field. The
+              value goes only to Clerk (see createClerkAccount): it is never in
+              `v`, the localStorage draft, or the signups row. */}
+          {!isSignedIn && (
+            <div className="sm:col-span-2">
+              <label className={labelCls} htmlFor="password">
+                Create a password <span className="text-red-400">*</span>
+              </label>
+              <input
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                className={inputCls}
+                autoComplete="new-password"
+                minLength={8}
+              />
+              <p className="mt-1 text-xs text-white/40">
+                At least 8 characters — you&apos;ll sign in to GoPixel with your
+                email and this password.
+              </p>
+              <FieldError msg={errors.password} />
+            </div>
+          )}
           {/* LinkedIn, WeChat, personal website, the enrichment opt-in and the
               student-resource prompt used to sit here. Creating an account is now
               name + email + phone only; all of these are part of finishing your
@@ -571,6 +781,11 @@ export default function SignupForm({
             <FieldError msg={errors.termsAccepted} />
           </span>
         </label>
+
+        {/* Clerk's smart bot-protection widget mounts here during
+            signUp.create(); invisible unless a challenge is required. Without
+            this element Clerk falls back to an in-page modal. */}
+        <div id="clerk-captcha" />
 
         <div className="mt-2 flex flex-wrap items-center gap-3">
           <button
