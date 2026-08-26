@@ -41,6 +41,17 @@ export function IconX(props: IconProps) {
   );
 }
 
+// Discord mark, simplified to the house stroke style — rounded face + two eyes.
+export function IconDiscord(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M8.5 5.5C10.8 4.8 13.2 4.8 15.5 5.5l1.2-1.4c2 .5 3.4 1.3 4.3 2.1 1.5 4 1.6 8 .8 11.5-1.6 1.2-3.2 2-4.8 2.4l-1-1.8c-2.6.7-5.4.7-8 0l-1 1.8c-1.6-.4-3.2-1.2-4.8-2.4-.8-3.5-.7-7.5.8-11.5.9-.8 2.3-1.6 4.3-2.1l1.2 1.4Z" />
+      <circle cx="9.3" cy="12.3" r="1.2" />
+      <circle cx="14.7" cy="12.3" r="1.2" />
+    </Icon>
+  );
+}
+
 // Rounded square + lens — Instagram profile link.
 export function IconInstagram(props: IconProps) {
   return (

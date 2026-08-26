@@ -11,6 +11,7 @@ import {
   shareFieldsOrDefault,
   DEFAULT_SHARE_FIELDS,
   isShareVisibility,
+  coerceShareVisibility,
   type ShareFieldKey,
   type ShareVisibility,
 } from "@/lib/share";
@@ -167,5 +168,26 @@ export async function setShareVisibilityByToken(
   } catch (e) {
     console.error("setShareVisibilityByToken failed:", e);
     return { visibility: "private", error: "Something went wrong. Please try again." };
+  }
+}
+
+// Round 6: skipping the wizard's sharing step means "keep my profile private".
+// Private is already the schema default, so this mostly reaffirms — the guard
+// exists so a skip can never DOWNGRADE someone who explicitly chose to be
+// listed earlier and then skipped past the step on a revisit.
+export async function keepPrivateOnShareSkip(signupId: string): Promise<void> {
+  if (!UUID_RE.test(signupId)) return;
+  try {
+    const [row] = await getDb()
+      .select({ visibility: signups.shareVisibility })
+      .from(signups)
+      .where(eq(signups.id, signupId))
+      .limit(1);
+    if (!row) return;
+    const current = coerceShareVisibility(row.visibility);
+    if (current !== "private") return; // an explicit ohs/link choice stands
+    await setShareVisibility(signupId, "private");
+  } catch (e) {
+    console.error("keepPrivateOnShareSkip failed:", e);
   }
 }

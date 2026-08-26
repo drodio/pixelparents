@@ -15,12 +15,13 @@ import {
   curatedEnrichmentOf,
   type StoredEnrichment,
 } from "@/lib/enrichment/profile";
-import { IconGlobe, IconInstagram, IconX } from "@/components/icons";
+import { IconGlobe, IconInstagram, IconX, IconDiscord } from "@/components/icons";
 import {
   instagramHandleOf,
   instagramUrlFor,
   xHandleOf,
   xUrlFor,
+  discordHandleOf,
 } from "@/lib/social-handles";
 import {
   IconPhone,
@@ -198,6 +199,9 @@ export async function ProfileView({
   const instagramUrl = igHandle ? instagramUrlFor(igHandle) : null;
   const xHandle = showLinks ? xHandleOf(extra) : null;
   const xProfileUrl = xHandle ? xUrlFor(xHandle) : null;
+  // Discord (round 6): username only — no public profile URL exists for a bare
+  // username, so this renders as a copyable chip, not a link.
+  const discordName = showLinks ? discordHandleOf(extra) : null;
 
   // Curated auto-built profile (bio / expertise / how-they-can-help) — behind the
   // NEW, default-OFF "profile_enrichment" share field. ONLY the curated info is
@@ -350,7 +354,7 @@ export async function ProfileView({
         </div>
       )}
 
-      {(linkedinUrl || githubUrl || websiteUrl || instagramUrl || xProfileUrl) && (
+      {(linkedinUrl || githubUrl || websiteUrl || instagramUrl || xProfileUrl || discordName) && (
         <div className="mt-4 flex flex-wrap gap-2">
           {websiteUrl && (
             <a
@@ -405,6 +409,15 @@ export async function ProfileView({
             >
               <IconX className="h-4 w-4" />X
             </a>
+          )}
+          {discordName && (
+            <span
+              title="Discord username"
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.04] px-3 py-1.5 text-sm text-white/85"
+            >
+              <IconDiscord className="h-4 w-4" />
+              {discordName}
+            </span>
           )}
         </div>
       )}

@@ -21,12 +21,17 @@ import { OnboardingGateContext } from "./onboarding-gate";
 export function OnboardingWizard({
   steps,
   finishHref,
+  skipActions,
   children,
 }: {
   steps: OnboardingStep[];
   // Where "Finish" lands — the status-aware welcome screen, same destination the
   // single-page flow's Finish button used.
   finishHref: string;
+  // Optional per-step side effects fired when THAT step is skipped (round 6:
+  // skipping the sharing step records keep-it-private). Values are bound
+  // server actions passed from the page; fire-and-forget.
+  skipActions?: Record<string, (() => Promise<void>) | undefined>;
   children: React.ReactNode[];
 }) {
   const router = useRouter();
@@ -161,7 +166,10 @@ export function OnboardingWizard({
             {step.skippable && !currentBlocked && (
               <button
                 type="button"
-                onClick={() => go(index + 1)}
+                onClick={() => {
+                  void skipActions?.[step.key]?.();
+                  go(index + 1);
+                }}
                 className="text-sm text-white/50 underline underline-offset-2 transition hover:text-white/80"
               >
                 Skip for now

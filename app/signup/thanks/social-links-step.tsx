@@ -4,7 +4,16 @@ import { useState } from "react";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
 import { patchSignup, type SignupPatch } from "@/app/signup/actions";
-import { IconPlus, IconX } from "@/components/icons";
+import {
+  IconPlus,
+  IconX,
+  IconLinkedin,
+  IconGithub,
+  IconMessage,
+  IconInstagram,
+  IconDiscord,
+  IconGlobe,
+} from "@/components/icons";
 
 // The socials page of the onboarding wizard (V2 round 2). Ava's spec, verbatim
 // intent: rather than stacking five labeled inputs, "a drop down to select
@@ -19,25 +28,45 @@ import { IconPlus, IconX } from "@/components/icons";
 //   x         → xHandle          (extra jsonb — NEW)
 // Removing a row clears the field (empty string → the sanitizer nulls it).
 
-type PlatformKey = "linkedin" | "github" | "wechat" | "instagram" | "x" | "website";
+type PlatformKey =
+  | "linkedin"
+  | "github"
+  | "wechat"
+  | "instagram"
+  | "x"
+  | "discord"
+  | "website";
 
 const PLATFORMS: {
   key: PlatformKey;
   label: string;
   prefix: string;
   placeholder: string;
+  // Round 6: every row shows its platform's logo, not just the name.
+  Icon: (p: { className?: string }) => React.ReactElement;
   patchKey: keyof SignupPatch &
-    ("linkedinHandle" | "githubUsername" | "wechatId" | "instagramHandle" | "xHandle" | "websiteUrl");
+    (
+      | "linkedinHandle"
+      | "githubUsername"
+      | "wechatId"
+      | "instagramHandle"
+      | "xHandle"
+      | "discordHandle"
+      | "websiteUrl"
+    );
 }[] = [
-  { key: "linkedin", label: "LinkedIn", prefix: "linkedin.com/in/", placeholder: "your-handle", patchKey: "linkedinHandle" },
-  { key: "github", label: "GitHub", prefix: "github.com/", placeholder: "username", patchKey: "githubUsername" },
-  { key: "wechat", label: "WeChat", prefix: "ID:", placeholder: "your-wechat-id", patchKey: "wechatId" },
-  { key: "instagram", label: "Instagram", prefix: "instagram.com/", placeholder: "username", patchKey: "instagramHandle" },
-  { key: "x", label: "X", prefix: "x.com/", placeholder: "username", patchKey: "xHandle" },
-  // Round 5: personal website joins the adder. The full URL, not a handle —
-  // the sanitizer normalizes it (extra.websiteUrl, already rendered on
-  // profiles behind the same "links" share opt-in).
-  { key: "website", label: "Personal Website", prefix: "", placeholder: "https://yourname.com", patchKey: "websiteUrl" },
+  { key: "linkedin", label: "LinkedIn", prefix: "linkedin.com/in/", placeholder: "your-handle", Icon: IconLinkedin, patchKey: "linkedinHandle" },
+  { key: "github", label: "GitHub", prefix: "github.com/", placeholder: "username", Icon: IconGithub, patchKey: "githubUsername" },
+  { key: "wechat", label: "WeChat", prefix: "ID:", placeholder: "your-wechat-id", Icon: IconMessage, patchKey: "wechatId" },
+  { key: "instagram", label: "Instagram", prefix: "instagram.com/", placeholder: "username", Icon: IconInstagram, patchKey: "instagramHandle" },
+  { key: "x", label: "X", prefix: "x.com/", placeholder: "username", Icon: IconX, patchKey: "xHandle" },
+  // Round 6: Discord joins the adder. Username only — bare Discord usernames
+  // have no public profile URL, so the profile shows a chip, not a link.
+  { key: "discord", label: "Discord", prefix: "@", placeholder: "username", Icon: IconDiscord, patchKey: "discordHandle" },
+  // Round 5: personal website. Full URL, not a handle — the sanitizer
+  // normalizes it (extra.websiteUrl, already on profiles behind the same
+  // "links" share opt-in).
+  { key: "website", label: "Personal Website", prefix: "", placeholder: "https://yourname.com", Icon: IconGlobe, patchKey: "websiteUrl" },
 ];
 
 const selectCls =
@@ -104,6 +133,10 @@ export function StepSocialLinks({
         const meta = PLATFORMS.find((p) => p.key === row.platform)!;
         return (
           <div key={i} className="flex items-center gap-2">
+            {/* The row's platform logo tracks the dropdown selection. */}
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg border border-white/15 bg-white/5 text-white/70">
+              <meta.Icon className="h-5 w-5" />
+            </span>
             <select
               aria-label="Platform"
               value={row.platform}

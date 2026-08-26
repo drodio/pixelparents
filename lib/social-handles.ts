@@ -47,3 +47,8 @@ export function xHandleOf(extra: Record<string, unknown> | null | undefined): st
   const v = (extra ?? {}).xHandle;
   return typeof v === "string" && v.trim() ? v.trim() : null;
 }
+
+export function discordHandleOf(extra: Record<string, unknown> | null | undefined): string | null {
+  const v = (extra ?? {}).discordHandle;
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
