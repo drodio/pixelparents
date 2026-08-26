@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { inviteStudent, type InvitedStudent } from "./actions";
+import { formatPhone } from "@/lib/phone";
 import { IconCircleCheck } from "@/components/icons";
 
 // The END-of-onboarding "Add your student" step (round 3, Aug 17): the parent
@@ -117,6 +118,10 @@ export function StudentInviteStep({
             type="tel"
             value={v.phone}
             onChange={(e) => setV((p) => ({ ...p, phone: e.target.value }))}
+            onBlur={() => {
+              const f = formatPhone(v.phone);
+              if (f !== v.phone) setV((p) => ({ ...p, phone: f }));
+            }}
             className={inputCls}
             autoComplete="off"
           />

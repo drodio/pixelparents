@@ -77,14 +77,17 @@ export function StepCityState({
           onSelect={pickCity}
         />
       </div>
-      {/* State LEFT, country RIGHT (Aug 24 walkthrough) — most members are US,
-          so the field they actually change comes first. */}
+      {/* State LEFT, country RIGHT — and ALL THREE fields always visible
+          (round 6: "there should always be a place to put city, state and
+          country"). Non-US members get a free-text State / Province / Region
+          instead of losing the field; picking a city still adjusts state and
+          country automatically. */}
       <div className="grid gap-4 sm:grid-cols-2">
-        {v.country === "United States" && (
-          <div>
-            <label className={labelCls} htmlFor="onb-state">
-              State
-            </label>
+        <div>
+          <label className={labelCls} htmlFor="onb-state">
+            {v.country === "United States" ? "State" : "State / Province / Region"}
+          </label>
+          {v.country === "United States" ? (
             <select
               id="onb-state"
               value={v.state}
@@ -101,8 +104,19 @@ export function StepCityState({
                 </option>
               ))}
             </select>
-          </div>
-        )}
+          ) : (
+            <input
+              id="onb-state"
+              value={v.state}
+              onChange={(e) => {
+                setV((prev) => ({ ...prev, state: e.target.value }));
+                queue({ state: e.target.value });
+              }}
+              placeholder="e.g. Ontario, Zhejiang, Bavaria…"
+              className={inputCls}
+            />
+          )}
+        </div>
         <div>
           <label className={labelCls} htmlFor="onb-country">
             Country
@@ -112,7 +126,10 @@ export function StepCityState({
             value={v.country}
             onChange={(e) => {
               const country = e.target.value;
-              const clearState = country !== "United States" && v.state !== "";
+              // Switching country empties the state so a US state never
+              // lingers under another country (and vice versa) — the field
+              // itself stays visible either way.
+              const clearState = v.state !== "";
               setV((prev) => ({ ...prev, country, ...(clearState ? { state: "" } : {}) }));
               queue({ country, ...(clearState ? { state: "" } : {}) }, true);
             }}

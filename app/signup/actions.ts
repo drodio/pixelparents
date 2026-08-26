@@ -187,6 +187,9 @@ export type SignupPatch = Partial<{
   // jsonb as bare handles; the profile builds the URLs at render time.
   instagramHandle: string;
   xHandle: string;
+  // Discord username (round 6). Extra jsonb; displayed as a non-link chip —
+  // bare Discord usernames have no public profile URL.
+  discordHandle: string;
 }>;
 
 // Translate a (trusted-but-untyped) SignupPatch into a sanitized Drizzle `set`
@@ -219,7 +222,12 @@ export async function sanitizeSignupPatch(
     set.termsVersion = TERMS_VERSION;
   }
   if ("city" in patch) set.city = text(patch.city, 120) || null;
-  if ("state" in patch) set.state = oneOf(US_STATES, patch.state);
+  // US states stay canonical (membership-checked); anything else is a
+  // free-text province/region (round 6: the state field is always visible,
+  // including for non-US members). Empty clears.
+  if ("state" in patch) {
+    set.state = oneOf(US_STATES, patch.state) ?? (text(patch.state, 120) || null);
+  }
   if ("country" in patch) set.country = oneOf(COUNTRIES, patch.country);
   if ("skillsets" in patch) {
     const s = (patch.skillsets ?? []).filter((x) => SKILLSETS.includes(x as never));
@@ -267,6 +275,9 @@ export async function sanitizeSignupPatch(
   }
   if ("xHandle" in patch) {
     extraPatch.xHandle = normalizeSocialHandle(patch.xHandle) ?? undefined;
+  }
+  if ("discordHandle" in patch) {
+    extraPatch.discordHandle = normalizeSocialHandle(patch.discordHandle) ?? undefined;
   }
   // Account type: only "student" is persisted. A "parent" account (or any
   // unrecognized value) clears the key entirely, so parent rows carry NO

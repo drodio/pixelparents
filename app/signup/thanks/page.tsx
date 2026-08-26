@@ -4,6 +4,7 @@ import Link from "next/link";
 import { getInterestPool } from "@/lib/interests";
 import { getSignupForEdit } from "@/lib/db/signups";
 import { shareFieldsOrDefault, coerceShareVisibility } from "@/lib/share";
+import { keepPrivateOnShareSkip } from "@/lib/share-actions";
 import { shareUrlFor } from "@/lib/url";
 import { signedPhotoUrls } from "@/lib/blob";
 import { getInviteTokenForFamily } from "@/lib/family";
@@ -27,7 +28,7 @@ import { buildOnboardingSteps } from "./onboarding-steps";
 import { StepCityState, StepInterests, StepPhotos } from "./profile-steps";
 import { StepSocialLinks } from "./social-links-step";
 import { ShareSequence } from "./share-sequence";
-import { instagramHandleOf, xHandleOf } from "@/lib/social-handles";
+import { instagramHandleOf, xHandleOf, discordHandleOf } from "@/lib/social-handles";
 import { websiteUrlOf } from "@/lib/enrichment/profile";
 
 export const metadata: Metadata = {
@@ -162,6 +163,7 @@ export default async function ThanksPage({
     wechat: signup.wechatId ?? "",
     instagram: instagramHandleOf(extraBlob) ?? "",
     x: xHandleOf(extraBlob) ?? "",
+    discord: discordHandleOf(extraBlob) ?? "",
     website: websiteUrlOf(extraBlob) ?? "",
   };
 
@@ -364,6 +366,11 @@ export default async function ThanksPage({
                 <OnboardingWizard
                   steps={wizardSteps}
                   finishHref={`/signup/welcome?id=${encodeURIComponent(validId)}`}
+                  skipActions={{
+                    // Round 6: skipping sharing = keep the profile private
+                    // (never downgrades an explicit earlier choice).
+                    share: keepPrivateOnShareSkip.bind(null, validId),
+                  }}
                 >
                   {wizardSteps.map((s) => {
                     switch (s.key) {
