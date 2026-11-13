@@ -11,6 +11,7 @@ import { DashboardShell } from "@/components/dashboard-shell";
 import { SignedOutPanel } from "@/components/signed-out-panel";
 import { IconArrowRight } from "@/components/icons";
 import { NewBoardForm } from "./new-board-form";
+import { HowBoardsWork } from "../how-boards-work";
 
 export const dynamic = "force-dynamic";
 
@@ -68,9 +69,11 @@ export default async function NewBoardPage() {
       <header className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Create a board</h1>
         <p className="mt-1 text-sm text-white/55">
-          A board is a permanent, community-curated collection on a theme. Give it a clear title
-          and a short description — we&apos;ll auto-label it with topic tags so others can find it.
+          A board is a permanent, community-curated collection on one topic. Give it a clear title
+          and a short description, and we&apos;ll add topic tags so others can find it. Once it&apos;s
+          created, you and every verified family can start adding to it.
         </p>
+        <HowBoardsWork className="mt-5" />
       </header>
       <NewBoardForm />
     </div>,

@@ -8,7 +8,8 @@ import { optimizeImage } from "@/lib/image";
 import type { Photo } from "@/lib/db/schema/signups";
 import { MentionCaptionInput, type MentionCandidate } from "@/components/mention-caption-input";
 import { iconForInterest } from "@/lib/interest-icons";
-import { splitInterestEntry } from "@/lib/interest-split";
+import { interestKey, splitInterestEntry } from "@/lib/interest-split";
+import { groupInterests, relatedSuggestions } from "@/lib/interest-taxonomy";
 import { TagList } from "@/components/tag-list";
 import { useAutoSave } from "@/lib/use-auto-save";
 import { SaveStatus } from "@/components/save-status";
@@ -62,146 +63,204 @@ export function TagPicker({
   onChange: (next: string[]) => void;
   suggestions: string[];
   placeholder: string;
+  /**
+   * Turns on the full picker layout: labeled "selected" and "explore" columns
+   * (explore left, selected right from sm up), and the explore list grouped by
+   * category. Without it the picker stays the compact single-column version.
+   */
   labels?: { selected: string; explore: string; exploreHint: string };
-  /** Lowercase interest → how many people list it; shown on matches while typing. */
+  /** interestKey → how many people list it; shown on matches while typing. */
   counts?: Record<string, number>;
 }) {
   const [draft, setDraft] = useState("");
   const q = draft.trim();
   const ql = q.toLowerCase();
+  const full = Boolean(labels);
 
-  // Add a tag — preferring an existing suggestion's exact spelling so typing
-  // "biking" selects the existing "Biking" rather than creating a near-duplicate.
+  // Add a tag — preferring an existing suggestion's spelling so typing
+  // "biking" (or "Books: X" when "Book: X" exists) selects the existing one
+  // rather than creating a near-duplicate.
   const add = (raw: string) => {
     const next = [...value];
     for (const t of splitInterestEntry(raw)) {
-      const canonical = suggestions.find((s) => s.toLowerCase() === t.toLowerCase()) ?? t;
-      if (!next.some((v) => v.toLowerCase() === canonical.toLowerCase())) next.push(canonical);
+      const canonical = suggestions.find((s) => interestKey(s) === interestKey(t)) ?? t;
+      if (!next.some((v) => interestKey(v) === interestKey(canonical))) next.push(canonical);
     }
     if (next.length !== value.length) onChange(next);
     setDraft("");
   };
   const remove = (t: string) => onChange(value.filter((v) => v !== t));
-  const isSelected = (s: string) => value.some((v) => v.toLowerCase() === s.toLowerCase());
+  const isSelected = (s: string) => value.some((v) => interestKey(v) === interestKey(s));
   const removeMatching = (s: string) =>
-    onChange(value.filter((v) => v.toLowerCase() !== s.toLowerCase()));
+    onChange(value.filter((v) => interestKey(v) !== interestKey(s)));
+  const countFor = (s: string) => counts?.[interestKey(s)] ?? 0;
 
   // Selected suggestions stay in the list (marked, click again to remove) so a
   // chip never jumps out from under the pointer.
-  const available = ql ? suggestions.filter((s) => s.toLowerCase().includes(ql)) : suggestions;
+  const direct = ql ? suggestions.filter((s) => s.toLowerCase().includes(ql)) : suggestions;
+  const related = ql ? relatedSuggestions(q, suggestions, new Set(direct)) : [];
   // When the typed text isn't already an existing label (or selected), offer it
   // as a gold "create new" chip at the bottom of the list. Enter still adds it too.
-  const matchesExisting = suggestions.some((s) => s.toLowerCase() === ql);
-  const alreadySelected = value.some((v) => v.toLowerCase() === ql);
+  const matchesExisting = suggestions.some((s) => interestKey(s) === interestKey(q));
+  const alreadySelected = q !== "" && isSelected(q);
   const showCreateNew = q !== "" && !matchesExisting && !alreadySelected;
 
+  const chip = (s: string, opts: { relatedTo?: boolean } = {}) => {
+    const Icon = iconForInterest(s);
+    const exact = ql !== "" && interestKey(s) === interestKey(q);
+    const selected = isSelected(s);
+    const n = countFor(s);
+    return (
+      <button
+        type="button"
+        key={s}
+        aria-pressed={selected}
+        // Stop the input's onBlur (which would add the raw draft) from
+        // firing before this click registers.
+        onMouseDown={(e) => e.preventDefault()}
+        onClick={() => (selected ? removeMatching(s) : add(s))}
+        title={selected ? `Remove "${s}"` : opts.relatedTo ? `Add "${s}" (related to "${q}")` : `Add "${s}"`}
+        className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1 text-sm transition-colors ${
+          selected
+            ? "border-amber-400 bg-amber-400/15 font-medium text-amber-300 hover:bg-amber-400/25"
+            : exact
+              ? "border-amber-400 text-amber-400 hover:bg-white/10"
+              : opts.relatedTo
+                ? "border-dashed border-white/25 text-white/70 hover:bg-white/10"
+                : "border-white/20 text-white/70 hover:bg-white/10"
+        }`}
+      >
+        {selected ? (
+          <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
+        ) : (
+          <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+        )}
+        {/* One span: inside the button's flex gap, the highlight's text
+            pieces would otherwise render as separate gapped items. */}
+        <span>{exact || selected || opts.relatedTo ? s : <HighlightedText text={s} query={q} />}</span>
+        {ql !== "" && !selected && n > 0 && (
+          <span className="text-xs text-white/55">· {peopleLabel(n)}</span>
+        )}
+      </button>
+    );
+  };
+
+  const createNew = showCreateNew && (
+    <button
+      type="button"
+      // Same onBlur guard as the suggestion chips above.
+      onMouseDown={(e) => e.preventDefault()}
+      onClick={() => add(q)}
+      title={`Add "${q}" as a new interest`}
+      className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-amber-400/10 px-3 py-1 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-400/20"
+    >
+      <Plus className="h-3.5 w-3.5" strokeWidth={2} />
+      {q}
+    </button>
+  );
+
+  const input = (
+    <input
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === ",") {
+          e.preventDefault();
+          add(draft);
+        }
+      }}
+      onBlur={() => add(draft)}
+      placeholder={placeholder}
+      aria-label={labels ? labels.explore : placeholder}
+      className={inputCls}
+    />
+  );
+
+  // While typing: direct matches, then related ones, then "create new".
+  // Not typing: the whole list, grouped by category in the full layout.
+  const options = ql ? (
+    (direct.length > 0 || related.length > 0 || showCreateNew) && (
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        {direct.map((s) => chip(s))}
+        {related.length > 0 && (
+          <span className="text-xs font-medium text-white/55">
+            {direct.length > 0 ? "Related:" : `Related to "${q}":`}
+          </span>
+        )}
+        {related.map((s) => chip(s, { relatedTo: true }))}
+        {createNew}
+      </div>
+    )
+  ) : full ? (
+    <div className="mt-3 flex flex-col gap-3">
+      {groupInterests(suggestions).map((g) => (
+        <div key={g.id}>
+          <p className="mb-1.5 text-xs font-medium text-white/55">{g.label}</p>
+          <div className="flex flex-wrap gap-2">{g.items.map((s) => chip(s))}</div>
+        </div>
+      ))}
+    </div>
+  ) : (
+    suggestions.length > 0 && (
+      <div className="mt-2 flex flex-wrap gap-2">{suggestions.map((s) => chip(s))}</div>
+    )
+  );
+
+  const selectedChips = value.length > 0 && (
+    <TagList
+      tags={value}
+      max={full ? 100 : undefined}
+      className="mb-2 flex flex-wrap items-center gap-2"
+      toggleClassName="inline-flex items-center rounded-md border border-white/20 px-3 py-1 text-sm font-medium text-white/70 transition-colors hover:bg-white/10"
+      renderTag={(t) => {
+        const Icon = iconForInterest(t);
+        return (
+          <button
+            type="button"
+            key={t}
+            onClick={() => remove(t)}
+            title={`Remove "${t}"`}
+            className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1 text-sm font-medium text-black"
+          >
+            <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+            {t} <IconX className="h-3 w-3" />
+          </button>
+        );
+      }}
+    />
+  );
+
+  if (!labels) {
+    return (
+      <div className="mt-1">
+        {/* Selected tags compress to the first few + "+N more" so a long list of
+            picks doesn't bury the input below it. */}
+        {selectedChips}
+        {input}
+        {options}
+      </div>
+    );
+  }
+
+  // Full layout: explore on the left, your picks on the right (sm and up).
+  // On a phone your picks come first so they are never buried under the list.
   return (
-    <div className="mt-1">
-      {labels && value.length > 0 && (
+    <div className="mt-1 grid gap-6 sm:grid-cols-[minmax(0,1fr)_minmax(0,13rem)]">
+      <div className="order-2 sm:order-1">
+        <p className="text-xs font-semibold uppercase tracking-wide text-white/50">{labels.explore}</p>
+        <p className="mb-2 mt-0.5 text-sm text-white/55">{labels.exploreHint}</p>
+        {input}
+        {options}
+      </div>
+      <div className="order-1 sm:order-2 sm:border-l sm:border-white/10 sm:pl-6">
         <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-white/50">
           {labels.selected}
+          {value.length > 0 && <span className="ml-1 font-normal normal-case text-white/55">({value.length})</span>}
         </p>
-      )}
-      {/* Selected tags compress to the first few + "+N more" so a long list of
-          picks doesn't bury the input below it. Each chip stays a click-to-remove
-          button; expanding reveals the rest inline. */}
-      {value.length > 0 && (
-        <TagList
-          tags={value}
-          className="mb-2 flex flex-wrap items-center gap-2"
-          toggleClassName="inline-flex items-center rounded-md border border-white/20 px-3 py-1 text-sm font-medium text-white/70 transition-colors hover:bg-white/10"
-          renderTag={(t) => {
-            const Icon = iconForInterest(t);
-            return (
-              <button
-                type="button"
-                key={t}
-                onClick={() => remove(t)}
-                className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1 text-sm font-medium text-black"
-              >
-                <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                {t} <IconX className="h-3 w-3" />
-              </button>
-            );
-          }}
-        />
-      )}
-      {labels && (
-        <div className="mb-1 mt-4">
-          <p className="text-xs font-semibold uppercase tracking-wide text-white/50">
-            {labels.explore}
-          </p>
-          <p className="mt-0.5 text-sm text-white/55">{labels.exploreHint}</p>
-        </div>
-      )}
-      <input
-        value={draft}
-        onChange={(e) => setDraft(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === ",") {
-            e.preventDefault();
-            add(draft);
-          }
-        }}
-        onBlur={() => add(draft)}
-        placeholder={placeholder}
-        className={inputCls}
-      />
-      {(available.length > 0 || showCreateNew) && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          {available.map((s) => {
-            const Icon = iconForInterest(s);
-            const exact = ql !== "" && s.toLowerCase() === ql;
-            const selected = isSelected(s);
-            return (
-              <button
-                type="button"
-                key={s}
-                aria-pressed={selected}
-                // Stop the input's onBlur (which would add the raw draft) from
-                // firing before this click registers.
-                onMouseDown={(e) => e.preventDefault()}
-                onClick={() => (selected ? removeMatching(s) : add(s))}
-                title={selected ? `Remove "${s}"` : `Add "${s}"`}
-                className={`inline-flex items-center gap-1.5 rounded-md border px-3 py-1 text-sm transition-colors ${
-                  selected
-                    ? "border-amber-400 bg-amber-400/15 font-medium text-amber-300 hover:bg-amber-400/25"
-                    : exact
-                      ? "border-amber-400 text-amber-400 hover:bg-white/10"
-                      : "border-white/20 text-white/70 hover:bg-white/10"
-                }`}
-              >
-                {selected ? (
-                  <Check className="h-3.5 w-3.5" strokeWidth={2.5} />
-                ) : (
-                  <Icon className="h-3.5 w-3.5" strokeWidth={2} />
-                )}
-                {/* One span: inside the button's flex gap, the highlight's text
-                    pieces would otherwise render as separate gapped items. */}
-                <span>{exact || selected ? s : <HighlightedText text={s} query={q} />}</span>
-                {ql !== "" && !selected && (counts?.[s.toLowerCase()] ?? 0) > 0 && (
-                  <span className="text-xs text-white/40">
-                    · {peopleLabel(counts![s.toLowerCase()]!)}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-          {showCreateNew && (
-            <button
-              type="button"
-              // Same onBlur guard as the suggestion chips above.
-              onMouseDown={(e) => e.preventDefault()}
-              onClick={() => add(q)}
-              title={`Add "${q}" as a new interest`}
-              className="inline-flex items-center gap-1.5 rounded-md border border-amber-400 bg-amber-400/10 px-3 py-1 text-sm font-medium text-amber-300 transition-colors hover:bg-amber-400/20"
-            >
-              <Plus className="h-3.5 w-3.5" strokeWidth={2} />
-              {q}
-            </button>
-          )}
-        </div>
-      )}
+        {selectedChips || (
+          <p className="text-sm text-white/55">Nothing yet. Pick from the list or type your own.</p>
+        )}
+      </div>
     </div>
   );
 }

@@ -12,7 +12,8 @@
 // group families that genuinely share a spelling; it can't merge two distinct
 // interests. (See lib/interest-matching.test.ts for the regression pins.)
 
-import { splitInterestEntry } from "./interest-split";
+import { interestKey, splitInterestEntry } from "./interest-split";
+import { sharedTheme, themeLabel } from "./interest-taxonomy";
 
 // One other family's worth of matchable data. `interests` is the family's shared
 // interest set (already coarsened/opt-in-gated by the data layer); `signalCount`
@@ -37,6 +38,10 @@ export type InterestMatch = {
   // The exact shared interests, in the VIEWER's order, so the UI can render stable
   // "shared: X, Y" chips using the viewer's own spelling.
   sharedInterests: string[];
+  // Differently-worded interests of theirs that are the same kind of thing as
+  // one of yours ("Percy Jackson" for your "Harry Potter"). Never counted in
+  // `score`; used as the second ranking key and shown as "similar".
+  relatedInterests: { theirs: string; yours: string; theme: string }[];
 };
 
 export type RankInterestOptions = {
@@ -54,22 +59,23 @@ export type RankInterestOptions = {
 // `key`. Non-strings/blanks are dropped so raw DB arrays are safe to pass.
 function normalizeKey(s: unknown): string | null {
   if (typeof s !== "string") return null;
-  const v = s.trim().toLowerCase();
-  return v || null;
+  return interestKey(s) || null;
 }
 
 // Rank other families for a viewer by shared-interest overlap. Pure + deterministic.
 //
-// Rules (overlap is the ONLY signal):
+// Rules:
 //   - No viewer interests → no signal → [] (nothing to match on).
 //   - Exclude the viewer + any passed co-parent signupIds.
 //   - sharedInterests = viewer interests (in viewer order) present in the
-//     candidate's interests, compared case-insensitively. Display uses the VIEWER's
+//     candidate's interests, compared by interestKey. Display uses the VIEWER's
 //     spelling so chips are stable regardless of the other family's casing.
-//   - Drop zero-overlap candidates.
-//   - score = sharedInterests.length.
-// Stable sort: score desc → signalCount desc (richer profile first) → name asc →
-// signupId asc. Then slice to `limit`.
+//   - relatedInterests = candidate interests NOT exactly shared that share a
+//     theme with one of the viewer's (lib/interest-taxonomy.ts).
+//   - Drop candidates with neither shared nor related interests.
+//   - score = sharedInterests.length (related interests never inflate it).
+// Stable sort: score desc → related count desc → signalCount desc (richer
+// profile first) → name asc → signupId asc. Then slice to `limit`.
 export function rankInterestMatches(opts: RankInterestOptions): InterestMatch[] {
   const { viewerInterests, candidates, excludeSignupIds = null, limit = 12 } = opts;
 
@@ -96,18 +102,35 @@ export function rankInterestMatches(opts: RankInterestOptions): InterestMatch[] 
     if (exclude.has(c.signupId)) continue;
 
     const candKeys = new Set<string>();
+    const candParts: Array<{ key: string; label: string }> = [];
     for (const i of c.interests) {
       if (typeof i !== "string") continue;
       for (const part of splitInterestEntry(i)) {
         const k = normalizeKey(part);
-        if (k) candKeys.add(k);
+        if (k && !candKeys.has(k)) {
+          candKeys.add(k);
+          candParts.push({ key: k, label: part });
+        }
       }
     }
     // Iterate the VIEWER's interests so shared stays in viewer order + spelling.
     const sharedInterests = orderedViewer
       .filter((v) => candKeys.has(v.key))
       .map((v) => v.label);
-    if (sharedInterests.length === 0) continue;
+
+    const viewerKeys = new Set(orderedViewer.map((v) => v.key));
+    const relatedInterests: InterestMatch["relatedInterests"] = [];
+    for (const cp of candParts) {
+      if (viewerKeys.has(cp.key)) continue;
+      for (const v of orderedViewer) {
+        const theme = sharedTheme(v.label, cp.label);
+        if (theme) {
+          relatedInterests.push({ theirs: cp.label, yours: v.label, theme: themeLabel(theme) });
+          break;
+        }
+      }
+    }
+    if (sharedInterests.length === 0 && relatedInterests.length === 0) continue;
 
     signalCountById.set(c.signupId, c.signalCount);
     matches.push({
@@ -117,18 +140,22 @@ export function rankInterestMatches(opts: RankInterestOptions): InterestMatch[] 
       isStudent: c.isStudent,
       score: sharedInterests.length,
       sharedInterests,
+      relatedInterests,
     });
   }
 
   matches.sort((a, b) => {
     if (b.score !== a.score) return b.score - a.score; // 1. overlap count desc
+    if (b.relatedInterests.length !== a.relatedInterests.length) {
+      return b.relatedInterests.length - a.relatedInterests.length; // 2. related count desc
+    }
     const fa = signalCountById.get(a.signupId) ?? 0;
     const fb = signalCountById.get(b.signupId) ?? 0;
-    if (fb !== fa) return fb - fa; // 2. richer profile first
+    if (fb !== fa) return fb - fa; // 3. richer profile first
     const na = a.name ?? "";
     const nb = b.name ?? "";
-    if (na !== nb) return na.localeCompare(nb); // 3. name asc
-    return a.signupId.localeCompare(b.signupId); // 4. stable id tiebreak
+    if (na !== nb) return na.localeCompare(nb); // 4. name asc
+    return a.signupId.localeCompare(b.signupId); // 5. stable id tiebreak
   });
 
   return matches.slice(0, Math.max(0, limit));

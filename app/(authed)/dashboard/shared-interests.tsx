@@ -14,13 +14,18 @@ function MatchCard({ match }: { match: SharedInterestMatch }) {
   const name = match.name || "An OHS family";
   const shown = match.sharedInterests.slice(0, 4);
   const overflow = match.sharedInterests.length - shown.length;
+  const related = match.relatedInterests.slice(0, Math.max(0, 4 - shown.length));
+  const badge =
+    match.score > 0
+      ? `${match.score} shared`
+      : `${match.relatedInterests.length} similar`;
 
   const inner = (
     <>
       <div className="flex items-center justify-between gap-2">
         <span className="min-w-0 flex-1 truncate font-semibold text-white">{name}</span>
         <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-0.5 text-xs font-medium text-amber-300">
-          {match.score} shared
+          {badge}
         </span>
       </div>
       <div className="mt-2 flex flex-wrap gap-1.5">
@@ -32,10 +37,25 @@ function MatchCard({ match }: { match: SharedInterestMatch }) {
             {interest}
           </span>
         ))}
+        {related.map((r) => (
+          <span
+            key={r.theirs}
+            title={`Similar to your "${r.yours}" (${r.theme})`}
+            className="rounded-full border border-dashed border-amber-400/40 px-2 py-0.5 text-xs text-white/70"
+          >
+            {r.theirs}
+          </span>
+        ))}
         {overflow > 0 && (
           <span className="rounded-full px-2 py-0.5 text-xs text-white/40">+{overflow} more</span>
         )}
       </div>
+      {related.length > 0 && (
+        <p className="mt-1.5 text-xs text-white/55">
+          Similar to your {related[0]!.yours}
+          {related.length > 1 ? ` and ${related.length - 1} more` : ""}
+        </p>
+      )}
     </>
   );
 
@@ -78,7 +98,8 @@ export function SharedInterests({ matches }: { matches: SharedInterestMatch[] })
         ))}
       </div>
       <p className="mt-3 text-xs text-white/40">
-        Ranked by how many interests you have in common. Browse everyone in the{" "}
+        Ranked by how many interests you have in common, then by similar ones (dashed). Browse
+        everyone in the{" "}
         <Link href="/directory" className="text-amber-300/80 hover:text-amber-300">
           directory
         </Link>

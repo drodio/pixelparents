@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { HowBoardsWork } from "./how-boards-work";
 import Link from "next/link";
 import { currentUser } from "@clerk/nextjs/server";
 import { primaryEmail } from "@/lib/clerk";
@@ -33,6 +34,7 @@ function PageHeader() {
         <span className="text-white/75">organized, community-curated, and permanent</span>.
         Browse boards the OHS community built, or start your own.
       </p>
+      <HowBoardsWork className="mt-5" />
     </header>
   );
 }

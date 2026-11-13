@@ -276,11 +276,17 @@ export function BoardDetailClient({
 
       {/* Add-a-contribution toggle */}
       <div className="flex items-center justify-between gap-3">
-        <h2 className="text-sm font-semibold text-white/80">Contributions</h2>
+        <div>
+          <h2 className="text-sm font-semibold text-white/80">Contributions</h2>
+          <p className="mt-0.5 text-xs text-white/55">
+            Add a link, a file, or a written note. Upvote what helps; the board&apos;s creator can pin
+            the most useful ones.
+          </p>
+        </div>
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
-          className="inline-flex items-center gap-2 rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
+          className="inline-flex shrink-0 items-center gap-2 rounded-full bg-amber-400 px-4 py-2 text-sm font-semibold text-black transition hover:bg-amber-300"
         >
           {showForm ? <IconX className="h-4 w-4" /> : <IconPlus className="h-4 w-4" />}
           {showForm ? "Close" : "Add a contribution"}
@@ -300,7 +306,9 @@ export function BoardDetailClient({
       {/* Contributions thread (sorted server-side by upvotes desc) */}
       {contributions.length === 0 ? (
         <div className="rounded-2xl border border-white/10 bg-white/[0.02] p-10 text-center">
-          <p className="text-white/60">No contributions yet — be the first to add one.</p>
+          <p className="text-white/60">
+            No contributions yet. Add a link, a file, or a note to get this board started.
+          </p>
         </div>
       ) : (
         <ul className="flex flex-col gap-3">

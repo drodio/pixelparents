@@ -53,7 +53,7 @@ export function NewBoardForm() {
           value={title}
           onChange={(e) => setTitle(e.target.value)}
           maxLength={BOARD_TITLE_MAX}
-          placeholder="e.g. AP Calculus BC — study links & past papers"
+          placeholder="e.g. Choosing between OHS and other schools"
           className={controlCls}
           autoFocus
         />
@@ -68,7 +68,7 @@ export function NewBoardForm() {
           onChange={(e) => setDescription(e.target.value)}
           maxLength={BOARD_DESC_MAX}
           rows={4}
-          placeholder="What belongs on this board? Who is it for?"
+          placeholder="What belongs here, and who is it for? e.g. Families comparing OHS with local schools or other online programs share what helped them decide."
           className={controlCls}
         />
       </label>
