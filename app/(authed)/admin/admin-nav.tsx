@@ -12,6 +12,7 @@ const items = [
   { href: "/admin/feedback", label: "Feedback" },
   { href: "/admin/enforcement", label: "Enforcement" },
   { href: "/admin/logs", label: "Logs" },
+  { href: "/admin/blog", label: "Blog" },
 ];
 
 export default function AdminNav({

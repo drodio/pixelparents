@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 import { withBotId } from "botid/next/config";
 
 const nextConfig: NextConfig = {
+  async headers() {
+    return [{ source: "/blog/:path*", headers: [
+      { key: "Cache-Control", value: "private, no-store" },
+      { key: "Referrer-Policy", value: "no-referrer" },
+      { key: "X-Robots-Tag", value: "noindex, nofollow, noarchive" },
+    ] }];
+  },
   async redirects() {
     return [
       // Canonicalize www -> apex (308 permanent), handled at the Vercel edge.

@@ -3,6 +3,7 @@
 import { Suspense, useEffect } from "react";
 import { usePathname, useSearchParams } from "next/navigation";
 import posthog from "posthog-js";
+import { isPrivateBlogUrl } from "@/lib/blog";
 
 // PostHog product analytics, wired per PostHog's official Next.js App Router
 // guide. Config comes from env ONLY — the key is never hardcoded.
@@ -20,6 +21,7 @@ let initialized = false;
 
 function initPostHog(): boolean {
   if (typeof window === "undefined") return false;
+  if (isPrivateBlogUrl(window.location.href)) return false;
   if (!POSTHOG_KEY) return false; // no key → no-op
   if (!initialized) {
     posthog.init(POSTHOG_KEY, {
@@ -33,6 +35,14 @@ function initPostHog(): boolean {
       autocapture: true,
       // Respect Do Not Track.
       respect_dnt: true,
+      // Do not send blog capability URLs or editor content to analytics, even
+      // after a client navigation from a page that initialized PostHog.
+      before_send: (event) => {
+        if (isPrivateBlogUrl(window.location.href) ||
+          isPrivateBlogUrl(String(event?.properties?.$current_url ?? "")) ||
+          isPrivateBlogUrl(String(event?.properties?.$referrer ?? ""))) return null;
+        return event;
+      },
     });
     initialized = true;
   }
